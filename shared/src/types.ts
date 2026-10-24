@@ -26,7 +26,7 @@ export interface FolderMeta {
   deletedAt?: number;
 }
 
-export type BoardNodeType = 'sticky' | 'text' | 'note' | 'frame';
+export type BoardNodeType = 'sticky' | 'text' | 'note' | 'frame' | 'shape';
 
 export interface BoardNodeData {
   id: string;

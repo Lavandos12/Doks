@@ -871,7 +871,7 @@ body, html {
   color: var(--text-muted);
 }
 
-/* 6. Board Canvas Styling */
+/* 6. Board Canvas Miro-Level Styling (Stage D) */
 .board-container {
   flex: 1;
   position: relative;
@@ -882,144 +882,349 @@ body, html {
   user-select: none;
 }
 
-.canvas-toolbar {
+.board-container.cursor-grab {
+  cursor: grab;
+}
+
+.board-container.cursor-grab:active {
+  cursor: grabbing;
+}
+
+/* Floating Miro Toolbox */
+.board-toolbox {
   position: absolute;
-  top: 14px;
+  top: 16px;
   left: 20px;
   z-index: 100;
   background: var(--bg-secondary);
   border: 1px solid var(--border-color);
-  border-radius: 8px;
+  border-radius: 10px;
   padding: 5px 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+}
+
+.toolbox-group {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.toolbox-divider {
+  width: 1px;
+  height: 20px;
+  background: var(--border-color);
+  margin: 0 4px;
+}
+
+.tb-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.tb-btn:hover {
+  background-color: var(--bg-card);
+  color: var(--text-primary);
+}
+
+.tb-btn.active {
+  background-color: var(--bg-card);
+  color: var(--accent);
+}
+
+.tb-btn.danger {
+  color: var(--danger);
+}
+
+.tb-btn.danger:hover {
+  background-color: rgba(248, 113, 113, 0.15);
+}
+
+/* Color Palette in Toolbox */
+.toolbox-colors {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.tb-color-dot {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: transform 0.1s;
+}
+
+.tb-color-dot:hover {
+  transform: scale(1.2);
+}
+
+.tb-color-dot.active {
+  transform: scale(1.25);
+  border-color: #fff;
+}
+
+/* Bottom-Right Zoom & Template Controls */
+.board-zoom-controls {
+  position: absolute;
+  bottom: 16px;
+  right: 20px;
+  z-index: 100;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 4px 8px;
   display: flex;
   align-items: center;
   gap: 6px;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
 }
 
-.tool-btn {
+.zoom-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  width: 26px;
+  height: 26px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.zoom-btn:hover {
+  background-color: var(--bg-card);
+  color: var(--text-primary);
+}
+
+.zoom-level {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  min-width: 36px;
+  text-align: center;
+}
+
+.template-seed-btn {
   background: var(--bg-card);
   border: 1px solid var(--border-color);
-  color: var(--text-primary);
-  padding: 5px 8px;
-  border-radius: 6px;
+  color: var(--accent);
+  padding: 4px 10px;
+  border-radius: 5px;
   cursor: pointer;
-  font-size: 0.8rem;
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 5px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  margin-left: 4px;
 }
 
-.tool-btn:hover {
-  background: var(--bg-card-hover);
+.template-seed-btn:hover {
+  background-color: var(--bg-card-hover);
 }
 
-.toolbar-divider {
-  width: 1px;
-  height: 20px;
-  background: var(--border-color);
-  margin: 0 2px;
-}
-
-.color-palette {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.color-circle {
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  border: 1px solid rgba(255, 255, 255, 0.4);
-  cursor: pointer;
-}
-
-.canvas-svg {
+/* Transform Layer (Infinite scaled plane) */
+.board-transform-layer {
   position: absolute;
   top: 0;
   left: 0;
   width: 100%;
   height: 100%;
-  pointer-events: none;
+  pointer-events: auto;
 }
 
-.edge-line {
-  stroke-width: 2.5;
-  fill: none;
-}
-
-.edge-label {
-  fill: var(--text-muted);
-  font-size: 12px;
-  font-family: var(--font-family);
-}
-
-.canvas-nodes-layer {
+/* SVG Connection Layer */
+.canvas-svg-layer {
   position: absolute;
   top: 0;
   left: 0;
+  width: 10000px;
+  height: 10000px;
+  pointer-events: none;
+  overflow: visible;
 }
 
-.board-node {
+.board-edge-line {
+  pointer-events: stroke;
+  cursor: pointer;
+  transition: stroke 0.15s;
+}
+
+.board-edge-line:hover {
+  stroke: var(--accent);
+  stroke-width: 3.5px;
+}
+
+.edge-text-label {
+  fill: var(--text-muted);
+  font-size: 11px;
+  font-family: var(--font-family);
+  background-color: var(--bg-primary);
+}
+
+/* Node Boxes (Miro Stickies, Frames, Notes, Shapes) */
+.board-node-box {
   position: absolute;
   border-radius: 8px;
   border: 2px solid;
-  background: var(--bg-secondary);
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+  background-color: var(--bg-secondary);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
   display: flex;
   flex-direction: column;
   cursor: move;
+  box-sizing: border-box;
 }
 
-.board-node.selected {
-  box-shadow: 0 0 0 3px var(--accent);
+.board-node-box.selected {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
-.node-frame {
-  background: rgba(30, 41, 59, 0.35);
+.board-node-box.type-frame {
+  background-color: rgba(26, 29, 37, 0.35);
   border-style: dashed;
+  border-width: 2px;
 }
 
-.node-meta-bar {
+.board-node-box.type-text {
+  background: transparent;
+  border-color: transparent !important;
+  box-shadow: none;
+}
+
+.board-node-box.type-text.selected {
+  border-color: var(--border-color) !important;
+}
+
+/* 4 Magnetic Connection Ports */
+.magnetic-port {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background-color: var(--accent);
+  border: 2px solid #fff;
+  opacity: 0;
+  transition: opacity 0.15s;
+  cursor: crosshair;
+  z-index: 20;
+}
+
+.board-node-box:hover .magnetic-port {
+  opacity: 1;
+}
+
+.port-top {
+  top: -6px;
+  left: calc(50% - 5px);
+}
+
+.port-right {
+  top: calc(50% - 5px);
+  right: -6px;
+}
+
+.port-bottom {
+  bottom: -6px;
+  left: calc(50% - 5px);
+}
+
+.port-left {
+  top: calc(50% - 5px);
+  left: -6px;
+}
+
+/* Node Header / Stripe */
+.node-meta-stripe {
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 4px 8px;
   font-size: 0.75rem;
   border-bottom: 1px solid var(--border-color);
+  gap: 6px;
 }
 
-.node-checkbox {
+.type-text .node-meta-stripe {
+  display: none;
+}
+
+.sticky-checkbox {
+  cursor: pointer;
+  accent-color: var(--accent);
+}
+
+.node-author-chip {
+  font-weight: 600;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+}
+
+.node-open-note-btn {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  display: flex;
+  align-items: center;
+  gap: 4px;
   cursor: pointer;
 }
 
-.connect-port-btn {
-  background: none;
-  border: none;
-  color: var(--text-muted);
-  cursor: pointer;
+.node-open-note-btn:hover {
+  background-color: var(--bg-card-hover);
+  color: var(--accent);
 }
 
-.node-textarea {
+/* Node Content Area */
+.frame-label-area {
+  padding: 8px 12px;
+}
+
+.frame-label-text {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.node-inline-textarea {
   flex: 1;
   background: transparent;
   border: none;
   color: var(--text-primary);
-  padding: 8px;
+  padding: 8px 10px;
   resize: none;
   outline: none;
   font-family: var(--font-family);
   font-size: 0.9rem;
+  line-height: 1.4;
+  cursor: text;
 }
 
-.frame-title {
-  padding: 8px;
-  font-weight: 700;
-  font-size: 1rem;
+.type-text .node-inline-textarea {
+  font-size: 1.1rem;
+  font-weight: 500;
 }
 
-.resize-handle {
+/* Node Resize Handle */
+.node-resize-handle {
   position: absolute;
   bottom: 0;
   right: 0;
@@ -1027,7 +1232,38 @@ body, html {
   height: 14px;
   cursor: se-resize;
   background: var(--accent);
-  border-radius: 2px;
+  border-radius: 2px 0 6px 0;
+  z-index: 10;
+}
+
+/* Marquee Selection Rectangle */
+.marquee-selection-box {
+  position: absolute;
+  border: 1.5px dashed var(--accent);
+  background-color: rgba(124, 140, 255, 0.12);
+  pointer-events: none;
+  z-index: 1000;
+}
+
+/* Real-time Awareness Remote Cursors */
+.remote-cursor-pointer {
+  position: absolute;
+  pointer-events: none;
+  z-index: 999;
+  transition: left 0.05s linear, top 0.05s linear;
+}
+
+.remote-cursor-badge {
+  position: absolute;
+  left: 14px;
+  top: 14px;
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 4px;
+  white-space: nowrap;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
 }
 
 /* 7. Common Buttons & Utility */
