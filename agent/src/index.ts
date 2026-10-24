@@ -8,6 +8,7 @@ export * from './security.js';
 export * from './network.js';
 export * from './storage/doc-manager.js';
 export * from './storage/state-store.js';
+export * from './storage/attachments.js';
 export * from './peer/peer-service.js';
 export * from './server/http-server.js';
 

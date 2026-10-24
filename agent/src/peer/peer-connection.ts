@@ -191,6 +191,30 @@ export class PeerConnection extends EventEmitter {
         this.emit('pong', Date.now() - msg.timestamp);
         break;
       }
+
+      case 'attachment-list': {
+        if (!this.isAuthenticated) return;
+        this.emit('attachment-list', msg.hashes);
+        break;
+      }
+
+      case 'attachment-request': {
+        if (!this.isAuthenticated) return;
+        this.emit('attachment-request', { hash: msg.hash, chunkIndex: msg.chunkIndex });
+        break;
+      }
+
+      case 'attachment-chunk': {
+        if (!this.isAuthenticated) return;
+        this.emit('attachment-chunk', {
+          hash: msg.hash,
+          chunkIndex: msg.chunkIndex,
+          totalChunks: msg.totalChunks,
+          data: base64ToUint8Array(msg.data),
+          ext: msg.ext
+        });
+        break;
+      }
     }
   }
 

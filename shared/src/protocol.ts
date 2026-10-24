@@ -7,6 +7,9 @@ export type PeerMessageType =
   | 'relay'
   | 'subscribe'
   | 'unsubscribe'
+  | 'attachment-request'
+  | 'attachment-chunk'
+  | 'attachment-list'
   | 'ping'
   | 'pong';
 
@@ -71,6 +74,26 @@ export interface UnsubscribeMessage {
   docName: string;
 }
 
+export interface AttachmentRequestMessage {
+  type: 'attachment-request';
+  hash: string;
+  chunkIndex: number;
+}
+
+export interface AttachmentChunkMessage {
+  type: 'attachment-chunk';
+  hash: string;
+  chunkIndex: number;
+  totalChunks: number;
+  data: string; // base64
+  ext: string;
+}
+
+export interface AttachmentListMessage {
+  type: 'attachment-list';
+  hashes: string[];
+}
+
 export type PeerMessage =
   | HandshakeChallenge
   | HandshakeResponse
@@ -80,6 +103,9 @@ export type PeerMessage =
   | RelayMessage
   | SubscribeMessage
   | UnsubscribeMessage
+  | AttachmentRequestMessage
+  | AttachmentChunkMessage
+  | AttachmentListMessage
   | PingMessage
   | PongMessage;
 

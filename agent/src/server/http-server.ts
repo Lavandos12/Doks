@@ -4,7 +4,11 @@ import fastifyCookie from '@fastify/cookie';
 import fastifyStatic from '@fastify/static';
 import path from 'node:path';
 import fs from 'node:fs';
+import os from 'node:os';
+import crypto from 'node:crypto';
+import { execSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import * as Y from 'yjs';
 import * as awarenessProtocol from 'y-protocols/awareness';
 import type { AgentConfig } from '@doks/shared';
 import {
@@ -12,10 +16,21 @@ import {
   encodeMessage,
   decodeMessage,
   uint8ArrayToBase64,
-  base64ToUint8Array
+  base64ToUint8Array,
+  csvToMarkdown,
+  htmlToMarkdown,
+  docxXmlToMarkdown,
+  DOC_INDEX,
+  getIndexMaps,
+  getBoardMaps,
+  getNoteText,
+  nodeMapToData,
+  getNoteDocName,
+  getBoardDocName
 } from '@doks/shared';
 import { DocManager } from '../storage/doc-manager.js';
 import { PeerService } from '../peer/peer-service.js';
+import { AttachmentManager } from '../storage/attachments.js';
 import { generateSessionToken } from '../security.js';
 import { findAvailablePort, findRadminIp } from '../network.js';
 import { saveConfig } from '../config.js';
@@ -40,6 +55,7 @@ export interface HttpServerOptions {
   docManager: DocManager;
   peerService: PeerService;
   snapshotManager?: any;
+  attachmentManager?: AttachmentManager;
   webDistPath?: string;
 }
 
@@ -49,6 +65,7 @@ export class AgentHttpServer {
   private docManager: DocManager;
   private peerService: PeerService;
   private snapshotManager?: any;
+  private attachmentManager?: AttachmentManager;
   private sessionToken: string;
   private webDistPath: string;
 
@@ -57,6 +74,7 @@ export class AgentHttpServer {
     this.docManager = options.docManager;
     this.peerService = options.peerService;
     this.snapshotManager = options.snapshotManager;
+    this.attachmentManager = options.attachmentManager;
     this.sessionToken = generateSessionToken();
     this.webDistPath = resolveWebDist(options.webDistPath);
 
@@ -72,6 +90,26 @@ export class AgentHttpServer {
   private setupPlugins(): void {
     this.fastify.register(fastifyCookie);
     this.fastify.register(fastifyWebsocket);
+
+    // B22 & Attachments: Allow raw buffer uploads for files & attachments
+    this.fastify.addContentTypeParser(
+      [
+        'application/octet-stream',
+        'application/pdf',
+        'application/zip',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'text/csv',
+        'text/html',
+        'text/markdown'
+      ],
+      { parseAs: 'buffer' },
+      (_req, body, done) => {
+        done(null, body);
+      }
+    );
+    this.fastify.addContentTypeParser(/^image\/.*/, { parseAs: 'buffer' }, (_req, body, done) => done(null, body));
+    this.fastify.addContentTypeParser(/^video\/.*/, { parseAs: 'buffer' }, (_req, body, done) => done(null, body));
+    this.fastify.addContentTypeParser(/^audio\/.*/, { parseAs: 'buffer' }, (_req, body, done) => done(null, body));
 
     // Serve static files if webDistPath exists
     if (fs.existsSync(this.webDistPath)) {
@@ -203,6 +241,349 @@ export class AgentHttpServer {
       }
       const success = this.snapshotManager.restoreSnapshot(body.snapshotId, body.docName);
       return { success };
+    });
+
+    // API: Upload attachment (B22)
+    this.fastify.post('/api/attachments', async (req, reply) => {
+      if (!this.attachmentManager) {
+        return reply.code(500).send({ error: 'Attachment manager not available' });
+      }
+
+      let buffer: Buffer;
+      let originalName = 'attachment.bin';
+
+      const contentType = req.headers['content-type'] || '';
+      if (contentType.includes('application/json')) {
+        const body = req.body as { fileName?: string; data?: string };
+        if (!body?.data) {
+          return reply.code(400).send({ error: 'No data provided' });
+        }
+        buffer = Buffer.from(body.data, 'base64');
+        if (body.fileName) originalName = body.fileName;
+      } else if (Buffer.isBuffer(req.body)) {
+        buffer = req.body;
+        const customName = req.headers['x-file-name'] as string;
+        if (customName) originalName = decodeURIComponent(customName);
+      } else {
+        return reply.code(400).send({ error: 'Unsupported payload or empty body' });
+      }
+
+      const info = this.attachmentManager.saveAttachment(buffer, originalName);
+
+      try {
+        const indexDoc = this.docManager.getOrCreateDoc(DOC_INDEX);
+        const { attachments } = getIndexMaps(indexDoc);
+        attachments.set(info.hash, {
+          hash: info.hash,
+          name: info.fileName,
+          size: info.size,
+          mime: info.mimeType,
+          addedBy: this.config.memberName,
+          addedAt: Date.now(),
+          deleted: false
+        });
+      } catch (err) {
+        console.error('[HttpServer] Failed to index attachment in Yjs:', err);
+      }
+
+      return {
+        success: true,
+        hash: info.hash,
+        fileName: info.fileName,
+        size: info.size,
+        mimeType: info.mimeType
+      };
+    });
+
+    // API: Get attachment (Supports Range requests)
+    this.fastify.get('/api/attachments/:hash', async (req, reply) => {
+      if (!this.attachmentManager) {
+        return reply.code(500).send({ error: 'Attachment manager not available' });
+      }
+      const { hash } = req.params as { hash: string };
+      const att = this.attachmentManager.getAttachment(hash);
+      if (!att || !fs.existsSync(att.filePath)) {
+        return reply.code(404).send({ error: 'Attachment not found' });
+      }
+
+      const range = req.headers.range;
+      if (range) {
+        const parts = range.replace(/bytes=/, '').split('-');
+        const start = parseInt(parts[0], 10);
+        const end = parts[1] ? parseInt(parts[1], 10) : att.size - 1;
+        const chunkSize = end - start + 1;
+        const stream = fs.createReadStream(att.filePath, { start, end });
+        reply.code(206);
+        reply.header('Content-Range', `bytes ${start}-${end}/${att.size}`);
+        reply.header('Accept-Ranges', 'bytes');
+        reply.header('Content-Length', chunkSize);
+        reply.header('Content-Type', att.mimeType);
+        return reply.send(stream);
+      } else {
+        reply.header('Content-Type', att.mimeType);
+        reply.header('Content-Length', att.size);
+        return reply.send(fs.createReadStream(att.filePath));
+      }
+    });
+
+    // API: Import file into vault
+    this.fastify.post('/api/import/file', async (req, reply) => {
+      let fileName = 'imported-note.md';
+      let content = '';
+      let asBoard = false;
+
+      const customName = req.headers['x-file-name'] as string;
+      if (customName) fileName = decodeURIComponent(customName);
+
+      if (Buffer.isBuffer(req.body)) {
+        const ext = path.extname(fileName).toLowerCase();
+        if (ext === '.docx') {
+          const tempPath = path.join(os.tmpdir(), `doks-import-${Date.now()}.docx`);
+          fs.writeFileSync(tempPath, req.body);
+          try {
+            const xml = execSync(`tar -xf "${tempPath}" -O word/document.xml`, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+            content = docxXmlToMarkdown(xml);
+          } catch (e) {
+            content = req.body.toString('utf8');
+          } finally {
+            if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
+          }
+        } else {
+          content = req.body.toString('utf8');
+        }
+      } else if (typeof req.body === 'object' && req.body !== null) {
+        const body = req.body as any;
+        if (body.fileName) fileName = body.fileName;
+        if (body.asBoard !== undefined) asBoard = Boolean(body.asBoard);
+        if (body.content) content = body.content;
+      }
+
+      const ext = path.extname(fileName).toLowerCase();
+      const baseName = path.basename(fileName, ext);
+      const indexDoc = this.docManager.getOrCreateDoc(DOC_INDEX);
+      const { notes, boards } = getIndexMaps(indexDoc);
+
+      if (ext === '.csv' || ext === '.tsv') {
+        if (asBoard) {
+          const boardId = crypto.randomUUID();
+          boards.set(boardId, {
+            id: boardId,
+            title: baseName,
+            folder: null,
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+            deleted: false
+          });
+          const boardDoc = this.docManager.getOrCreateDoc(getBoardDocName(boardId));
+          const { nodes } = getBoardMaps(boardDoc);
+          const lines = content.split(/\r?\n/).filter((l) => l.trim().length > 0);
+          lines.slice(0, 100).forEach((line, i) => {
+            const nodeId = crypto.randomUUID();
+            const nodeMap = new Y.Map();
+            nodeMap.set('id', nodeId);
+            nodeMap.set('type', 'sticky');
+            nodeMap.set('x', 100 + (i % 5) * 220);
+            nodeMap.set('y', 100 + Math.floor(i / 5) * 160);
+            nodeMap.set('w', 200);
+            nodeMap.set('h', 140);
+            nodeMap.set('text', new Y.Text(line));
+            nodeMap.set('color', '1');
+            nodeMap.set('author', this.config.memberName);
+            nodeMap.set('done', false);
+            nodeMap.set('z', i + 1);
+            nodeMap.set('deleted', false);
+            nodes.set(nodeId, nodeMap);
+          });
+          return { success: true, created: 1, skipped: 0, errors: [], type: 'board', id: boardId };
+        } else {
+          const md = csvToMarkdown(content);
+          const noteId = crypto.randomUUID();
+          notes.set(noteId, {
+            id: noteId,
+            title: baseName,
+            folder: null,
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+            deleted: false
+          });
+          const noteDoc = this.docManager.getOrCreateDoc(getNoteDocName(noteId));
+          getNoteText(noteDoc).insert(0, md);
+          return { success: true, created: 1, skipped: 0, errors: [], type: 'note', id: noteId };
+        }
+      } else if (ext === '.html') {
+        const md = htmlToMarkdown(content);
+        const noteId = crypto.randomUUID();
+        notes.set(noteId, {
+          id: noteId,
+          title: baseName,
+          folder: null,
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+          deleted: false
+        });
+        const noteDoc = this.docManager.getOrCreateDoc(getNoteDocName(noteId));
+        getNoteText(noteDoc).insert(0, md);
+        return { success: true, created: 1, skipped: 0, errors: [], type: 'note', id: noteId };
+      } else if (ext === '.canvas') {
+        try {
+          const canvasData = JSON.parse(content);
+          const boardId = crypto.randomUUID();
+          boards.set(boardId, {
+            id: boardId,
+            title: baseName,
+            folder: null,
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+            deleted: false
+          });
+          const boardDoc = this.docManager.getOrCreateDoc(getBoardDocName(boardId));
+          const { nodes, edges } = getBoardMaps(boardDoc);
+          if (Array.isArray(canvasData.nodes)) {
+            for (const n of canvasData.nodes) {
+              const nodeMap = new Y.Map();
+              nodeMap.set('id', n.id);
+              nodeMap.set('type', n.type || 'text');
+              nodeMap.set('x', n.x ?? 0);
+              nodeMap.set('y', n.y ?? 0);
+              nodeMap.set('w', n.width ?? 200);
+              nodeMap.set('h', n.height ?? 120);
+              nodeMap.set('text', new Y.Text(n.text || ''));
+              nodeMap.set('color', n.color || '1');
+              nodeMap.set('author', n.author || this.config.memberName);
+              nodeMap.set('done', Boolean(n.done));
+              nodeMap.set('z', 1);
+              nodeMap.set('deleted', false);
+              nodes.set(n.id, nodeMap);
+            }
+          }
+          if (Array.isArray(canvasData.edges)) {
+            for (const e of canvasData.edges) {
+              edges.set(e.id, {
+                id: e.id,
+                from: e.fromNode,
+                to: e.toNode,
+                fromSide: e.fromSide,
+                toSide: e.toSide,
+                label: e.label,
+                deleted: false
+              });
+            }
+          }
+          return { success: true, created: 1, skipped: 0, errors: [], type: 'board', id: boardId };
+        } catch (e: any) {
+          return reply.code(400).send({ error: `Invalid canvas JSON: ${e.message}` });
+        }
+      } else {
+        const noteId = crypto.randomUUID();
+        notes.set(noteId, {
+          id: noteId,
+          title: baseName,
+          folder: null,
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+          deleted: false
+        });
+        const noteDoc = this.docManager.getOrCreateDoc(getNoteDocName(noteId));
+        getNoteText(noteDoc).insert(0, content);
+        return { success: true, created: 1, skipped: 0, errors: [], type: 'note', id: noteId };
+      }
+    });
+
+    // API: Export Vault as .zip
+    this.fastify.get('/api/export/vault', async (req, reply) => {
+      const vaultDir = this.config.vaultPath;
+      if (!fs.existsSync(vaultDir)) {
+        return reply.code(404).send({ error: 'Vault directory does not exist' });
+      }
+
+      const tempZip = path.join(os.tmpdir(), `doks-vault-${Date.now()}.zip`);
+      try {
+        execSync(`tar -acf "${tempZip}" -C "${vaultDir}" .`, { stdio: 'ignore' });
+        const zipBuffer = fs.readFileSync(tempZip);
+        try {
+          if (fs.existsSync(tempZip)) fs.unlinkSync(tempZip);
+        } catch {}
+
+        reply.header('Content-Type', 'application/zip');
+        reply.header('Content-Disposition', 'attachment; filename="eluma-vault.zip"');
+        return reply.send(zipBuffer);
+      } catch (err: any) {
+        if (fs.existsSync(tempZip)) {
+          try { fs.unlinkSync(tempZip); } catch {}
+        }
+        return reply.code(500).send({ error: `Export failed: ${err.message}` });
+      }
+    });
+
+    // API: Export single note
+    this.fastify.get('/api/export/note/:id', async (req, reply) => {
+      const { id } = req.params as { id: string };
+      const indexDoc = this.docManager.getOrCreateDoc(DOC_INDEX);
+      const { notes } = getIndexMaps(indexDoc);
+      const meta = notes.get(id);
+      if (!meta || meta.deleted) {
+        return reply.code(404).send({ error: 'Note not found' });
+      }
+
+      const noteDoc = this.docManager.getOrCreateDoc(getNoteDocName(id));
+      const content = getNoteText(noteDoc).toString();
+      const safeTitle = encodeURIComponent(meta.title || 'note');
+      reply.header('Content-Type', 'text/markdown; charset=utf-8');
+      reply.header('Content-Disposition', `attachment; filename="${safeTitle}.md"`);
+      return reply.send(content);
+    });
+
+    // API: Export single board
+    this.fastify.get('/api/export/board/:id', async (req, reply) => {
+      const { id } = req.params as { id: string };
+      const indexDoc = this.docManager.getOrCreateDoc(DOC_INDEX);
+      const { boards } = getIndexMaps(indexDoc);
+      const meta = boards.get(id);
+      if (!meta || meta.deleted) {
+        return reply.code(404).send({ error: 'Board not found' });
+      }
+
+      const boardDoc = this.docManager.getOrCreateDoc(getBoardDocName(id));
+      const { nodes, edges } = getBoardMaps(boardDoc);
+      const canvasNodes: any[] = [];
+      const canvasEdges: any[] = [];
+
+      nodes.forEach((nodeMap, nodeId) => {
+        const data = nodeMapToData(nodeId, nodeMap);
+        if (!data.deleted) {
+          canvasNodes.push({
+            id: data.id,
+            type: data.type === 'note' ? 'file' : data.type,
+            x: data.x,
+            y: data.y,
+            width: data.w,
+            height: data.h,
+            text: data.text,
+            color: data.color,
+            author: data.author,
+            done: data.done
+          });
+        }
+      });
+
+      edges.forEach((edgeData, edgeId) => {
+        if (!edgeData.deleted) {
+          canvasEdges.push({
+            id: edgeId,
+            fromNode: edgeData.from,
+            toNode: edgeData.to,
+            fromSide: edgeData.fromSide,
+            toSide: edgeData.toSide,
+            label: edgeData.label
+          });
+        }
+      });
+
+      const canvasJson = JSON.stringify({ nodes: canvasNodes, edges: canvasEdges }, null, 2);
+      const safeTitle = encodeURIComponent(meta.title || 'board');
+      reply.header('Content-Type', 'application/json; charset=utf-8');
+      reply.header('Content-Disposition', `attachment; filename="${safeTitle}.canvas"`);
+      return reply.send(canvasJson);
     });
 
     // WebSocket bridge for browser client

@@ -5,7 +5,9 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import * as awarenessProtocol from 'y-protocols/awareness';
 import type { AgentConfig, PeerStatus } from '@doks/shared';
+import { uint8ArrayToBase64, base64ToUint8Array } from '@doks/shared';
 import { DocManager } from '../storage/doc-manager.js';
+import { AttachmentManager } from '../storage/attachments.js';
 import { PeerConnection } from './peer-connection.js';
 import { findAvailablePort, findRadminIp } from '../network.js';
 
@@ -19,6 +21,7 @@ interface OutboundPeerState {
 export class PeerService extends EventEmitter {
   private config: AgentConfig;
   private docManager: DocManager;
+  private attachmentManager?: AttachmentManager;
   private wss?: WebSocketServer;
   private connections = new Map<string, PeerConnection>(); // key: peerId
   private outboundPeers = new Map<string, OutboundPeerState>(); // key: address
@@ -43,10 +46,11 @@ export class PeerService extends EventEmitter {
     this.seenRelaysQueue.push(msgHash);
   }
 
-  constructor(config: AgentConfig, docManager: DocManager) {
+  constructor(config: AgentConfig, docManager: DocManager, attachmentManager?: AttachmentManager) {
     super();
     this.config = config;
     this.docManager = docManager;
+    this.attachmentManager = attachmentManager;
 
     // Listen to local document updates to broadcast to peers
     this.docManager.on('update', ({ docName, update, origin }) => {
@@ -215,6 +219,59 @@ export class PeerService extends EventEmitter {
 
       // Anti-entropy: initiate sync step 1 for all known active documents
       this.syncAllDocsWithPeer(conn);
+
+      // Exchange attachments list
+      if (this.attachmentManager) {
+        try {
+          const attDir = this.attachmentManager.getAttachmentsDir();
+          if (fs.existsSync(attDir)) {
+            const files = fs.readdirSync(attDir);
+            const hashes = files
+              .map((f) => path.basename(f, path.extname(f)))
+              .filter((h) => h.length === 64);
+            if (hashes.length > 0) {
+              conn.send({ type: 'attachment-list', hashes });
+            }
+          }
+        } catch (e) {
+          console.error('[PeerService] Error sending attachment list:', e);
+        }
+      }
+    });
+
+    conn.on('attachment-list', (hashes: string[]) => {
+      if (!this.attachmentManager) return;
+      for (const h of hashes) {
+        if (!this.attachmentManager.getAttachment(h)) {
+          conn.send({ type: 'attachment-request', hash: h, chunkIndex: 0 });
+        }
+      }
+    });
+
+    conn.on('attachment-request', ({ hash, chunkIndex }: { hash: string; chunkIndex: number }) => {
+      if (!this.attachmentManager) return;
+      const att = this.attachmentManager.getAttachment(hash);
+      if (!att) return;
+      const chunk = this.attachmentManager.getChunk(hash, chunkIndex);
+      if (!chunk) return;
+      conn.send({
+        type: 'attachment-chunk',
+        hash,
+        chunkIndex,
+        totalChunks: chunk.totalChunks,
+        data: uint8ArrayToBase64(chunk.data),
+        ext: path.extname(att.fileName)
+      });
+    });
+
+    conn.on('attachment-chunk', ({ hash, chunkIndex, totalChunks, data, ext }: any) => {
+      if (!this.attachmentManager) return;
+      const res = this.attachmentManager.receiveChunk(hash, chunkIndex, totalChunks, Buffer.from(data), ext);
+      if (!res && chunkIndex + 1 < totalChunks) {
+        conn.send({ type: 'attachment-request', hash, chunkIndex: chunkIndex + 1 });
+      } else if (res) {
+        this.emit('attachment-received', res);
+      }
     });
 
     conn.on('sync', ({ docName, data }) => {

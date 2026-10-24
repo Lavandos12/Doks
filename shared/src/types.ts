@@ -26,7 +26,18 @@ export interface FolderMeta {
   deletedAt?: number;
 }
 
-export type BoardNodeType = 'sticky' | 'text' | 'note' | 'frame' | 'shape';
+export type BoardNodeType = 'sticky' | 'text' | 'note' | 'frame' | 'shape' | 'file' | 'image' | 'link';
+
+export interface AttachmentMeta {
+  hash: string;
+  name: string;
+  size: number;
+  mime: string;
+  addedBy: string;
+  addedAt: number;
+  deleted: boolean;
+  deletedAt?: number;
+}
 
 export interface BoardNodeData {
   id: string;
@@ -40,6 +51,9 @@ export interface BoardNodeData {
   author: string;
   done?: boolean;
   noteId?: string;
+  fileHash?: string;
+  fileName?: string;
+  url?: string;
   z: number;
   deleted: boolean;
   deletedAt?: number;

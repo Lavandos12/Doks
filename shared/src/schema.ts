@@ -1,5 +1,5 @@
 import * as Y from 'yjs';
-import type { NoteMeta, BoardMeta, FolderMeta, BoardNodeData, BoardEdgeData } from './types.js';
+import type { NoteMeta, BoardMeta, FolderMeta, AttachmentMeta, BoardNodeData, BoardEdgeData } from './types.js';
 
 export const DOC_INDEX = 'eluma-index';
 export const DOC_NOTE_PREFIX = 'eluma-note-';
@@ -35,13 +35,15 @@ export interface IndexDocStructure {
   notes: Y.Map<NoteMeta>;
   boards: Y.Map<BoardMeta>;
   folders: Y.Map<FolderMeta>;
+  attachments: Y.Map<AttachmentMeta>;
 }
 
 export function getIndexMaps(doc: Y.Doc): IndexDocStructure {
   return {
     notes: doc.getMap<NoteMeta>('notes'),
     boards: doc.getMap<BoardMeta>('boards'),
-    folders: doc.getMap<FolderMeta>('folders')
+    folders: doc.getMap<FolderMeta>('folders'),
+    attachments: doc.getMap<AttachmentMeta>('attachments')
   };
 }
 
@@ -79,6 +81,9 @@ export function nodeMapToData(id: string, map: Y.Map<any>): BoardNodeData {
     author: map.get('author') || '',
     done: map.get('done') || false,
     noteId: map.get('noteId') || undefined,
+    fileHash: map.get('fileHash') || undefined,
+    fileName: map.get('fileName') || undefined,
+    url: map.get('url') || undefined,
     z: map.get('z') ?? 1,
     deleted: map.get('deleted') || false,
     deletedAt: map.get('deletedAt') || undefined
