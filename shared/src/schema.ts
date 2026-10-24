@@ -86,6 +86,19 @@ export function nodeMapToData(id: string, map: Y.Map<any>): BoardNodeData {
 }
 
 /**
+ * Gets or migrates the Y.Text instance for a node's text property.
+ */
+export function getNodeYText(nodeMap: Y.Map<any>): Y.Text {
+  let yText = nodeMap.get('text');
+  if (!(yText instanceof Y.Text)) {
+    const initial = typeof yText === 'string' ? yText : '';
+    yText = new Y.Text(initial);
+    nodeMap.set('text', yText);
+  }
+  return yText as Y.Text;
+}
+
+/**
  * Sets properties on a node's Y.Map, ensuring each property is an individual key
  * so concurrent edits to different properties don't conflict.
  */
@@ -94,14 +107,11 @@ export function setNodeProperties(nodeMap: Y.Map<any>, data: Partial<BoardNodeDa
     if (val === undefined) {
       nodeMap.delete(key);
     } else if (key === 'text') {
-      let yText = nodeMap.get('text');
-      if (yText instanceof Y.Text) {
-        if (yText.toString() !== val) {
-          yText.delete(0, yText.length);
-          yText.insert(0, val as string);
-        }
-      } else {
-        nodeMap.set('text', String(val ?? ''));
+      const yText = getNodeYText(nodeMap);
+      const strVal = String(val ?? '');
+      if (yText.toString() !== strVal) {
+        yText.delete(0, yText.length);
+        yText.insert(0, strVal);
       }
     } else {
       nodeMap.set(key, val);

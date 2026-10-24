@@ -5,6 +5,8 @@ export type PeerMessageType =
   | 'sync'
   | 'awareness'
   | 'relay'
+  | 'subscribe'
+  | 'unsubscribe'
   | 'ping'
   | 'pong';
 
@@ -59,6 +61,16 @@ export interface PongMessage {
   timestamp: number;
 }
 
+export interface SubscribeMessage {
+  type: 'subscribe';
+  docName: string;
+}
+
+export interface UnsubscribeMessage {
+  type: 'unsubscribe';
+  docName: string;
+}
+
 export type PeerMessage =
   | HandshakeChallenge
   | HandshakeResponse
@@ -66,6 +78,8 @@ export type PeerMessage =
   | SyncMessage
   | AwarenessMessage
   | RelayMessage
+  | SubscribeMessage
+  | UnsubscribeMessage
   | PingMessage
   | PongMessage;
 

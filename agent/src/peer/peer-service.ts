@@ -2,10 +2,12 @@ import { WebSocketServer, WebSocket } from 'ws';
 import { EventEmitter } from 'node:events';
 import fs from 'node:fs';
 import path from 'node:path';
+import crypto from 'node:crypto';
+import * as awarenessProtocol from 'y-protocols/awareness';
 import type { AgentConfig, PeerStatus } from '@doks/shared';
 import { DocManager } from '../storage/doc-manager.js';
 import { PeerConnection } from './peer-connection.js';
-import { findAvailablePort } from '../network.js';
+import { findAvailablePort, findRadminIp } from '../network.js';
 
 interface OutboundPeerState {
   address: string;
@@ -21,6 +23,25 @@ export class PeerService extends EventEmitter {
   private connections = new Map<string, PeerConnection>(); // key: peerId
   private outboundPeers = new Map<string, OutboundPeerState>(); // key: address
   private isDestroyed = false;
+
+  // B20: LRU cache for relayed messages to prevent loops
+  private seenRelays = new Set<string>();
+  private seenRelaysQueue: string[] = [];
+  private static readonly MAX_SEEN_RELAYS = 2000;
+
+  private hasSeenRelay(msgHash: string): boolean {
+    return this.seenRelays.has(msgHash);
+  }
+
+  private markRelaySeen(msgHash: string): void {
+    if (this.seenRelays.has(msgHash)) return;
+    if (this.seenRelaysQueue.length >= PeerService.MAX_SEEN_RELAYS) {
+      const oldest = this.seenRelaysQueue.shift();
+      if (oldest) this.seenRelays.delete(oldest);
+    }
+    this.seenRelays.add(msgHash);
+    this.seenRelaysQueue.push(msgHash);
+  }
 
   constructor(config: AgentConfig, docManager: DocManager) {
     super();
@@ -50,7 +71,10 @@ export class PeerService extends EventEmitter {
       state.reconnectAttempts = 0;
     }
 
-    const host = this.config.bindAddress || '127.0.0.1';
+    const radminIp = findRadminIp();
+    const host = (this.config.bindAddress === 'auto' || !this.config.bindAddress)
+      ? (radminIp || '0.0.0.0')
+      : this.config.bindAddress;
     const freePort = await findAvailablePort(this.config.peerPort, host);
     if (freePort !== this.config.peerPort) {
       console.warn(`[PeerService] Peer port ${this.config.peerPort} is busy, auto-switching to free port ${freePort}`);
@@ -209,6 +233,16 @@ export class PeerService extends EventEmitter {
     conn.on('relay', ({ originPeerId, docName, data, hopCount }) => {
       if (originPeerId === this.config.agentId) return; // avoid looping back to origin
 
+      // B20: Hash check to avoid re-processing or infinite relay loops
+      const msgHash = crypto.createHash('sha256')
+        .update(originPeerId)
+        .update(docName)
+        .update(data)
+        .digest('hex');
+
+      if (this.hasSeenRelay(msgHash)) return;
+      this.markRelaySeen(msgHash);
+
       const response = this.docManager.handleSyncMessage(docName, data, 'relay');
       if (response) {
         conn.sendSync(docName, response);
@@ -220,6 +254,23 @@ export class PeerService extends EventEmitter {
           if (peerId !== originPeerId && peerId !== conn.remotePeerId && peerConn.isAuthenticated) {
             peerConn.sendRelay(originPeerId, docName, data, hopCount + 1);
           }
+        }
+      }
+    });
+
+    conn.on('awareness', ({ docName, data }) => {
+      try {
+        awarenessProtocol.applyAwarenessUpdate(this.docManager.getAwareness(), data, conn.remotePeerId);
+      } catch (err) {
+        console.error('[PeerService] Error applying peer awareness update:', err);
+      }
+
+      this.emit('awareness', { docName, data });
+
+      // Relay awareness to other peers (avoiding echo back)
+      for (const [peerId, peerConn] of this.connections.entries()) {
+        if (peerId !== conn.remotePeerId && peerConn.isAuthenticated) {
+          peerConn.sendAwareness(docName, data);
         }
       }
     });
@@ -248,6 +299,14 @@ export class PeerService extends EventEmitter {
     for (const conn of this.connections.values()) {
       if (conn.isAuthenticated) {
         conn.sendSync(docName, update);
+      }
+    }
+  }
+
+  public broadcastAwareness(docName: string, data: Uint8Array): void {
+    for (const conn of this.connections.values()) {
+      if (conn.isAuthenticated) {
+        conn.sendAwareness(docName, data);
       }
     }
   }

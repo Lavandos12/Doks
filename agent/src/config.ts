@@ -55,7 +55,7 @@ export function loadOrCreateConfig(options: ConfigOptions = {}): AgentConfig {
   const memberColor = existing.memberColor || AUTHOR_COLORS[Math.floor(Math.random() * AUTHOR_COLORS.length)];
   const peerPort = options.peerPort ?? existing.peerPort ?? 4747;
   const webPort = options.webPort ?? existing.webPort ?? 3000;
-  const bindAddress = options.bindAddress ?? existing.bindAddress ?? (radminIp || '127.0.0.1');
+  const bindAddress = options.bindAddress ?? existing.bindAddress ?? 'auto';
   const peers = options.peers ?? existing.peers ?? [];
 
   const config: AgentConfig = {
