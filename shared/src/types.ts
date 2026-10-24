@@ -1,0 +1,99 @@
+export interface NoteMeta {
+  id: string;
+  title: string;
+  folder: string | null;
+  createdAt: number;
+  updatedAt: number;
+  deleted: boolean;
+  deletedAt?: number;
+}
+
+export interface BoardMeta {
+  id: string;
+  title: string;
+  folder: string | null;
+  createdAt: number;
+  updatedAt: number;
+  deleted: boolean;
+  deletedAt?: number;
+}
+
+export interface FolderMeta {
+  id: string;
+  name: string;
+  parent: string | null;
+  deleted: boolean;
+  deletedAt?: number;
+}
+
+export type BoardNodeType = 'sticky' | 'text' | 'note' | 'frame';
+
+export interface BoardNodeData {
+  id: string;
+  type: BoardNodeType;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  text: string;
+  color: string;
+  author: string;
+  done?: boolean;
+  noteId?: string;
+  z: number;
+  deleted: boolean;
+  deletedAt?: number;
+}
+
+export interface BoardEdgeData {
+  id: string;
+  from: string;
+  to: string;
+  fromSide?: 'top' | 'right' | 'bottom' | 'left';
+  toSide?: 'top' | 'right' | 'bottom' | 'left';
+  label?: string;
+  color?: string;
+  deleted: boolean;
+  deletedAt?: number;
+}
+
+export interface UserPresence {
+  peerId: string;
+  name: string;
+  color: string;
+  activeDoc?: string;
+  cursor?: { x: number; y: number };
+  selection?: any;
+  lastActive: number;
+}
+
+export interface PeerStatus {
+  address: string;
+  peerId?: string;
+  name?: string;
+  connected: boolean;
+  isOutbound: boolean;
+  lastSeen?: number;
+  error?: string;
+}
+
+export interface AgentConfig {
+  agentId: string;
+  memberName: string;
+  memberColor: string;
+  teamKey: string;
+  peerPort: number;
+  webPort: number;
+  bindAddress?: string;
+  peers: string[];
+  vaultPath: string;
+  statePath: string;
+}
+
+export interface SnapshotMeta {
+  id: string;
+  timestamp: number;
+  dateStr: string;
+  docsCount: number;
+  sizeBytes: number;
+}

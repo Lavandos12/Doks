@@ -1,0 +1,21 @@
+{
+  "name": "doks-root",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "shared",
+    "agent",
+    "web",
+    "tests"
+  ],
+  "scripts": {
+    "build": "npm run build --workspace=shared && npm run build --workspace=web && npm run build --workspace=agent",
+    "test": "vitest run",
+    "dev:agent": "npm run dev --workspace=agent",
+    "dev:web": "npm run dev --workspace=web"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.3",
+    "vitest": "^2.1.8"
+  }
+}
