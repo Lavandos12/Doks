@@ -1,4 +1,5 @@
 import { exec } from 'node:child_process';
+import { pathToFileURL } from 'node:url';
 import { Agent } from './agent.js';
 
 export * from './agent.js';
@@ -11,7 +12,7 @@ export * from './peer/peer-service.js';
 export * from './server/http-server.js';
 
 // If run directly from CLI
-if (import.meta.url === `file:///${process.argv[1].replace(/\\/g, '/')}`) {
+if (import.meta.url === pathToFileURL(process.argv[1] || '').href) {
   const args = process.argv.slice(2);
   let baseDir: string | undefined;
   let webPort: number | undefined;

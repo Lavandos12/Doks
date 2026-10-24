@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import * as Y from 'yjs';
+import crypto from 'node:crypto';
 import {
   DOC_INDEX,
   isNoteDoc,
@@ -15,34 +15,81 @@ import {
 } from '@doks/shared';
 import { DocManager } from './doc-manager.js';
 
+const WINDOWS_RESERVED = /^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])$/i;
+
 export function sanitizeFileName(name: string): string {
   // Replace Windows illegal characters: < > : " / \ | ? *
-  return name.replace(/[<>:"/\\|?*]/g, '_').trim() || 'Untitled';
+  let safe = name.replace(/[<>:"/\\|?*]/g, '_').trim();
+  // Strip trailing dots and spaces
+  safe = safe.replace(/[. ]+$/, '');
+  // Windows reserved device names
+  if (WINDOWS_RESERVED.test(safe)) {
+    safe = `_${safe}`;
+  }
+  // Max length
+  if (safe.length > 80) {
+    safe = safe.slice(0, 80).trim();
+  }
+  return safe || 'Untitled';
+}
+
+interface MirrorRegistry {
+  notes: Record<string, string>; // noteId -> relativePath
+  boards: Record<string, string>; // boardId -> relativePath
 }
 
 export class FileMirror {
   private vaultPath: string;
   private boardsPath: string;
+  private mirrorJsonPath: string;
   private docManager: DocManager;
   private debounceMs: number;
   private pendingTimeouts = new Map<string, NodeJS.Timeout>();
+  private lastWrittenHashes = new Map<string, string>(); // normalizedFilePath -> sha256
+  private registry: MirrorRegistry = { notes: {}, boards: {} };
 
   constructor(vaultPath: string, docManager: DocManager, debounceMs = 3000) {
     this.vaultPath = vaultPath;
     this.boardsPath = path.join(vaultPath, 'boards');
+    const elumaDir = path.join(path.dirname(vaultPath), '.eluma');
+    this.mirrorJsonPath = path.join(elumaDir, 'mirror.json');
     this.docManager = docManager;
     this.debounceMs = debounceMs;
 
     fs.mkdirSync(this.vaultPath, { recursive: true });
     fs.mkdirSync(this.boardsPath, { recursive: true });
+    fs.mkdirSync(elumaDir, { recursive: true });
 
-    // Listen to all document updates
+    this.loadRegistry();
+
+    // Listen to document updates
     this.docManager.on('update', ({ docName, origin }) => {
-      // Do not mirror back updates coming from external file watcher
       if (origin !== 'external-file') {
         this.scheduleWrite(docName);
       }
     });
+  }
+
+  private loadRegistry(): void {
+    if (fs.existsSync(this.mirrorJsonPath)) {
+      try {
+        this.registry = JSON.parse(fs.readFileSync(this.mirrorJsonPath, 'utf8'));
+      } catch {
+        this.registry = { notes: {}, boards: {} };
+      }
+    }
+  }
+
+  private saveRegistry(): void {
+    try {
+      fs.writeFileSync(this.mirrorJsonPath, JSON.stringify(this.registry, null, 2), 'utf8');
+    } catch (err) {
+      console.error('[FileMirror] Failed to save mirror.json:', err);
+    }
+  }
+
+  public getLastWrittenHash(filePath: string): string | undefined {
+    return this.lastWrittenHashes.get(path.normalize(filePath));
   }
 
   public scheduleWrite(docName: string): void {
@@ -62,8 +109,8 @@ export class FileMirror {
   /**
    * Resolves folder path relative to vault root.
    */
-  private resolveFolderPath(folderId: string | null): string {
-    if (!folderId) return this.vaultPath;
+  private resolveFolderPath(folderId: string | null): { absDir: string; relDir: string } {
+    if (!folderId) return { absDir: this.vaultPath, relDir: '' };
     const indexDoc = this.docManager.getOrCreateDoc(DOC_INDEX);
     const { folders } = getIndexMaps(indexDoc);
 
@@ -82,15 +129,24 @@ export class FileMirror {
       }
     }
 
-    return path.join(this.vaultPath, ...parts);
+    const relDir = path.join(...parts);
+    return {
+      absDir: path.join(this.vaultPath, relDir),
+      relDir
+    };
   }
 
   /**
-   * Writes data to disk atomically using temp file and rename.
+   * Writes content atomically using temp file and rename.
+   * Tracks content hash to avoid feedback loops with FileWatcher.
    */
   private atomicWriteFile(targetPath: string, content: string): void {
     const dir = path.dirname(targetPath);
     fs.mkdirSync(dir, { recursive: true });
+
+    const hash = crypto.createHash('sha256').update(content).digest('hex');
+    const normalized = path.normalize(targetPath);
+    this.lastWrittenHashes.set(normalized, hash);
 
     const tempPath = `${targetPath}.tmp.${Date.now()}.${Math.random().toString(36).slice(2, 6)}`;
     try {
@@ -104,10 +160,27 @@ export class FileMirror {
     }
   }
 
+  private safelyDeleteOldFile(relPath: string | undefined): void {
+    if (!relPath) return;
+    const absPath = path.join(this.vaultPath, relPath);
+    if (fs.existsSync(absPath)) {
+      try {
+        fs.unlinkSync(absPath);
+        // Clean up empty parent folder if not root vault
+        const parentDir = path.dirname(absPath);
+        if (parentDir !== this.vaultPath && parentDir !== this.boardsPath) {
+          const files = fs.readdirSync(parentDir);
+          if (files.length === 0) {
+            fs.rmdirSync(parentDir);
+          }
+        }
+      } catch {}
+    }
+  }
+
   public flushDoc(docName: string): void {
     try {
       if (docName === DOC_INDEX) {
-        // Sync index structure
         this.flushAll();
         return;
       }
@@ -118,42 +191,81 @@ export class FileMirror {
       if (isNoteDoc(docName)) {
         const noteId = getEntityIdFromDocName(docName);
         const meta = notes.get(noteId);
-        const folderDir = this.resolveFolderPath(meta?.folder || null);
-        const fileName = `${sanitizeFileName(meta?.title || noteId)}.md`;
-        const filePath = path.join(folderDir, fileName);
+        const oldRelPath = this.registry.notes[noteId];
 
         if (!meta || meta.deleted) {
-          if (fs.existsSync(filePath)) {
-            try { fs.unlinkSync(filePath); } catch {}
-          }
+          this.safelyDeleteOldFile(oldRelPath);
+          delete this.registry.notes[noteId];
+          this.saveRegistry();
           return;
+        }
+
+        const { absDir, relDir } = this.resolveFolderPath(meta.folder || null);
+        let baseFileName = sanitizeFileName(meta.title || noteId);
+
+        // Check for collision with other active notes in the same folder
+        let hasCollision = false;
+        notes.forEach((otherMeta, otherId) => {
+          if (otherId !== noteId && !otherMeta.deleted && (otherMeta.folder || null) === (meta.folder || null)) {
+            if (sanitizeFileName(otherMeta.title) === baseFileName) {
+              // Collision exists! Check which one gets suffix (the one with larger ID)
+              if (noteId > otherId) {
+                hasCollision = true;
+              }
+            }
+          }
+        });
+
+        if (hasCollision) {
+          baseFileName = `${baseFileName}-${noteId.slice(0, 4)}`;
+        }
+
+        const fileName = `${baseFileName}.md`;
+        const targetAbsPath = path.join(absDir, fileName);
+        const newRelPath = path.join(relDir, fileName);
+
+        // If path changed (renamed or moved to another folder), delete old file!
+        if (oldRelPath && oldRelPath !== newRelPath) {
+          this.safelyDeleteOldFile(oldRelPath);
         }
 
         const noteDoc = this.docManager.getOrCreateDoc(docName);
         const text = noteDoc.getText('text').toString();
 
+        // Frontmatter: exactly one newline after closing delimiter
         const frontmatter = [
           '---',
           `id: ${noteId}`,
           `title: "${(meta.title || '').replace(/"/g, '\\"')}"`,
           `updatedAt: ${meta.updatedAt || Date.now()}`,
           '---',
-          '',
           ''
         ].join('\n');
 
-        this.atomicWriteFile(filePath, frontmatter + text);
+        this.atomicWriteFile(targetAbsPath, frontmatter + text);
+
+        this.registry.notes[noteId] = newRelPath;
+        this.saveRegistry();
+
       } else if (isBoardDoc(docName)) {
         const boardId = getEntityIdFromDocName(docName);
         const meta = boards.get(boardId);
-        const fileName = `${sanitizeFileName(meta?.title || boardId)}.canvas`;
-        const filePath = path.join(this.boardsPath, fileName);
+        const oldRelPath = this.registry.boards[boardId];
 
         if (!meta || meta.deleted) {
-          if (fs.existsSync(filePath)) {
-            try { fs.unlinkSync(filePath); } catch {}
-          }
+          this.safelyDeleteOldFile(oldRelPath);
+          delete this.registry.boards[boardId];
+          this.saveRegistry();
           return;
+        }
+
+        const baseFileName = sanitizeFileName(meta.title || boardId);
+        const fileName = `${baseFileName}.canvas`;
+        const targetAbsPath = path.join(this.boardsPath, fileName);
+        const newRelPath = path.join('boards', fileName);
+
+        if (oldRelPath && oldRelPath !== newRelPath) {
+          this.safelyDeleteOldFile(oldRelPath);
         }
 
         const boardDoc = this.docManager.getOrCreateDoc(docName);
@@ -172,7 +284,10 @@ export class FileMirror {
         const canvasData = boardToJSONCanvas(nodes, edges);
         const jsonContent = JSON.stringify(canvasData, null, 2);
 
-        this.atomicWriteFile(filePath, jsonContent);
+        this.atomicWriteFile(targetAbsPath, jsonContent);
+
+        this.registry.boards[boardId] = newRelPath;
+        this.saveRegistry();
       }
     } catch (err) {
       console.error(`[FileMirror] Error flushing doc ${docName}:`, err);

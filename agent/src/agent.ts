@@ -24,7 +24,7 @@ export class Agent {
     this.stateStore = new StateStore(this.config.statePath);
     this.docManager = new DocManager(this.stateStore);
     this.fileMirror = new FileMirror(this.config.vaultPath, this.docManager);
-    this.fileWatcher = new FileWatcher(this.config.vaultPath, this.docManager);
+    this.fileWatcher = new FileWatcher(this.config.vaultPath, this.docManager, this.fileMirror);
     
     const snapshotsDir = path.join(path.dirname(this.config.statePath), 'snapshots');
     this.snapshotManager = new SnapshotManager(snapshotsDir, this.docManager);

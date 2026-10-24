@@ -1,5 +1,7 @@
 import { WebSocketServer, WebSocket } from 'ws';
 import { EventEmitter } from 'node:events';
+import fs from 'node:fs';
+import path from 'node:path';
 import type { AgentConfig, PeerStatus } from '@doks/shared';
 import { DocManager } from '../storage/doc-manager.js';
 import { PeerConnection } from './peer-connection.js';
@@ -263,7 +265,26 @@ export class PeerService extends EventEmitter {
     }
   }
 
-  public addPeer(address: string): void {
+  public addPeer(rawAddress: string): void {
+    let address = rawAddress.trim();
+    let teamKeyFromInvite: string | undefined;
+
+    if (address.includes('#')) {
+      const parts = address.split('#');
+      address = parts[0].trim();
+      teamKeyFromInvite = parts[1]?.trim();
+    }
+
+    if (teamKeyFromInvite && teamKeyFromInvite.length === 64) {
+      this.config.teamKey = teamKeyFromInvite;
+      const elumaDir = path.dirname(this.config.statePath);
+      const configPath = path.join(elumaDir, 'config.json');
+      try {
+        fs.writeFileSync(configPath, JSON.stringify(this.config, null, 2), 'utf8');
+      } catch {}
+      console.log(`[PeerService] Adopted teamKey from invite for peer mesh`);
+    }
+
     if (!this.outboundPeers.has(address)) {
       this.outboundPeers.set(address, {
         address,

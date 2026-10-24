@@ -17,6 +17,7 @@ export class DocManager extends EventEmitter {
   private docs = new Map<string, Y.Doc>();
   private stateStore: StateStore;
   private awareness: awarenessProtocol.Awareness;
+  private autoCompactionTimer?: NodeJS.Timeout;
 
   constructor(stateStore: StateStore) {
     super();
@@ -33,21 +34,30 @@ export class DocManager extends EventEmitter {
         this.getOrCreateDoc(docName);
       }
     }
+
+    // Auto-compaction every 60s
+    this.autoCompactionTimer = setInterval(() => {
+      this.compactAll();
+    }, 60000);
   }
 
   public getOrCreateDoc(docName: string): Y.Doc {
     let doc = this.docs.get(docName);
     if (!doc) {
-      doc = new Y.Doc();
-      this.docs.set(docName, doc);
+      const createdDoc = new Y.Doc();
+      this.docs.set(docName, createdDoc);
+      doc = createdDoc;
 
       // Load state from disk
-      this.stateStore.loadDoc(docName, doc);
+      this.stateStore.loadDoc(docName, createdDoc);
 
       // Wire update listener
-      doc.on('update', (update: Uint8Array, origin: any) => {
+      createdDoc.on('update', (update: Uint8Array, origin: any) => {
         // Save to binary state store
         this.stateStore.saveUpdate(docName, update);
+        if (this.stateStore.getUpdateCount(docName) >= 500) {
+          this.stateStore.compactDoc(docName, createdDoc);
+        }
 
         // Emit update event for peer broadcasting and web clients
         const event: DocUpdateEvent = { docName, update, origin };
@@ -132,7 +142,12 @@ export class DocManager extends EventEmitter {
    * Destroys all documents and awareness.
    */
   public destroy(): void {
+    if (this.autoCompactionTimer) {
+      clearInterval(this.autoCompactionTimer);
+      this.autoCompactionTimer = undefined;
+    }
     this.compactAll();
+    this.stateStore.destroy();
     this.awareness.destroy();
     for (const doc of this.docs.values()) {
       doc.destroy();
