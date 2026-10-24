@@ -48,6 +48,20 @@ export function loadOrCreateConfig(options: ConfigOptions = {}): AgentConfig {
     }
   }
 
+  // Stage H: Migration from v1.0 - back up existing state before applying v2 schema
+  const backupV1Path = path.join(elumaDir, 'backup-v1');
+  if (fs.existsSync(statePath) && !fs.existsSync(backupV1Path) && (!existing.version || existing.version < 2)) {
+    try {
+      const stateFiles = fs.readdirSync(statePath);
+      if (stateFiles.length > 0) {
+        fs.cpSync(statePath, backupV1Path, { recursive: true });
+        console.log('[Migration] Created backup of v1.0 state at .eluma/backup-v1');
+      }
+    } catch (e) {
+      console.warn('[Migration] Failed to backup v1 state:', e);
+    }
+  }
+
   const radminIp = findRadminIp();
   const agentId = existing.agentId || crypto.randomUUID();
   const teamKey = options.teamKey || existing.teamKey || generateTeamKey();
@@ -59,6 +73,7 @@ export function loadOrCreateConfig(options: ConfigOptions = {}): AgentConfig {
   const peers = options.peers ?? existing.peers ?? [];
 
   const config: AgentConfig = {
+    version: 2,
     agentId,
     memberName,
     memberColor,

@@ -92,6 +92,7 @@ export interface PeerStatus {
 }
 
 export interface AgentConfig {
+  version?: number;
   agentId: string;
   memberName: string;
   memberColor: string;
