@@ -18,6 +18,7 @@ import {
 } from '../../state/app-state.js';
 import { seedDefaultBoard } from './board-seed.js';
 import { Icon, type IconName } from '../../ui/icons.js';
+import { AiExportModal } from './ai-export-modal.js';
 
 export const CANVAS_COLORS: Record<string, string> = {
   '1': '#e06c75', // Red
@@ -58,6 +59,7 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
   // Selection state (multi-selection)
   const [selectedNodeIds, setSelectedNodeIds] = useState<Set<string>>(new Set());
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
+  const [showAiModal, setShowAiModal] = useState(false);
 
   // Current selected color for new stickies or changing node color
   const [activeColor, setActiveColor] = useState<string>('3');
@@ -261,6 +263,12 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
       if (e.ctrlKey && (e.key.toLowerCase() === 'y' || (e.shiftKey && e.key.toLowerCase() === 'z'))) {
         e.preventDefault();
         undoManagerRef.current?.redo();
+      }
+
+      // AI Context Export (Ctrl+Shift+E)
+      if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'e') {
+        e.preventDefault();
+        setShowAiModal(true);
       }
 
       // Duplicate (Ctrl+D)
@@ -786,6 +794,17 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
             <Icon name="trash" size={16} />
           </button>
         )}
+
+        <div class="toolbox-divider" />
+
+        {/* AI Context Export */}
+        <button
+          class="tb-btn text-[var(--accent)]"
+          onClick={() => setShowAiModal(true)}
+          title="Экспорт для ИИ (Ctrl+Shift+E)"
+        >
+          <Icon name="sparkles" size={17} />
+        </button>
       </div>
 
       {/* 2. Zoom & Template Controls (Bottom-Right) */}
@@ -1065,6 +1084,14 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
           </div>
         ))}
       </div>
+
+      {showAiModal && (
+        <AiExportModal
+          boardId={boardId}
+          selectedNodeIds={Array.from(selectedNodeIds)}
+          onClose={() => setShowAiModal(false)}
+        />
+      )}
     </div>
   );
 }

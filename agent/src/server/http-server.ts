@@ -26,7 +26,9 @@ import {
   getNoteText,
   nodeMapToData,
   getNoteDocName,
-  getBoardDocName
+  getBoardDocName,
+  generateAiContext,
+  type AiExportOptions
 } from '@doks/shared';
 import { DocManager } from '../storage/doc-manager.js';
 import { PeerService } from '../peer/peer-service.js';
@@ -584,6 +586,17 @@ export class AgentHttpServer {
       reply.header('Content-Type', 'application/json; charset=utf-8');
       reply.header('Content-Disposition', `attachment; filename="${safeTitle}.canvas"`);
       return reply.send(canvasJson);
+    });
+
+    // API: Export AI Context (Section 5)
+    this.fastify.post('/api/export/ai', async (req, reply) => {
+      const body = req.body as AiExportOptions;
+      if (!body?.boardId) {
+        return reply.code(400).send({ error: 'boardId is required' });
+      }
+
+      const result = generateAiContext(this.docManager, body);
+      return result;
     });
 
     // WebSocket bridge for browser client
