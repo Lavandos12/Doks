@@ -38,7 +38,7 @@ export function wikilinksCompletionSource(context: CompletionContext): Completio
 export function findBacklinks(targetTitle: string, allNotes: Array<{ id: string; title: string; text?: string }>): Array<{ id: string; title: string }> {
   if (!targetTitle) return [];
   const escaped = targetTitle.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&');
-  const regex = new RegExp(`\\[\\[\\s*${escaped}\\s*\\]\\]`, 'i');
+  const regex = new RegExp(`\\[\\[\\s*${escaped}(\\s*\\|[^\\]]*)?\\]\\]`, 'i');
 
   return allNotes.filter((n) => {
     if (n.title.toLowerCase() === targetTitle.toLowerCase()) return false;
@@ -49,15 +49,16 @@ export function findBacklinks(targetTitle: string, allNotes: Array<{ id: string;
 /**
  * Opens or creates a note when a [[Title]] link is activated.
  */
-export function navigateToWikilink(title: string): void {
+export function navigateToWikilink(rawTitle: string): void {
+  const [cleanTitle] = rawTitle.split('|').map((s) => s.trim());
   const match = notes.value.find(
-    (n) => !n.deleted && n.title.toLowerCase() === title.trim().toLowerCase()
+    (n) => !n.deleted && n.title.toLowerCase() === cleanTitle.toLowerCase()
   );
   if (match) {
     selectedNoteId.value = match.id;
   } else {
     // If not found, create note automatically
-    const newId = createNote(title.trim());
+    const newId = createNote(cleanTitle);
     selectedNoteId.value = newId;
   }
 }
