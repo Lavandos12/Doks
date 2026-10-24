@@ -14,7 +14,9 @@ export class NotesSearchIndex {
     this.miniSearch = new MiniSearch<SearchDoc>({
       fields: ['title', 'text'],
       storeFields: ['id', 'title'],
+      processTerm: (term) => term.toLowerCase().replace(/ё/g, 'е'),
       searchOptions: {
+        processTerm: (term) => term.toLowerCase().replace(/ё/g, 'е'),
         prefix: true,
         fuzzy: 0.2,
         boost: { title: 2 }

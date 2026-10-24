@@ -1,6 +1,16 @@
 import { h } from 'preact';
 import { useState, useEffect } from 'preact/hooks';
 import type { PeerStatus } from '@doks/shared';
+import { Icon } from '../../ui/icons.js';
+
+const AUTHOR_COLORS = [
+  '#3b82f6', // blue
+  '#10b981', // emerald
+  '#f59e0b', // amber
+  '#8b5cf6', // purple
+  '#ec4899', // pink
+  '#06b6d4', // cyan
+];
 
 export function NetworkScreen() {
   const [status, setStatus] = useState<any>(null);
@@ -8,12 +18,21 @@ export function NetworkScreen() {
   const [copyFeedback, setCopyFeedback] = useState(false);
   const [loading, setLoading] = useState(false);
 
+  // Profile editing (B10)
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const [editName, setEditName] = useState('');
+  const [editColor, setEditColor] = useState('');
+
   const fetchStatus = async () => {
     try {
       const res = await fetch('/api/status');
       if (res.ok) {
         const data = await res.json();
         setStatus(data);
+        if (!isEditingProfile) {
+          setEditName(data.memberName || '');
+          setEditColor(data.memberColor || '#3b82f6');
+        }
       }
     } catch {}
   };
@@ -23,6 +42,24 @@ export function NetworkScreen() {
     const interval = setInterval(fetchStatus, 3000);
     return () => clearInterval(interval);
   }, []);
+
+  const handleSaveProfile = async () => {
+    if (!editName.trim()) return;
+    try {
+      const res = await fetch('/api/profile', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          memberName: editName.trim(),
+          memberColor: editColor
+        })
+      });
+      if (res.ok) {
+        setIsEditingProfile(false);
+        fetchStatus();
+      }
+    } catch {}
+  };
 
   const handleAddPeer = async () => {
     if (!newPeerAddr.trim()) return;
@@ -52,9 +89,7 @@ export function NetworkScreen() {
     } catch {}
   };
 
-  const inviteString = status
-    ? `doks://${status.bindAddress || '26.x.x.x'}:${status.peerPort || 4747}#${status.teamKey}`
-    : '';
+  const inviteString = status?.inviteLink || (status?.effectiveIp ? `doks://${status.effectiveIp}:${status.peerPort}` : '');
 
   const copyInvite = () => {
     if (inviteString) {
@@ -67,35 +102,94 @@ export function NetworkScreen() {
   return (
     <div class="network-screen">
       <div class="screen-header">
-        <h2>Участники и Сеть (Radmin VPN)</h2>
+        <div class="screen-title-group">
+          <h2>Участники и Сеть (Radmin VPN)</h2>
+          <span class="screen-subtitle">Mesh-синхронизация без выделенного сервера</span>
+        </div>
+
+        {status?.radminFound ? (
+          <div class="radmin-screen-badge ok">
+            <Icon name="wifi" size={16} />
+            <span>Radmin активен: {status.effectiveIp}</span>
+          </div>
+        ) : (
+          <div class="radmin-screen-badge warn">
+            <Icon name="wifi-off" size={16} />
+            <span>Radmin не обнаружен (проверьте включение VPN)</span>
+          </div>
+        )}
       </div>
 
       <div class="network-cards-grid">
-        {/* Profile Card */}
+        {/* Profile Card (B10) */}
         <div class="network-card">
-          <h3>Ваш узел</h3>
-          <div class="node-profile">
-            <div
-              class="avatar-circle"
-              style={{ backgroundColor: status?.memberColor || '#3b82f6' }}
-            >
-              {(status?.memberName || 'U')[0].toUpperCase()}
-            </div>
-            <div class="profile-details">
-              <span class="profile-name">{status?.memberName || 'Пользователь'}</span>
-              <span class="profile-ip">
-                Radmin IP: <strong>{status?.bindAddress || '26.x.x.x'}</strong> (Порт: {status?.peerPort || 4747})
-              </span>
-              <span class="profile-id">ID: {status?.agentId}</span>
-            </div>
+          <div class="card-header-bar">
+            <h3>Ваш профиль соавтора</h3>
+            {!isEditingProfile && (
+              <button class="card-action-link" onClick={() => setIsEditingProfile(true)}>
+                <Icon name="edit" size={13} />
+                <span>Изменить</span>
+              </button>
+            )}
           </div>
+
+          {isEditingProfile ? (
+            <div class="profile-edit-form">
+              <label class="form-label">Имя или позывной</label>
+              <input
+                type="text"
+                class="form-input"
+                value={editName}
+                onInput={(e) => setEditName((e.target as HTMLInputElement).value)}
+                maxLength={32}
+              />
+
+              <label class="form-label">Цвет курсора и стикеров</label>
+              <div class="color-palette-picker">
+                {AUTHOR_COLORS.map((c) => (
+                  <button
+                    key={c}
+                    type="button"
+                    class={`color-circle-btn ${editColor === c ? 'selected' : ''}`}
+                    style={{ backgroundColor: c }}
+                    onClick={() => setEditColor(c)}
+                  />
+                ))}
+              </div>
+
+              <div class="form-buttons">
+                <button class="btn-cancel" onClick={() => setIsEditingProfile(false)}>
+                  Отмена
+                </button>
+                <button class="btn-primary" onClick={handleSaveProfile}>
+                  Сохранить
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div class="node-profile">
+              <div
+                class="avatar-circle"
+                style={{ backgroundColor: status?.memberColor || '#3b82f6' }}
+              >
+                {(status?.memberName || 'U')[0].toUpperCase()}
+              </div>
+              <div class="profile-details">
+                <span class="profile-name">{status?.memberName || 'Пользователь'}</span>
+                <span class="profile-ip">
+                  Сетевой адрес: <strong>{status?.effectiveIp || '26.x.x.x'}</strong> (Порт: {status?.peerPort || 4747})
+                </span>
+                <span class="profile-id">ID узла: {status?.agentId}</span>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Invite Card */}
         <div class="network-card">
-          <h3>Приглашение для команды</h3>
+          <h3>Приглашение в команду</h3>
           <p class="card-desc">
-            Передайте эту строку другим участникам вашей комнаты в Radmin VPN:
+            Передайте эту защищённую ссылку участнику вашей комнаты Radmin VPN для автоматического подключения:
           </p>
           <div class="invite-box">
             <input
@@ -103,9 +197,11 @@ export function NetworkScreen() {
               readonly
               class="invite-input"
               value={inviteString}
+              placeholder="Генерация ссылки приглашения..."
             />
             <button class="btn-primary" onClick={copyInvite}>
-              {copyFeedback ? 'Скопировано!' : 'Копировать'}
+              <Icon name={copyFeedback ? 'check' : 'share'} size={15} />
+              <span>{copyFeedback ? 'Скопировано!' : 'Копировать'}</span>
             </button>
           </div>
         </div>
@@ -114,7 +210,7 @@ export function NetworkScreen() {
       {/* Peers Section */}
       <div class="peers-section">
         <div class="section-title-bar">
-          <h3>Подключенные пиры ({status?.connectedCount || 0})</h3>
+          <h3>Участники в сети ({status?.connectedCount || 0} подключено)</h3>
         </div>
 
         {/* Add Peer Bar */}
@@ -122,13 +218,14 @@ export function NetworkScreen() {
           <input
             type="text"
             class="peer-input"
-            placeholder="Введите IP:порт или строку doks://26.x.x.x:4747#key"
+            placeholder="Введите IP:порт или строку doks://26.x.x.x:4747#teamKey"
             value={newPeerAddr}
             onInput={(e) => setNewPeerAddr((e.target as HTMLInputElement).value)}
             onKeyDown={(e) => e.key === 'Enter' && handleAddPeer()}
           />
           <button class="btn-primary" onClick={handleAddPeer} disabled={loading}>
-            Добавить пир
+            <Icon name="plus" size={15} />
+            <span>Добавить пир</span>
           </button>
         </div>
 
@@ -148,7 +245,7 @@ export function NetworkScreen() {
               {!status?.peers || status.peers.length === 0 ? (
                 <tr>
                   <td colspan={5} class="table-empty">
-                    Нет добавленных пиров. Добавьте адрес участника сети.
+                    Нет добавленных пиров. Вставьте строку приглашения или IP другого компьютера.
                   </td>
                 </tr>
               ) : (
@@ -156,7 +253,8 @@ export function NetworkScreen() {
                   <tr key={p.address}>
                     <td>
                       <span class={`status-pill ${p.connected ? 'online' : 'offline'}`}>
-                        {p.connected ? 'Онлайн' : 'Офлайн'}
+                        <span class="status-dot"></span>
+                        {p.connected ? 'В сети' : 'Офлайн'}
                       </span>
                     </td>
                     <td>
@@ -171,8 +269,10 @@ export function NetworkScreen() {
                       <button
                         class="btn-delete-peer"
                         onClick={() => handleRemovePeer(p.address)}
+                        title="Удалить соединение"
                       >
-                        Удалить
+                        <Icon name="trash" size={13} />
+                        <span>Удалить</span>
                       </button>
                     </td>
                   </tr>
