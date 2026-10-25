@@ -60,7 +60,7 @@ export const ru = {
   'search.found_count': 'Найдено результатов: {count}',
   'search.no_results': 'Ничего не найдено',
 
-  'ai.modal_title': 'Экспорт контекста для ИИ (doks-ai/1)',
+  'ai.modal_title': 'Экспорт доски для ИИ (doks-ai/1)',
   'ai.copy': 'Скопировать в буфер',
   'ai.copied': 'Скопировано!',
   'ai.close': 'Закрыть',
