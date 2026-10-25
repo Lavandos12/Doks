@@ -1,6 +1,14 @@
 #!/usr/bin/env node
 import { exec } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
+
+// Clear proxy environment variables so Node never routes 127.0.0.1 or 26.x.x.x via Hiddify / sing-box
+delete process.env.HTTP_PROXY;
+delete process.env.HTTPS_PROXY;
+delete process.env.ALL_PROXY;
+delete process.env.http_proxy;
+delete process.env.https_proxy;
+
 import { Agent } from './agent.js';
 
 export * from './agent.js';
@@ -22,7 +30,7 @@ if (import.meta.url === pathToFileURL(process.argv[1] || '').href) {
 
   if (args.includes('--help') || args.includes('-h')) {
     console.log(`
-Doks v0.2.0 - Local-first collaborative workspace for teams
+Doks v1.0.0 - Local-first collaborative workspace for teams
 
 Usage:
   doks [options]
@@ -40,7 +48,7 @@ Options:
   }
 
   if (args.includes('--version') || args.includes('-v')) {
-    console.log('0.2.0');
+    console.log('1.0.0');
     process.exit(0);
   }
 

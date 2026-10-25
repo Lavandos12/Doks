@@ -162,6 +162,13 @@ body, html {
   flex-direction: column;
   background-color: var(--bg-secondary);
   overflow: hidden;
+  transition: width 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.sidebar-collapsed .explorer-pane {
+  width: 0;
+  min-width: 0;
+  display: none;
 }
 
 .explorer-section {
@@ -627,6 +634,10 @@ body, html {
 
 .radmin-badge.found {
   color: var(--success);
+}
+
+.radmin-badge.solo-mode {
+  color: var(--accent);
 }
 
 .radmin-badge.missing {
@@ -3313,4 +3324,216 @@ body, html {
   align-items: center;
   gap: 4px;
   margin-left: auto;
+}
+
+/* Sleek Bottom-Right Canvas HUD (Zoom, Fit, Minimap) */
+.canvas-bottom-right-hud {
+  position: absolute;
+  right: 18px;
+  bottom: 18px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+  z-index: 100;
+  user-select: none;
+}
+
+.zoom-hud-pill {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  border-radius: 10px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.45);
+}
+
+.hud-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-width: 28px;
+  height: 28px;
+  padding: 0 6px;
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.76rem;
+  font-weight: 500;
+  transition: all 0.12s ease;
+}
+
+.hud-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-primary);
+}
+
+.hud-btn.active {
+  background: rgba(255, 255, 255, 0.15);
+  color: var(--accent);
+}
+
+.zoom-value-btn {
+  min-width: 44px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.hud-divider {
+  width: 1px;
+  height: 16px;
+  background: rgba(255, 255, 255, 0.12);
+  margin: 0 2px;
+}
+
+.hud-btn-text {
+  font-size: 0.74rem;
+  font-weight: 600;
+}
+
+.minimap-popup {
+  padding: 6px;
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.55);
+}
+
+/* Empty Canvas Center Card */
+.canvas-empty-state {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 24px 32px;
+  border-radius: 14px;
+  z-index: 20;
+  max-width: 380px;
+  pointer-events: auto;
+}
+
+.empty-state-title {
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 6px;
+}
+
+.empty-state-desc {
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  line-height: 1.4;
+  margin-bottom: 16px;
+}
+
+.empty-state-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* SVG Edge Styling & Hit Area */
+.canvas-edge-hit-area {
+  cursor: pointer;
+  pointer-events: stroke;
+}
+
+.canvas-edge-path {
+  cursor: pointer;
+  pointer-events: stroke;
+  transition: stroke 0.15s ease, stroke-width 0.15s ease;
+}
+
+.canvas-edge-path:hover {
+  stroke: var(--accent);
+  stroke-width: 3px;
+}
+
+.canvas-edge-path.selected {
+  stroke: var(--accent) !important;
+  stroke-width: 3px !important;
+}
+
+.connecting-preview-line {
+  pointer-events: none;
+}
+
+.magnetic-snap-ring {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2.5px;
+  animation: pulseSnap 1.2s infinite ease-in-out;
+  pointer-events: none;
+}
+
+@keyframes pulseSnap {
+  0% { r: 6px; stroke-opacity: 1; }
+  50% { r: 10px; stroke-opacity: 0.5; }
+  100% { r: 6px; stroke-opacity: 1; }
+}
+
+/* Card Redesign & Floating Inspector enhancements */
+.inspector-font-sizes {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.inspector-size-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  border-radius: 4px;
+  font-size: 0.74rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.1s ease;
+}
+
+.inspector-size-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text-primary);
+}
+
+.sticky-checkbox-container {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 5;
+}
+
+.node-drag-bar {
+  height: 22px;
+  width: 100%;
+  cursor: grab;
+  display: flex;
+  align-items: center;
+  padding: 2px 6px;
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.node-drag-bar:active {
+  cursor: grabbing;
+}
+
+.node-author-microbadge {
+  position: absolute;
+  right: 8px;
+  bottom: 6px;
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  opacity: 0.7;
+  pointer-events: none;
+  user-select: none;
 }

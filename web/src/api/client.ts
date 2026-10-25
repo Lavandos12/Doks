@@ -17,6 +17,10 @@ export interface AgentStatusResponse {
   webPort: number;
   effectiveIp: string;
   radminFound: boolean;
+  radminIp?: string | null;
+  preferredMeshIp?: string | null;
+  meshInterfaceKind?: string;
+  interfaces?: any[];
   peers: any[];
   connectedCount: number;
   teamKey?: string;
@@ -47,9 +51,12 @@ class ApiClient {
 
     this.tokenPromise = (async () => {
       try {
-        // First try GET / to obtain the cookie if needed
-        await fetch('/', { credentials: 'include' });
         this.extractCookieToken();
+        if (!this.sessionToken && typeof window !== 'undefined') {
+          // Fetch root to obtain doks_session cookie
+          await fetch('/', { credentials: 'include' }).catch(() => {});
+          this.extractCookieToken();
+        }
 
         const res = await fetch('/api/status', {
           credentials: 'include',
@@ -62,8 +69,11 @@ class ApiClient {
             this.sessionToken = data.token;
           }
         }
+        this.extractCookieToken();
       } catch (err) {
         console.warn('[ApiClient] Failed to bootstrap session token:', err);
+      } finally {
+        this.tokenPromise = null;
       }
       return this.sessionToken;
     })();

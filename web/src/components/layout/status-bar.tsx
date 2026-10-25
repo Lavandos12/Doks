@@ -1,6 +1,6 @@
 import { h } from 'preact';
 import { connectionState, agentStatus } from '../../state/yjs-client.js';
-import { currentView, isCommandPaletteOpen } from '../../state/app-state.js';
+import { currentView, isCommandPaletteOpen, currentScope } from '../../state/app-state.js';
 import { currentLanguage, setLanguage, t } from '../../i18n/index.js';
 import { Icon } from '../../ui/icons.js';
 
@@ -36,14 +36,37 @@ export function StatusBar() {
           )}
         </div>
 
-        <div
-          class={`radmin-badge ${radminFound ? 'found' : 'missing'}`}
-          onClick={() => (currentView.value = 'network')}
-          title={radminFound ? `Слушаем интерфейс Radmin VPN (${effectiveIp})` : 'Radmin VPN не обнаружен. Проверьте подключение Radmin.'}
-        >
-          <Icon name={radminFound ? 'wifi' : 'wifi-off'} size={13} />
-          <span>{radminFound ? t('status.radmin_found', { ip: effectiveIp }) : t('status.radmin_missing')}</span>
-        </div>
+        {currentScope.value === 'solo' ? (
+          <div
+            class="radmin-badge solo-mode"
+            onClick={() => (currentView.value = 'network')}
+            title="Личное пространство активно (без синхронизации по сети)"
+          >
+            <Icon name="lock" size={13} />
+            <span>Локальное хранилище</span>
+          </div>
+        ) : (
+          <div
+            class={`radmin-badge ${radminFound ? 'found' : 'missing'}`}
+            onClick={() => (currentView.value = 'network')}
+            title={
+              radminFound
+                ? `Слушаем интерфейс Radmin VPN (${effectiveIp})`
+                : status?.preferredMeshIp
+                  ? `Слушаем локальный интерфейс (${effectiveIp})`
+                  : 'Radmin VPN не обнаружен. Проверьте подключение Radmin.'
+            }
+          >
+            <Icon name={radminFound ? 'wifi' : 'wifi-off'} size={13} />
+            <span>
+              {radminFound
+                ? t('status.radmin_found', { ip: effectiveIp })
+                : status?.preferredMeshIp
+                  ? `LAN: ${effectiveIp}`
+                  : t('status.radmin_missing')}
+            </span>
+          </div>
+        )}
       </div>
 
       <div class="status-right">

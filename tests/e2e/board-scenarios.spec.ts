@@ -424,4 +424,55 @@ test.describe('F12: Playwright E2E Scenarios for Doks', () => {
     await expect(canvasBtn).toHaveClass(/active/);
     await expect(page.locator('.board-container')).toBeVisible();
   });
+
+  test('Scenario 11: Magnetic Port Connection creates persistent SVG edge and inspects label', async ({ page }) => {
+    await page.goto(`http://127.0.0.1:${port1}`);
+    await openBoard(page);
+
+    // Place Sticky A
+    await page.click('button[title*="Стикер"]');
+    const canvas = page.locator('.board-container');
+    await canvas.click({ position: { x: 250, y: 250 } });
+
+    // Place Sticky B
+    await page.click('button[title*="Стикер"]');
+    await canvas.click({ position: { x: 550, y: 250 } });
+
+    const nodes = page.locator('.board-node-box');
+    await expect(nodes).toHaveCount(2);
+
+    const firstNode = nodes.first();
+    const secondNode = nodes.nth(1);
+
+    // Hover on first node to reveal magnetic ports
+    await firstNode.hover();
+    const rightPort = firstNode.locator('.port-right');
+    await expect(rightPort).toBeVisible();
+
+    const rightBox = await rightPort.boundingBox();
+    const secondBox = await secondNode.boundingBox();
+    expect(rightBox).not.toBeNull();
+    expect(secondBox).not.toBeNull();
+
+    // Drag from right port of Node A to center-left of Node B
+    await page.mouse.move(rightBox!.x + rightBox!.width / 2, rightBox!.y + rightBox!.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(secondBox!.x + 10, secondBox!.y + secondBox!.height / 2, { steps: 5 });
+    await page.mouse.up();
+
+    // Assert SVG edge is created and attached
+    const edgePath = page.locator('.canvas-edge-path');
+    await expect(edgePath).toBeAttached({ timeout: 5000 });
+    await expect(edgePath).toHaveAttribute('d', /^M/);
+
+    // Click edge hit area to reveal floating edge inspector
+    const edgeHitArea = page.locator('.canvas-edge-hit-area');
+    await edgeHitArea.click({ force: true });
+    await expect(page.locator('.floating-edge-pill')).toBeVisible();
+
+    // Type a label for the connection
+    const labelInput = page.locator('.edge-label-input');
+    await labelInput.fill('API Flow');
+    await expect(page.locator('.edge-text-label')).toHaveText('API Flow');
+  });
 });

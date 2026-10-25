@@ -21,7 +21,9 @@ import {
   searchQuery,
   isCommandPaletteOpen,
   currentScope,
-  setScope
+  setScope,
+  isSidebarCollapsed,
+  toggleSidebar
 } from '../../state/app-state.js';
 import { t } from '../../i18n/index.js';
 import { Icon } from '../../ui/icons.js';
@@ -247,6 +249,13 @@ export function Sidebar() {
 
         <div class="activity-bottom">
           <button
+            class="activity-btn toggle-sidebar-btn"
+            onClick={toggleSidebar}
+            title={isSidebarCollapsed.value ? 'Развернуть панель (Ctrl+B)' : 'Свернуть панель (Ctrl+B)'}
+          >
+            <Icon name={isSidebarCollapsed.value ? 'chevron-right' : 'sidebar-left'} size={19} />
+          </button>
+          <button
             class="activity-btn"
             onClick={() => setTheme(theme.value === 'dark' ? 'light' : 'dark')}
             title={`Theme: ${theme.value === 'dark' ? 'Light' : 'Dark'}`}
@@ -258,14 +267,6 @@ export function Sidebar() {
 
       {/* 2. Explorer Primary Pane */}
       <div class="explorer-pane">
-        <div class="sidebar-scope-banner">
-          <div class={`scope-indicator-badge ${currentScope.value}`}>
-            <Icon name={currentScope.value === 'solo' ? 'lock' : 'globe-mesh'} size={13} class="scope-badge-icon" />
-            <span class="scope-badge-title">
-              {currentScope.value === 'solo' ? 'Личное (Соло)' : 'Общее (Команда)'}
-            </span>
-          </div>
-        </div>
         {currentView.value === 'notes' && (
           <div class="explorer-section">
             <div class="explorer-header">

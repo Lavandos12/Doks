@@ -77,6 +77,7 @@ export interface BoardNodeData {
   z: number;
   locked?: boolean;
   fontSize?: number;
+  hasCheckbox?: boolean;
   deleted: boolean;
   deletedAt?: number;
   scope?: WorkspaceScope;
@@ -93,6 +94,8 @@ export interface BoardEdgeData {
   toSide?: 'top' | 'right' | 'bottom' | 'left';
   label?: string;
   color?: string;
+  direction?: 'forward' | 'both' | 'none';
+  style?: 'solid' | 'dashed';
   deleted: boolean;
   deletedAt?: number;
   scope?: WorkspaceScope;

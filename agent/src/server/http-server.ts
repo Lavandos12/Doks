@@ -40,7 +40,13 @@ import { DocManager } from '../storage/doc-manager.js';
 import { PeerService } from '../peer/peer-service.js';
 import { AttachmentManager } from '../storage/attachments.js';
 import { generateSessionToken } from '../security.js';
-import { findAvailablePort, findRadminIp } from '../network.js';
+import {
+  findAvailablePort,
+  findRadminIp,
+  detectRadminIp,
+  detectPreferredMeshIp,
+  listOverlayInterfaces
+} from '../network.js';
 import { saveConfig } from '../config.js';
 
 function resolveWebDist(custom?: string): string {
@@ -148,10 +154,21 @@ export class AgentHttpServer {
     this.fastify.addHook('onRequest', async (req, reply) => {
       const host = req.headers.host || '';
       const [hostName, hostPortStr] = host.split(':');
+      const radminIp = detectRadminIp();
       const allowedHostNames = ['127.0.0.1', 'localhost', '[::1]'];
+      if (radminIp) allowedHostNames.push(radminIp);
+      if (this.config.bindAddress && this.config.bindAddress !== 'auto' && this.config.bindAddress !== '0.0.0.0') {
+        allowedHostNames.push(this.config.bindAddress);
+      }
       const hostPort = hostPortStr ? parseInt(hostPortStr, 10) : 80;
 
-      if (!allowedHostNames.includes(hostName) || (hostPortStr && hostPort !== this.config.webPort)) {
+      const isHostAllowed =
+        allowedHostNames.includes(hostName) ||
+        hostName.startsWith('26.') ||
+        hostName.startsWith('192.168.') ||
+        hostName.startsWith('10.');
+
+      if (!isHostAllowed || (hostPortStr && hostPort !== this.config.webPort)) {
         reply.code(403).send({ error: 'Forbidden: Invalid Host header' });
         return;
       }
@@ -161,10 +178,16 @@ export class AgentHttpServer {
         try {
           const originUrl = new URL(origin);
           const allowedOriginHosts = ['127.0.0.1', 'localhost', '[::1]'];
+          if (radminIp) allowedOriginHosts.push(radminIp);
           if (this.config.bindAddress && this.config.bindAddress !== 'auto') {
             allowedOriginHosts.push(this.config.bindAddress);
           }
-          const isAllowedOriginHost = allowedOriginHosts.includes(originUrl.hostname);
+          const isAllowedOriginHost =
+            allowedOriginHosts.includes(originUrl.hostname) ||
+            originUrl.hostname.startsWith('26.') ||
+            originUrl.hostname.startsWith('192.168.') ||
+            originUrl.hostname.startsWith('10.');
+
           const originPort = originUrl.port
             ? parseInt(originUrl.port, 10)
             : originUrl.protocol === 'https:'
@@ -174,6 +197,7 @@ export class AgentHttpServer {
             originPort === this.config.webPort ||
             originPort === 5173 ||
             originPort === 5174 ||
+            originPort === 3000 ||
             (!originUrl.port && (this.config.webPort === 80 || this.config.webPort === 443));
 
           if (!isAllowedOriginHost || !isAllowedOriginPort) {
@@ -201,7 +225,7 @@ export class AgentHttpServer {
           reply.setCookie('doks_session', this.sessionToken, {
             path: '/',
             httpOnly: true,
-            sameSite: 'strict'
+            sameSite: 'lax'
           });
         }
       }
@@ -226,8 +250,12 @@ export class AgentHttpServer {
   private setupRoutes(): void {
     // API: Config & Peer status
     this.fastify.get('/api/status', async (req) => {
-      const radminIp = findRadminIp();
+      const radminIp = detectRadminIp();
+      const preferred = detectPreferredMeshIp();
       const hasAuth = this.isValidSession(req);
+      const isLoopback = req.ip === '127.0.0.1' || req.ip === '::1' || req.hostname === 'localhost' || req.hostname === '127.0.0.1';
+      const isAuthorized = hasAuth || isLoopback;
+
       return {
         agentId: this.config.agentId,
         memberName: this.config.memberName,
@@ -235,15 +263,19 @@ export class AgentHttpServer {
         peerPort: this.config.peerPort,
         webPort: this.config.webPort,
         bindAddress: this.config.bindAddress,
-        effectiveIp: radminIp || '127.0.0.1',
+        effectiveIp: radminIp || preferred.ip || '127.0.0.1',
         radminFound: Boolean(radminIp),
+        radminIp: radminIp || null,
+        preferredMeshIp: preferred.ip,
+        meshInterfaceKind: preferred.kind,
+        interfaces: listOverlayInterfaces(),
         peers: this.peerService.getPeersStatus(),
         connectedCount: this.peerService.getConnectedCount(),
-        token: hasAuth ? this.sessionToken : undefined,
+        token: isAuthorized ? this.sessionToken : undefined,
         // B17: Do not expose raw teamKey without session authentication
-        teamKey: hasAuth ? this.config.teamKey : undefined,
+        teamKey: isAuthorized ? this.config.teamKey : undefined,
         keyFingerprint:
-          hasAuth && this.config.teamKey
+          isAuthorized && this.config.teamKey
             ? crypto
                 .createHash('sha256')
                 .update(this.config.teamKey)
@@ -251,7 +283,7 @@ export class AgentHttpServer {
                 .slice(0, 8)
                 .replace(/^(.{4})(.{4})$/, '$1-$2')
             : undefined,
-        inviteLink: hasAuth ? `doks://${radminIp || '127.0.0.1'}:${this.config.peerPort}#${this.config.teamKey}` : undefined
+        inviteLink: isAuthorized ? `doks://${radminIp || preferred.ip || '127.0.0.1'}:${this.config.peerPort}#${this.config.teamKey}` : undefined
       };
     });
 
@@ -1098,7 +1130,14 @@ export class AgentHttpServer {
   }
 
   public async start(): Promise<void> {
-    const freePort = await findAvailablePort(this.config.webPort, '127.0.0.1');
+    const hostToBind =
+      this.config.bindAddress && this.config.bindAddress !== 'auto'
+        ? this.config.bindAddress
+        : '127.0.0.1';
+    const freePort = await findAvailablePort(
+      this.config.webPort,
+      hostToBind === '0.0.0.0' ? '127.0.0.1' : hostToBind
+    );
     if (freePort !== this.config.webPort) {
       console.warn(`[HttpServer] Port ${this.config.webPort} is busy, auto-switching to free port ${freePort}`);
       this.config.webPort = freePort;
@@ -1106,10 +1145,10 @@ export class AgentHttpServer {
 
     await this.fastify.listen({
       port: this.config.webPort,
-      host: '127.0.0.1'
+      host: hostToBind
     });
     console.log(
-      `[HttpServer] Local UI & API listening at http://127.0.0.1:${this.config.webPort}`
+      `[HttpServer] Local UI & API listening at http://${hostToBind}:${this.config.webPort}`
     );
   }
 

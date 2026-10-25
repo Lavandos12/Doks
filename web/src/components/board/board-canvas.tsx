@@ -34,17 +34,22 @@ import { TransferModal } from './transfer-modal.js';
 import { t } from '../../i18n/index.js';
 import { showConfirm } from '../../ui/dialogs.js';
 import { showToast } from '../../ui/toast.js';
+import {
+  findMagneticTargetPort,
+  buildBezierEdgePath,
+  getPortCoordinates,
+  type PortSide,
+  type BoxNode
+} from '../../utils/connectorGeometry.js';
 
 export const CANVAS_COLORS: Record<string, string> = {
-  '1': '#f87171', // Crimson / Coral
-  '2': '#fb923c', // Orange
-  '3': '#fbbf24', // Warm Amber (Solo accent)
-  '4': '#34d399', // Emerald
-  '5': '#38bdf8', // Slate Cyan (Team accent)
-  '6': '#c084fc', // Purple
-  '7': '#818cf8', // Indigo
-  '8': '#94a3b8', // Neutral Graphite
-  default: '#38bdf8'
+  '1': '#d97706', // Warm Amber
+  '2': '#3b82f6', // Slate Blue
+  '3': '#10b981', // Mint Emerald
+  '4': '#f43f5e', // Rose Coral
+  '5': '#8b5cf6', // Violet
+  '6': '#4b5563', // Graphite
+  default: '#d97706'
 };
 
 export type CanvasTool = 'select' | 'hand' | 'sticky' | 'text' | 'note' | 'frame' | 'arrow' | 'shape';
@@ -143,10 +148,19 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
   // Arrow connection in progress
   const [connectingState, setConnectingState] = useState<{
     fromNodeId: string;
-    fromSide?: 'top' | 'right' | 'bottom' | 'left';
+    fromSide: PortSide;
+    startX: number;
+    startY: number;
     currentX: number;
     currentY: number;
+    snappedTarget: { nodeId: string; side: PortSide; point: { x: number; y: number } } | null;
   } | null>(null);
+
+  const connectingStateRef = useRef(connectingState);
+  connectingStateRef.current = connectingState;
+
+  // Bottom-right minimap toggle
+  const [showMinimap, setShowMinimap] = useState(false);
 
   // Quick connect drop menu on empty canvas
   const [quickConnect, setQuickConnect] = useState<QuickConnectState | null>(null);
@@ -302,19 +316,8 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
     return { x, y };
   };
 
-  const getPortCoord = (node: BoardNodeData, side?: 'top' | 'right' | 'bottom' | 'left') => {
-    switch (side) {
-      case 'top':
-        return { x: node.x + node.w / 2, y: node.y };
-      case 'right':
-        return { x: node.x + node.w, y: node.y + node.h / 2 };
-      case 'bottom':
-        return { x: node.x + node.w / 2, y: node.y + node.h };
-      case 'left':
-        return { x: node.x, y: node.y + node.h / 2 };
-      default:
-        return { x: node.x + node.w / 2, y: node.y + node.h / 2 };
-    }
+  const getPortCoord = (node: BoardNodeData, side?: PortSide) => {
+    return getPortCoordinates({ id: node.id, x: node.x, y: node.y, width: node.w, height: node.h }, side || 'right');
   };
 
   // Zoom to mouse cursor
@@ -828,9 +831,26 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
         setSelectedNodeIds(newSelected);
       }
 
-      // Drag arrow connector
+      // Drag arrow connector with magnetic geometric snapping
       if (connectingState) {
-        setConnectingState((prev) => (prev ? { ...prev, currentX: pos.x, currentY: pos.y } : null));
+        const boxNodes: BoxNode[] = visibleNodes.map((n) => ({
+          id: n.id,
+          x: n.x,
+          y: n.y,
+          width: n.w,
+          height: n.h
+        }));
+        const snapped = findMagneticTargetPort(boxNodes, connectingState.fromNodeId, pos.x, pos.y, 28);
+        setConnectingState((prev) =>
+          prev
+            ? {
+                ...prev,
+                currentX: snapped ? snapped.point.x : pos.x,
+                currentY: snapped ? snapped.point.y : pos.y,
+                snappedTarget: snapped
+              }
+            : null
+        );
       }
     };
 
@@ -841,18 +861,47 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
       setAlignmentGuides([]);
       setMarqueeBox(null);
 
-      if (connectingState) {
-        // If dropped on empty canvas, open quick connect drop menu
-        const pos = screenToCanvas(e.clientX, e.clientY);
-        setQuickConnect({
-          x: e.clientX,
-          y: e.clientY,
-          canvasX: pos.x,
-          canvasY: pos.y,
-          fromNodeId: connectingState.fromNodeId,
-          fromSide: connectingState.fromSide || 'right'
-        });
+      const state = connectingStateRef.current;
+      if (state) {
+        connectingStateRef.current = null;
         setConnectingState(null);
+
+        const pos = screenToCanvas(e.clientX, e.clientY);
+        const boxNodes: BoxNode[] = visibleNodes.map((n) => ({
+          id: n.id,
+          x: n.x,
+          y: n.y,
+          width: n.w,
+          height: n.h
+        }));
+        const target = state.snappedTarget || findMagneticTargetPort(boxNodes, state.fromNodeId, pos.x, pos.y, 28);
+
+        if (target && target.nodeId !== state.fromNodeId) {
+          const edgeId = crypto.randomUUID();
+          boardDoc.transact(() => {
+            yEdges.set(edgeId, {
+              id: edgeId,
+              from: state.fromNodeId,
+              to: target.nodeId,
+              fromSide: state.fromSide,
+              toSide: target.side,
+              direction: 'forward',
+              style: 'solid',
+              deleted: false
+            });
+          }, 'user');
+          setActiveTool('select');
+        } else {
+          // If dropped on empty canvas, open quick connect drop menu
+          setQuickConnect({
+            x: e.clientX,
+            y: e.clientY,
+            canvasX: pos.x,
+            canvasY: pos.y,
+            fromNodeId: state.fromNodeId,
+            fromSide: state.fromSide
+          });
+        }
       }
     };
 
@@ -931,11 +980,27 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
 
     if (activeTool === 'arrow') {
       const pos = screenToCanvas(e.clientX, e.clientY);
+      const box: BoxNode = { id: node.id, x: node.x, y: node.y, width: node.w, height: node.h };
+      const sides: PortSide[] = ['top', 'right', 'bottom', 'left'];
+      let bestSide: PortSide = 'right';
+      let bestDist = Infinity;
+      for (const s of sides) {
+        const pt = getPortCoordinates(box, s);
+        const dist = Math.hypot(pos.x - pt.x, pos.y - pt.y);
+        if (dist < bestDist) {
+          bestDist = dist;
+          bestSide = s;
+        }
+      }
+      const startPt = getPortCoordinates(box, bestSide);
       setConnectingState({
         fromNodeId: node.id,
-        fromSide: 'right',
+        fromSide: bestSide,
+        startX: startPt.x,
+        startY: startPt.y,
         currentX: pos.x,
-        currentY: pos.y
+        currentY: pos.y,
+        snappedTarget: null
       });
       return;
     }
@@ -998,33 +1063,22 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
   };
 
   // Magnetic port pointer handlers
-  const handlePortPointerDown = (nodeId: string, side: 'top' | 'right' | 'bottom' | 'left', e: MouseEvent) => {
+  const handlePortPointerDown = (nodeId: string, side: PortSide, e: MouseEvent) => {
     e.stopPropagation();
     const pos = screenToCanvas(e.clientX, e.clientY);
+    const node = nodeLookup.get(nodeId);
+    const startPt = node
+      ? getPortCoordinates({ id: node.id, x: node.x, y: node.y, width: node.w, height: node.h }, side)
+      : pos;
     setConnectingState({
       fromNodeId: nodeId,
       fromSide: side,
+      startX: startPt.x,
+      startY: startPt.y,
       currentX: pos.x,
-      currentY: pos.y
+      currentY: pos.y,
+      snappedTarget: null
     });
-  };
-
-  const handlePortPointerUp = (toNodeId: string, toSide: 'top' | 'right' | 'bottom' | 'left', e: MouseEvent) => {
-    e.stopPropagation();
-    if (connectingState && connectingState.fromNodeId !== toNodeId) {
-      const edgeId = crypto.randomUUID();
-      boardDoc.transact(() => {
-        yEdges.set(edgeId, {
-          id: edgeId,
-          from: connectingState.fromNodeId,
-          to: toNodeId,
-          fromSide: connectingState.fromSide || 'right',
-          toSide,
-          deleted: false
-        });
-      }, 'user');
-      setConnectingState(null);
-    }
   };
 
   // Custom Context Menu handler
@@ -1087,6 +1141,39 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
       height: (maxY - minY) * viewport.zoom
     };
   }, [selectedNodeIds, nodeLookup, viewport]);
+
+  const fitToContent = () => {
+    if (visibleNodes.length === 0) {
+      setViewport({ x: 80, y: 80, zoom: 1 });
+      return;
+    }
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    for (const n of visibleNodes) {
+      minX = Math.min(minX, n.x);
+      minY = Math.min(minY, n.y);
+      maxX = Math.max(maxX, n.x + n.w);
+      maxY = Math.max(maxY, n.y + n.h);
+    }
+    const contentW = maxX - minX;
+    const contentH = maxY - minY;
+    const padding = 80;
+    const availW = containerSize.width || window.innerWidth;
+    const availH = containerSize.height || window.innerHeight;
+
+    const scaleX = (availW - padding * 2) / Math.max(contentW, 100);
+    const scaleY = (availH - padding * 2) / Math.max(contentH, 100);
+    const zoom = Math.min(Math.max(Math.min(scaleX, scaleY), 0.2), 2.0);
+
+    const centerX = (minX + maxX) / 2;
+    const centerY = (minY + maxY) / 2;
+    const x = availW / 2 - centerX * zoom;
+    const y = availH / 2 - centerY * zoom;
+
+    setViewport({ x, y, zoom });
+  };
 
   return (
     <div
@@ -1258,7 +1345,7 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
           onMouseDown={(e) => e.stopPropagation()}
           onClick={(e) => e.stopPropagation()}
         >
-          {/* Color Palette (8 colors) */}
+          {/* Color Palette (6 muted colors) */}
           <div class="inspector-palette">
             {Object.entries(CANVAS_COLORS).filter(([k]) => k !== 'default').map(([key, hex]) => (
               <button
@@ -1277,6 +1364,82 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
               />
             ))}
           </div>
+
+          <div class="inspector-divider" />
+
+          {/* Font size buttons S / M / L */}
+          <div class="inspector-font-sizes">
+            <button
+              class="inspector-size-btn"
+              title="Размер текста: Маленький (13px)"
+              onClick={() => {
+                boardDoc.transact(() => {
+                  for (const id of selectedNodeIds) {
+                    const map = yNodes.get(id);
+                    if (map) map.set('fontSize', 13);
+                  }
+                }, 'user');
+              }}
+            >
+              S
+            </button>
+            <button
+              class="inspector-size-btn"
+              title="Размер текста: Средний (15px)"
+              onClick={() => {
+                boardDoc.transact(() => {
+                  for (const id of selectedNodeIds) {
+                    const map = yNodes.get(id);
+                    if (map) map.set('fontSize', 15);
+                  }
+                }, 'user');
+              }}
+            >
+              M
+            </button>
+            <button
+              class="inspector-size-btn"
+              title="Размер текста: Большой (18px)"
+              onClick={() => {
+                boardDoc.transact(() => {
+                  for (const id of selectedNodeIds) {
+                    const map = yNodes.get(id);
+                    if (map) map.set('fontSize', 18);
+                  }
+                }, 'user');
+              }}
+            >
+              L
+            </button>
+          </div>
+
+          {/* Checkbox toggle for stickies */}
+          {(() => {
+            const hasSticky = Array.from(selectedNodeIds).some((id) => nodeLookup.get(id)?.type === 'sticky');
+            if (!hasSticky) return null;
+            return (
+              <button
+                class="inspector-btn"
+                title="Добавить / убрать чекбокс задачи"
+                onClick={() => {
+                  boardDoc.transact(() => {
+                    for (const id of selectedNodeIds) {
+                      const node = nodeLookup.get(id);
+                      if (node?.type === 'sticky') {
+                        const map = yNodes.get(id);
+                        if (map) {
+                          const currentVal = map.get('hasCheckbox');
+                          map.set('hasCheckbox', !currentVal);
+                        }
+                      }
+                    }
+                  }, 'user');
+                }}
+              >
+                <Icon name="check-square" size={15} />
+              </button>
+            );
+          })()}
 
           <div class="inspector-divider" />
 
@@ -1368,7 +1531,7 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
               <input
                 type="text"
                 class="edge-label-input"
-                placeholder="Подпись стрелки..."
+                placeholder="Подпись связи..."
                 value={edge.label || ''}
                 onInput={(e) => {
                   const val = (e.target as HTMLInputElement).value;
@@ -1377,8 +1540,36 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
                 }}
               />
               <button
+                class={`inspector-btn ${edge.style === 'dashed' ? 'active' : ''}`}
+                title={edge.style === 'dashed' ? 'Сплошная линия' : 'Пунктирная линия'}
+                onClick={() => {
+                  const edgeMap = yEdges.get(edge.id);
+                  if (edgeMap) {
+                    yEdges.set(edge.id, {
+                      ...edgeMap,
+                      style: edgeMap.style === 'dashed' ? 'solid' : 'dashed'
+                    });
+                  }
+                }}
+              >
+                <Icon name="shape" size={14} />
+              </button>
+              <button
+                class="inspector-btn"
+                title="Направление стрелки"
+                onClick={() => {
+                  const edgeMap = yEdges.get(edge.id);
+                  if (edgeMap) {
+                    const nextDir = edgeMap.direction === 'forward' ? 'both' : edgeMap.direction === 'both' ? 'none' : 'forward';
+                    yEdges.set(edge.id, { ...edgeMap, direction: nextDir });
+                  }
+                }}
+              >
+                <Icon name="arrow" size={14} />
+              </button>
+              <button
                 class="inspector-btn danger"
-                title="Удалить стрелку (Delete)"
+                title="Удалить связь (Delete)"
                 onClick={() => {
                   const edgeMap = yEdges.get(edge.id);
                   if (edgeMap) yEdges.set(edge.id, { ...edgeMap, deleted: true });
@@ -1392,42 +1583,7 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
         })()
       )}
 
-      {/* 4. Canvas Viewport Controls */}
-      <div class="canvas-viewport-controls liquid-glass-surface" onMouseDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()}>
-        <button
-          class="zoom-btn"
-          onClick={() => setViewport((v) => ({ ...v, zoom: Math.min(v.zoom * 1.2, 4.0) }))}
-          title="Приблизить"
-        >
-          <Icon name="zoom-in" size={15} />
-        </button>
-        <button
-          class="zoom-btn"
-          onClick={() => setViewport((v) => ({ ...v, zoom: Math.max(v.zoom * 0.8, 0.1) }))}
-          title="Отдалить"
-        >
-          <Icon name="zoom-out" size={15} />
-        </button>
-        <button
-          class="zoom-btn"
-          onClick={() => setViewport({ x: 80, y: 80, zoom: 1 })}
-          title="Сбросить масштаб (100%)"
-        >
-          1:1
-        </button>
-        {nodesList.length === 0 && (
-          <button
-            class="template-seed-btn"
-            onClick={() => seedDefaultBoard(boardDoc, agentStatus.value?.memberName || 'Вы')}
-            title="Заполнить шаблоном задач"
-          >
-            <Icon name="plus" size={14} />
-            <span>Шаблон</span>
-          </button>
-        )}
-      </div>
-
-      {/* 5. Infinite Scaled Layer */}
+      {/* Infinite Scaled Layer */}
       <div
         class="board-transform-layer"
         style={{
@@ -1449,6 +1605,17 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
             >
               <path d="M 0 1 L 10 5 L 0 9 z" fill="var(--accent, #38bdf8)" />
             </marker>
+            <marker
+              id="arrow-marker-start"
+              viewBox="0 0 10 10"
+              refX="2"
+              refY="5"
+              markerWidth="6"
+              markerHeight="6"
+              orient="auto-start-reverse"
+            >
+              <path d="M 10 1 L 0 5 L 10 9 z" fill="var(--accent, #38bdf8)" />
+            </marker>
           </defs>
 
           {/* Alignment snap lines */}
@@ -1461,8 +1628,8 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
                 x2={g.pos}
                 y2={10000}
                 stroke="#38bdf8"
-                stroke-width="1"
-                stroke-dasharray="3 3"
+                strokeWidth="1"
+                strokeDasharray="3 3"
               />
             ) : (
               <line
@@ -1472,8 +1639,8 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
                 x2={10000}
                 y2={g.pos}
                 stroke="#38bdf8"
-                stroke-width="1"
-                stroke-dasharray="3 3"
+                strokeWidth="1"
+                strokeDasharray="3 3"
               />
             )
           ))}
@@ -1484,27 +1651,58 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
             const toNode = nodeLookup.get(edge.to);
             if (!fromNode || !toNode) return null;
 
-            const p1 = getPortCoord(fromNode, edge.fromSide);
-            const p2 = getPortCoord(toNode, edge.toSide);
+            const fromSide = edge.fromSide || 'right';
+            const toSide = edge.toSide || 'left';
+            const p1 = getPortCoord(fromNode, fromSide);
+            const p2 = getPortCoord(toNode, toSide);
 
-            const dx = Math.abs(p2.x - p1.x) * 0.5;
-            const pathD = `M ${p1.x} ${p1.y} C ${p1.x + dx} ${p1.y}, ${p2.x - dx} ${p2.y}, ${p2.x} ${p2.y}`;
+            const pathD = buildBezierEdgePath(p1.x, p1.y, fromSide, p2.x, p2.y, toSide);
             const midX = (p1.x + p2.x) / 2;
             const midY = (p1.y + p2.y) / 2;
             const isSelected = selectedEdgeId === edge.id;
 
             return (
-              <g key={edge.id} onClick={(e) => { e.stopPropagation(); setSelectedEdgeId(edge.id); }}>
+              <g key={edge.id} class="canvas-edge-group">
+                {/* 16px transparent hit area */}
                 <path
                   d={pathD}
-                  class={`board-edge-line ${isSelected ? 'selected' : ''}`}
-                  stroke={isSelected ? 'var(--accent, #38bdf8)' : 'rgba(255, 255, 255, 0.4)'}
-                  stroke-width={isSelected ? 3 : 2}
+                  class="canvas-edge-hit-area"
+                  stroke="transparent"
+                  strokeWidth="16"
                   fill="none"
-                  marker-end="url(#arrow-marker)"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSelectedEdgeId(edge.id);
+                    setSelectedNodeIds(new Set());
+                  }}
+                />
+                {/* Visible styled path */}
+                <path
+                  d={pathD}
+                  class={`canvas-edge-path ${isSelected ? 'selected' : ''}`}
+                  stroke={isSelected ? 'var(--accent, #38bdf8)' : 'rgba(255, 255, 255, 0.45)'}
+                  strokeWidth={isSelected ? 3 : 2}
+                  strokeDasharray={edge.style === 'dashed' ? '5 5' : undefined}
+                  fill="none"
+                  markerEnd={edge.direction !== 'none' ? 'url(#arrow-marker)' : undefined}
+                  markerStart={edge.direction === 'both' ? 'url(#arrow-marker-start)' : undefined}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSelectedEdgeId(edge.id);
+                    setSelectedNodeIds(new Set());
+                  }}
                 />
                 {edge.label && (
-                  <text x={midX} y={midY - 8} class="edge-text-label" text-anchor="middle">
+                  <text
+                    x={midX}
+                    y={midY - 8}
+                    class="edge-text-label"
+                    textAnchor="middle"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedEdgeId(edge.id);
+                    }}
+                  >
                     {edge.label}
                   </text>
                 )}
@@ -1512,25 +1710,45 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
             );
           })}
 
-          {/* Temporary arrow during drag */}
+          {/* Temporary arrow during drag with magnetic live snap */}
           {connectingState && (
-            (() => {
-              const fromNode = nodeLookup.get(connectingState.fromNodeId);
-              if (!fromNode) return null;
-              const p1 = getPortCoord(fromNode, connectingState.fromSide);
-              return (
-                <line
-                  x1={p1.x}
-                  y1={p1.y}
-                  x2={connectingState.currentX}
-                  y2={connectingState.currentY}
-                  stroke="var(--accent, #38bdf8)"
-                  stroke-width="2.5"
-                  stroke-dasharray="4 4"
-                  marker-end="url(#arrow-marker)"
+            <g class="connecting-preview-group">
+              <path
+                d={
+                  connectingState.snappedTarget
+                    ? buildBezierEdgePath(
+                        connectingState.startX,
+                        connectingState.startY,
+                        connectingState.fromSide,
+                        connectingState.snappedTarget.point.x,
+                        connectingState.snappedTarget.point.y,
+                        connectingState.snappedTarget.side
+                      )
+                    : buildBezierEdgePath(
+                        connectingState.startX,
+                        connectingState.startY,
+                        connectingState.fromSide,
+                        connectingState.currentX,
+                        connectingState.currentY,
+                        'left'
+                      )
+                }
+                class="connecting-preview-line"
+                stroke="var(--accent, #38bdf8)"
+                strokeWidth="2.5"
+                strokeDasharray="4 4"
+                fill="none"
+                markerEnd="url(#arrow-marker)"
+              />
+              {connectingState.snappedTarget && (
+                <circle
+                  cx={connectingState.snappedTarget.point.x}
+                  cy={connectingState.snappedTarget.point.y}
+                  r="7"
+                  class="magnetic-snap-ring"
                 />
-              );
-            })()
+              )}
+            </g>
           )}
         </svg>
 
@@ -1560,46 +1778,49 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
               <div
                 class="magnetic-port port-top"
                 onMouseDown={(e) => handlePortPointerDown(node.id, 'top', e as any)}
-                onMouseUp={(e) => handlePortPointerUp(node.id, 'top', e as any)}
               />
               <div
                 class="magnetic-port port-right"
                 onMouseDown={(e) => handlePortPointerDown(node.id, 'right', e as any)}
-                onMouseUp={(e) => handlePortPointerUp(node.id, 'right', e as any)}
               />
               <div
                 class="magnetic-port port-bottom"
                 onMouseDown={(e) => handlePortPointerDown(node.id, 'bottom', e as any)}
-                onMouseUp={(e) => handlePortPointerUp(node.id, 'bottom', e as any)}
               />
               <div
                 class="magnetic-port port-left"
                 onMouseDown={(e) => handlePortPointerDown(node.id, 'left', e as any)}
-                onMouseUp={(e) => handlePortPointerUp(node.id, 'left', e as any)}
               />
 
-              {/* Node Header / Meta */}
-              <div class="node-meta-stripe">
-                {node.type === 'sticky' && (
-                  <input
-                    type="checkbox"
-                    class="sticky-checkbox"
-                    checked={node.done || false}
-                    onChange={(e) => {
-                      const map = yNodes.get(node.id);
-                      if (map) map.set('done', (e.target as HTMLInputElement).checked);
-                    }}
-                  />
-                )}
-                <span class="node-author-chip" style={{ color: nodeColorHex }}>
-                  {node.author || (isFrame ? 'Фрейм' : 'Стикер')}
-                </span>
-                {node.locked && (
-                  <span class="node-lock-badge" title="Заблокировано">
-                    <Icon name="lock" size={11} />
+              {/* Top drag bar for sticky notes */}
+              {node.type === 'sticky' && (
+                <div class="node-drag-bar" onMouseDown={(e) => handleNodePointerDown(node, e as any)}>
+                  {((node as any).hasCheckbox || node.done) && (
+                    <input
+                      type="checkbox"
+                      class="sticky-checkbox"
+                      checked={node.done || false}
+                      onChange={(e) => {
+                        const map = yNodes.get(node.id);
+                        if (map) map.set('done', (e.target as HTMLInputElement).checked);
+                      }}
+                      onMouseDown={(e) => e.stopPropagation()}
+                    />
+                  )}
+                  {node.locked && (
+                    <span class="node-lock-badge" title="Заблокировано">
+                      <Icon name="lock" size={11} />
+                    </span>
+                  )}
+                </div>
+              )}
+
+              {/* Note Header */}
+              {isNote && (
+                <div class="node-meta-stripe">
+                  <span class="node-author-chip" style={{ color: nodeColorHex }}>
+                    Заметка
                   </span>
-                )}
-                {isNote && (
                   <button
                     class="node-open-note-btn"
                     title="Открыть заметку во вкладке"
@@ -1614,8 +1835,8 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
                     <Icon name="file-text" size={12} />
                     <span>Открыть</span>
                   </button>
-                )}
-              </div>
+                </div>
+              )}
 
               {/* Node Content */}
               {isNote ? (
@@ -1736,6 +1957,7 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
                 <textarea
                   id={`node-textarea-${node.id}`}
                   class="node-inline-textarea"
+                  style={{ fontSize: node.fontSize ? `${node.fontSize}px` : undefined }}
                   value={node.text}
                   placeholder="Введите текст..."
                   onWheel={(e) => e.stopPropagation()}
@@ -1761,6 +1983,13 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
                     }
                   }}
                 />
+              )}
+
+              {/* Author micro-badge in Team Scope */}
+              {node.type === 'sticky' && currentScope.value === 'team' && node.author && (
+                <span class="node-author-microbadge" title={`Автор: ${node.author}`}>
+                  {node.author}
+                </span>
               )}
 
               {/* 8-Point Resize Handles (nw, n, ne, e, se, s, sw, w) */}
@@ -2015,16 +2244,81 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
         nodeIds={transferNodeIds}
       />
 
-      {/* Minimap */}
-      <BoardMinimap
-        nodes={nodesList}
-        viewport={viewport}
-        containerWidth={containerSize.width}
-        containerHeight={containerSize.height}
-        onNavigate={(newX, newY) => {
-          setViewport((prev) => ({ ...prev, x: newX, y: newY }));
-        }}
-      />
+      {/* Empty State Seed Card */}
+      {visibleNodes.length === 0 && (
+        <div class="canvas-empty-state liquid-glass-surface" onMouseDown={(e) => e.stopPropagation()}>
+          <div class="empty-state-title">Доска пуста</div>
+          <div class="empty-state-desc">Создайте стикер (S) или заполните шаблоном задач</div>
+          <button
+            class="btn-primary-sm empty-state-btn"
+            onClick={() => seedDefaultBoard(boardDoc, agentStatus.value?.memberName || 'Вы')}
+          >
+            <Icon name="plus" size={14} />
+            <span>Заполнить шаблоном</span>
+          </button>
+        </div>
+      )}
+
+      {/* Sleek Bottom-Right Canvas HUD (Zoom, Fit, Minimap) */}
+      <div
+        class="canvas-bottom-right-hud"
+        onMouseDown={(e) => e.stopPropagation()}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {showMinimap && (
+          <div class="minimap-popup liquid-glass-surface">
+            <BoardMinimap
+              nodes={nodesList}
+              viewport={viewport}
+              containerWidth={containerSize.width}
+              containerHeight={containerSize.height}
+              onNavigate={(newX, newY) => {
+                setViewport((prev) => ({ ...prev, x: newX, y: newY }));
+              }}
+            />
+          </div>
+        )}
+
+        <div class="zoom-hud-pill liquid-glass-surface">
+          <button
+            class="hud-btn"
+            onClick={() => setViewport((v) => ({ ...v, zoom: Math.max(v.zoom * 0.8, 0.15) }))}
+            title="Отдалить (-)"
+          >
+            <Icon name="zoom-out" size={14} />
+          </button>
+          <button
+            class="hud-btn zoom-value-btn"
+            onClick={() => setViewport((v) => ({ ...v, zoom: 1 }))}
+            title="Сбросить масштаб (100%)"
+          >
+            {Math.round(viewport.zoom * 100)}%
+          </button>
+          <button
+            class="hud-btn"
+            onClick={() => setViewport((v) => ({ ...v, zoom: Math.min(v.zoom * 1.25, 3.5) }))}
+            title="Приблизить (+)"
+          >
+            <Icon name="zoom-in" size={14} />
+          </button>
+          <div class="hud-divider" />
+          <button
+            class="hud-btn"
+            onClick={fitToContent}
+            title="Вписать всё содержимое (Fit)"
+          >
+            <Icon name="layout-canvas" size={14} />
+            <span class="hud-btn-text">Fit</span>
+          </button>
+          <button
+            class={`hud-btn ${showMinimap ? 'active' : ''}`}
+            onClick={() => setShowMinimap(!showMinimap)}
+            title="Миникарта"
+          >
+            <Icon name="frame" size={14} />
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

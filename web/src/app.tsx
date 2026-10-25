@@ -10,7 +10,8 @@ import {
   createNote,
   createBoard,
   theme,
-  isImportWizardOpen
+  isImportWizardOpen,
+  isSidebarCollapsed
 } from './state/app-state.js';
 import { Sidebar } from './components/layout/sidebar.js';
 import { TabBar } from './components/layout/tab-bar.js';
@@ -61,7 +62,7 @@ export function App() {
   };
 
   return (
-    <div class={`app-layout theme-${theme.value}`}>
+    <div class={`app-layout theme-${theme.value} ${isSidebarCollapsed.value ? 'sidebar-collapsed' : ''}`}>
       <Sidebar />
 
       <div class="main-area">

@@ -19,7 +19,7 @@ import { AttachmentManager } from '../storage/attachments.js';
 import { PeerConnection } from './peer-connection.js';
 import { PeerDiscoveryService, type DiscoveredPeer } from './peer-discovery.js';
 import { getOrGenerateNodeIdentity, type NodeIdentity } from '../security.js';
-import { findAvailablePort, findRadminIp } from '../network.js';
+import { findAvailablePort, findRadminIp, detectRadminIp } from '../network.js';
 import { logger } from '../logger.js';
 
 interface OutboundPeerState {
@@ -188,7 +188,13 @@ export class PeerService extends EventEmitter {
     const wsUrl = target.startsWith('ws://') ? target : `ws://${target}`;
 
     try {
-      const socket = new WebSocket(wsUrl);
+      const radminIp = detectRadminIp();
+      const isTargetRadmin = target.includes('26.') || (radminIp && target.startsWith('26.'));
+      const wsOptions: any = { agent: false };
+      if (isTargetRadmin && radminIp) {
+        wsOptions.localAddress = radminIp;
+      }
+      const socket = new WebSocket(wsUrl, wsOptions);
       const conn = new PeerConnection({
         socket,
         isOutbound: true,

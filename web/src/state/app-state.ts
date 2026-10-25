@@ -35,6 +35,11 @@ export interface TabItem {
 const savedScope = typeof localStorage !== 'undefined' ? (localStorage.getItem('doks_scope') as WorkspaceScope) : null;
 export const currentScope = signal<WorkspaceScope>(savedScope || 'team');
 
+export const isSidebarCollapsed = signal<boolean>(false);
+export function toggleSidebar(): void {
+  isSidebarCollapsed.value = !isSidebarCollapsed.value;
+}
+
 export function setScope(newScope: WorkspaceScope): void {
   if (currentScope.value === newScope) return;
   currentScope.value = newScope;
@@ -575,6 +580,12 @@ if (typeof window !== 'undefined') {
       e.preventDefault();
       isCommandPaletteOpen.value = !isCommandPaletteOpen.value;
       isQuickSwitcherOpen.value = false;
+    }
+
+    // Ctrl+B: Toggle Sidebar
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'b') {
+      e.preventDefault();
+      toggleSidebar();
     }
 
     // Ctrl+\: Toggle Split View
