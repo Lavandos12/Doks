@@ -67,7 +67,7 @@ export function AiExportModal({ boardId, selectedNodeIds = [], onClose }: AiExpo
   };
 
   return (
-    <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+    <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 ai-export-modal">
       <div class="bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded-xl shadow-2xl max-w-2xl w-full flex flex-col max-h-[85vh] overflow-hidden">
         {/* Header */}
         <div class="flex items-center justify-between px-6 py-4 border-b border-[var(--border-subtle)]">
@@ -77,6 +77,8 @@ export function AiExportModal({ boardId, selectedNodeIds = [], onClose }: AiExpo
           </div>
           <button
             onClick={onClose}
+            aria-label="Закрыть"
+            data-testid="close-ai-modal"
             class="text-[var(--text-secondary)] hover:text-[var(--text-primary)] p-1 rounded-md"
           >
             <Icon name="x" size={18} />
@@ -158,7 +160,7 @@ export function AiExportModal({ boardId, selectedNodeIds = [], onClose }: AiExpo
               readOnly
               rows={8}
               value={loading ? 'Генерация контекста...' : result?.markdown || ''}
-              class="w-full bg-[var(--bg-secondary)] border border-[var(--border-subtle)] rounded-lg p-3 text-xs font-mono text-[var(--text-primary)] focus:outline-none resize-none"
+              class="w-full bg-[var(--bg-secondary)] border border-[var(--border-subtle)] rounded-lg p-3 text-xs font-mono text-[var(--text-primary)] focus:outline-none resize-none ai-export-preview"
             />
           </div>
         </div>

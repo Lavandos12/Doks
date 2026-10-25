@@ -8,6 +8,7 @@ import os from 'node:os';
 import crypto from 'node:crypto';
 import { execSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { streamDirectoryAsZip } from '../storage/zip-stream.js';
 import * as Y from 'yjs';
 import * as awarenessProtocol from 'y-protocols/awareness';
 import type { AgentConfig } from '@doks/shared';
@@ -227,7 +228,47 @@ export class AgentHttpServer {
         connectedCount: this.peerService.getConnectedCount(),
         // B17: Do not expose raw teamKey without session authentication
         teamKey: hasAuth ? this.config.teamKey : undefined,
+        keyFingerprint:
+          hasAuth && this.config.teamKey
+            ? crypto
+                .createHash('sha256')
+                .update(this.config.teamKey)
+                .digest('hex')
+                .slice(0, 8)
+                .replace(/^(.{4})(.{4})$/, '$1-$2')
+            : undefined,
         inviteLink: hasAuth ? `doks://${radminIp || '127.0.0.1'}:${this.config.peerPort}#${this.config.teamKey}` : undefined
+      };
+    });
+
+    // API: Change team key (with automatic backup snapshot)
+    this.fastify.post('/api/team-key', async (req, reply) => {
+      const body = req.body as { teamKey?: string };
+      if (!body?.teamKey || body.teamKey.trim().length !== 64) {
+        return reply.code(400).send({ error: 'Valid 64-character hex team key is required' });
+      }
+
+      // Automatically create snapshot before changing team key
+      if (this.snapshotManager) {
+        try {
+          this.snapshotManager.createSnapshot('Before team key change');
+        } catch {}
+      }
+
+      this.config.teamKey = body.teamKey.trim();
+      saveConfig(this.config);
+
+      const fp = crypto
+        .createHash('sha256')
+        .update(this.config.teamKey)
+        .digest('hex')
+        .slice(0, 8)
+        .replace(/^(.{4})(.{4})$/, '$1-$2');
+
+      return {
+        success: true,
+        teamKey: this.config.teamKey,
+        keyFingerprint: fp
       };
     });
 
@@ -594,29 +635,22 @@ export class AgentHttpServer {
       }
     });
 
-    // API: Export Vault as .zip
+    // API: Export Vault as .zip (Streaming ZIP without execSync - F10)
     this.fastify.get('/api/export/vault', async (req, reply) => {
       const vaultDir = this.config.vaultPath;
       if (!fs.existsSync(vaultDir)) {
         return reply.code(404).send({ error: 'Vault directory does not exist' });
       }
 
-      const tempZip = path.join(os.tmpdir(), `doks-vault-${Date.now()}.zip`);
       try {
-        execSync(`tar -acf "${tempZip}" -C "${vaultDir}" .`, { stdio: 'ignore' });
-        const zipBuffer = fs.readFileSync(tempZip);
-        try {
-          if (fs.existsSync(tempZip)) fs.unlinkSync(tempZip);
-        } catch {}
-
-        reply.header('Content-Type', 'application/zip');
-        reply.header('Content-Disposition', 'attachment; filename="doks-vault.zip"');
-        return reply.send(zipBuffer);
+        reply.raw.setHeader('Content-Type', 'application/zip');
+        reply.raw.setHeader('Content-Disposition', 'attachment; filename="doks-vault.zip"');
+        await streamDirectoryAsZip(vaultDir, reply.raw);
+        reply.raw.end();
       } catch (err: any) {
-        if (fs.existsSync(tempZip)) {
-          try { fs.unlinkSync(tempZip); } catch {}
+        if (!reply.raw.headersSent) {
+          return reply.code(500).send({ error: `Export failed: ${err.message}` });
         }
-        return reply.code(500).send({ error: `Export failed: ${err.message}` });
       }
     });
 
@@ -759,11 +793,12 @@ export class AgentHttpServer {
         // Forward doc updates to the browser
         const updateListener = ({ docName, update, origin }: any) => {
           if (origin !== 'client' && socket.readyState === socket.OPEN && isDocSubscribed(docName)) {
+            const syncMsg = this.docManager.createUpdateSyncMessage(update);
             socket.send(
               encodeMessage({
                 type: 'sync',
                 docName,
-                data: uint8ArrayToBase64(update)
+                data: uint8ArrayToBase64(syncMsg)
               })
             );
           }

@@ -27,7 +27,8 @@ export class Agent {
     this.docManager = new DocManager(this.stateStore);
     this.fileMirror = new FileMirror(this.config.vaultPath, this.docManager);
     this.fileWatcher = new FileWatcher(this.config.vaultPath, this.docManager, this.fileMirror);
-    this.attachmentManager = new AttachmentManager(this.config.vaultPath);
+    const blobsDir = path.join(path.dirname(this.config.vaultPath), '.doks', 'blobs');
+    this.attachmentManager = new AttachmentManager(this.config.vaultPath, blobsDir);
     
     const snapshotsDir = path.join(path.dirname(this.config.statePath), 'snapshots');
     this.snapshotManager = new SnapshotManager(snapshotsDir, this.docManager);

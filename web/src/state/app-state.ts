@@ -1,7 +1,10 @@
 import { signal, computed } from '@preact/signals';
 import type { NoteMeta, BoardMeta, FolderMeta } from '@doks/shared';
-import { getIndexMaps, getNoteDocName } from '@doks/shared';
+import { getIndexMaps, getNoteDocName, getBoardDocName, getBoardMaps } from '@doks/shared';
 import { yjsClient } from './yjs-client.js';
+import { NotesSearchIndex } from '../search/indexer.js';
+
+export const searchIndex = new NotesSearchIndex();
 
 export type ViewType = 'notes' | 'board' | 'network' | 'history' | 'search';
 
@@ -72,6 +75,53 @@ function syncIndexSignals() {
     return tab;
   });
   openTabs.value = updatedTabs;
+
+  // Incremental Search Indexing (F6)
+  maps.notes.forEach((val, id) => {
+    if (val.deleted) {
+      searchIndex.removeDoc(id);
+    } else {
+      let text = '';
+      try {
+        const noteDoc = yjsClient.getOrCreateDoc(getNoteDocName(id));
+        text = noteDoc.getText('text').toString();
+      } catch {}
+      const tags = text.match(/#[a-zA-Zа-яА-Я0-9_-]+/g) || [];
+      searchIndex.updateDoc({
+        id,
+        type: 'note',
+        title: val.title,
+        folder: val.folder || undefined,
+        text,
+        tags
+      });
+    }
+  });
+
+  maps.boards.forEach((val, id) => {
+    if (val.deleted) {
+      searchIndex.removeDoc(id);
+    } else {
+      let boardText = '';
+      try {
+        const bDoc = yjsClient.getOrCreateDoc(getBoardDocName(id));
+        const { nodes } = getBoardMaps(bDoc);
+        const parts: string[] = [];
+        nodes.forEach((nodeMap) => {
+          const t = nodeMap.get('text');
+          if (t) parts.push(typeof t === 'string' ? t : t.toString());
+        });
+        boardText = parts.join('\n');
+      } catch {}
+      searchIndex.updateDoc({
+        id,
+        type: 'board',
+        title: val.title,
+        folder: val.folder || undefined,
+        text: boardText
+      });
+    }
+  });
 }
 
 maps.notes.observe(() => syncIndexSignals());
@@ -362,6 +412,12 @@ if (typeof window !== 'undefined') {
       e.preventDefault();
       isQuickSwitcherOpen.value = !isQuickSwitcherOpen.value;
       isCommandPaletteOpen.value = false;
+    }
+
+    // Ctrl+Shift+F: Global Search (F6)
+    if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'f') {
+      e.preventDefault();
+      currentView.value = 'search';
     }
 
     // Escape closes modals

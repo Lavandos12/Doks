@@ -5,6 +5,7 @@ import * as Y from 'yjs';
 export class StateStore {
   private stateDir: string;
   private updateCounts = new Map<string, number>();
+  private compactionTimer?: NodeJS.Timeout;
 
   constructor(stateDir: string) {
     this.stateDir = stateDir;
@@ -147,6 +148,9 @@ export class StateStore {
   }
 
   public destroy(): void {
-    // Clean shutdown
+    if (this.compactionTimer) {
+      clearInterval(this.compactionTimer);
+      this.compactionTimer = undefined;
+    }
   }
 }

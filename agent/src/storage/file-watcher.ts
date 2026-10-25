@@ -6,6 +6,7 @@ import DiffMatchPatch from 'diff-match-patch';
 import * as Y from 'yjs';
 import {
   DOC_INDEX,
+  getIndexMaps,
   getNoteDocName,
   getBoardDocName,
   getBoardMaps,
@@ -49,6 +50,12 @@ export class FileWatcher {
     if (!fs.existsSync(filePath)) return;
 
     try {
+      const isAttachment = filePath.includes(path.sep + 'attachments' + path.sep) || filePath.includes('/attachments/');
+      if (isAttachment) {
+        this.handleAttachmentChange(filePath);
+        return;
+      }
+
       const content = fs.readFileSync(filePath, 'utf8');
       const hash = crypto.createHash('sha256').update(content).digest('hex');
 
@@ -64,6 +71,58 @@ export class FileWatcher {
       }
     } catch (err) {
       console.error(`[FileWatcher] Error handling change for ${filePath}:`, err);
+    }
+  }
+
+  private handleAttachmentChange(filePath: string): void {
+    try {
+      if (!fs.existsSync(filePath) || fs.statSync(filePath).isDirectory()) return;
+      const buffer = fs.readFileSync(filePath);
+      const hash = crypto.createHash('sha256').update(buffer).digest('hex');
+
+      // 1. Ensure blob is stored in .doks/blobs/<sha256>
+      const blobsDir = path.join(path.dirname(this.vaultPath), '.doks', 'blobs');
+      fs.mkdirSync(blobsDir, { recursive: true });
+      const blobPath = path.join(blobsDir, hash);
+      if (!fs.existsSync(blobPath)) {
+        fs.writeFileSync(blobPath, buffer);
+      }
+
+      // 2. Index in Yjs indexDoc
+      const fileName = path.basename(filePath);
+      const ext = path.extname(filePath).toLowerCase();
+      const mimeMap: Record<string, string> = {
+        '.png': 'image/png',
+        '.jpg': 'image/jpeg',
+        '.jpeg': 'image/jpeg',
+        '.gif': 'image/gif',
+        '.webp': 'image/webp',
+        '.svg': 'image/svg+xml',
+        '.pdf': 'application/pdf',
+        '.md': 'text/markdown',
+        '.canvas': 'application/json',
+        '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        '.zip': 'application/zip',
+        '.txt': 'text/plain'
+      };
+      const mime = mimeMap[ext] || 'application/octet-stream';
+
+      const indexDoc = this.docManager.getOrCreateDoc(DOC_INDEX);
+      const { attachments } = getIndexMaps(indexDoc);
+      const existing = attachments.get(hash);
+      if (!existing || existing.deleted) {
+        attachments.set(hash, {
+          hash,
+          name: fileName,
+          size: buffer.length,
+          mime,
+          addedBy: 'Obsidian / External',
+          addedAt: Date.now(),
+          deleted: false
+        });
+      }
+    } catch (err) {
+      console.error(`[FileWatcher] Error handling external attachment ${filePath}:`, err);
     }
   }
 

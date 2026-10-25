@@ -39,7 +39,7 @@ describe('Stage F: Attachments, Chunked P2P Sync & Import/Export Wizard', () => 
 
       const info = manager.saveAttachment(content, 'test-image.png');
       expect(info.hash).toBe(expectedHash);
-      expect(info.fileName).toBe(`${expectedHash}.png`);
+      expect(info.fileName).toBe('test-image.png');
       expect(info.size).toBe(content.length);
       expect(info.mimeType).toBe('image/png');
 

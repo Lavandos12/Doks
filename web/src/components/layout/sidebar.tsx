@@ -208,9 +208,9 @@ export function Sidebar() {
           </button>
 
           <button
-            class="activity-btn"
-            onClick={() => (isCommandPaletteOpen.value = true)}
-            title="Поиск и Команды (Ctrl+P)"
+            class={`activity-btn ${currentView.value === 'search' ? 'active' : ''}`}
+            onClick={() => (currentView.value = currentView.value === 'search' ? 'notes' : 'search')}
+            title="Глобальный поиск (Ctrl+Shift+F)"
           >
             <Icon name="search" size={19} />
           </button>

@@ -30,14 +30,85 @@ export interface AiExportResult {
   openTasksCount: number;
 }
 
+const COLOR_HEX_MAP: Record<string, string> = {
+  '#fef08a': 'жёлтый',
+  '#fef9c3': 'жёлтый',
+  '#fde047': 'жёлтый',
+  '#bbf7d0': 'зелёный',
+  '#dcfce7': 'зелёный',
+  '#86efac': 'зелёный',
+  '#bae6fd': 'синий',
+  '#e0f2fe': 'синий',
+  '#7dd3fc': 'синий',
+  '#fecaca': 'красный',
+  '#fee2e2': 'красный',
+  '#fca5a5': 'красный',
+  '#e9d5ff': 'фиолетовый',
+  '#f3e8ff': 'фиолетовый',
+  '#d8b4fe': 'фиолетовый',
+  '#fed7aa': 'оранжевый',
+  '#ffedd5': 'оранжевый',
+  '#fdba74': 'оранжевый',
+  '#99f6e4': 'бирюзовый',
+  '#ccfbf1': 'бирюзовый',
+  '#5eead4': 'бирюзовый',
+  '#e2e8f0': 'серый',
+  '#f1f5f9': 'серый',
+  '#cbd5e1': 'серый',
+  '#f5f5f5': 'серый',
+  '#ffffff': 'без цвета',
+  'none': 'без цвета',
+  'default': 'без цвета'
+};
+
 const COLOR_NAMES: Record<string, string> = {
   '1': 'жёлтый',
   '2': 'зелёный',
   '3': 'синий',
   '4': 'красный',
   '5': 'фиолетовый',
-  '6': 'серый'
+  '6': 'серый',
+  ...COLOR_HEX_MAP
 };
+
+export function resolveColorName(color: string | undefined): string {
+  if (!color || color === 'none' || color === 'default') return 'без цвета';
+  const c = color.trim().toLowerCase();
+  if (COLOR_NAMES[c]) return COLOR_NAMES[c];
+  if (c.startsWith('#') && (c.length === 7 || c.length === 4)) {
+    let r = 0, g = 0, b = 0;
+    if (c.length === 7) {
+      r = parseInt(c.slice(1, 3), 16);
+      g = parseInt(c.slice(3, 5), 16);
+      b = parseInt(c.slice(5, 7), 16);
+    } else {
+      r = parseInt(c[1] + c[1], 16);
+      g = parseInt(c[2] + c[2], 16);
+      b = parseInt(c[3] + c[3], 16);
+    }
+    const standardColors = [
+      { name: 'жёлтый', r: 254, g: 240, b: 138 },
+      { name: 'зелёный', r: 187, g: 247, b: 208 },
+      { name: 'синий', r: 186, g: 230, b: 253 },
+      { name: 'красный', r: 254, g: 202, b: 202 },
+      { name: 'фиолетовый', r: 233, g: 213, b: 255 },
+      { name: 'оранжевый', r: 254, g: 215, b: 170 },
+      { name: 'бирюзовый', r: 153, g: 246, b: 228 },
+      { name: 'серый', r: 226, g: 232, b: 240 }
+    ];
+    let closest = standardColors[0];
+    let minDist = Infinity;
+    for (const sc of standardColors) {
+      const dist = (r - sc.r) ** 2 + (g - sc.g) ** 2 + (b - sc.b) ** 2;
+      if (dist < minDist) {
+        minDist = dist;
+        closest = sc;
+      }
+    }
+    return closest.name;
+  }
+  return color;
+}
 
 export function generateAiContext(
   docManager: { getOrCreateDoc: (name: string) => Y.Doc },
@@ -90,10 +161,16 @@ export function generateAiContext(
     }
   }
 
-  // Map IDs to short deterministic identifiers: n1, n2, n3...
+  // Map IDs to short deterministic identifiers: n_xxxxxx or n1, n2 if seq is present
   const idToShort = new Map<string, string>();
-  filteredNodes.forEach((n, idx) => {
-    idToShort.set(n.id, `n${idx + 1}`);
+  filteredNodes.forEach((n) => {
+    if ((n as any).seq !== undefined && (n as any).seq !== null) {
+      idToShort.set(n.id, `n${(n as any).seq}`);
+    } else {
+      const clean = n.id.replace(/[^a-zA-Z0-9]/g, '');
+      const prefix = clean.length >= 6 ? clean.slice(0, 6) : clean.padEnd(6, '0');
+      idToShort.set(n.id, `n_${prefix}`);
+    }
   });
 
   // Separate frames and elements
@@ -131,6 +208,48 @@ export function generateAiContext(
     return authorMap.get(name)!;
   };
 
+  // Connected notes collection
+  interface ConnectedNote {
+    id: string;
+    title: string;
+    content: string;
+  }
+  const connectedNotes: ConnectedNote[] = [];
+  if (options.includeNotes !== 'none') {
+    const noteIdsToInclude = new Set<string>();
+    filteredNodes.forEach((n) => {
+      if (n.noteId) noteIdsToInclude.add(n.noteId);
+      if (options.includeNotes === 'linked' || options.includeNotes === undefined) {
+        const wikiMatches = n.text.matchAll(/\[\[(.*?)\]\]/g);
+        for (const m of wikiMatches) {
+          const title = m[1].split('|')[0].trim();
+          notes.forEach((meta, id) => {
+            if (!meta.deleted && meta.title === title) {
+              noteIdsToInclude.add(id);
+            }
+          });
+        }
+      }
+    });
+
+    for (const nId of noteIdsToInclude) {
+      const meta = notes.get(nId);
+      if (!meta || meta.deleted) continue;
+
+      const noteDoc = docManager.getOrCreateDoc(getNoteDocName(nId));
+      const content = getNoteText(noteDoc).toString();
+
+      // Privacy check
+      if (content.includes('#private')) continue;
+
+      connectedNotes.push({
+        id: nId,
+        title: meta.title,
+        content
+      });
+    }
+  }
+
   // Stats calculation
   const totalObjects = filteredNodes.length;
   let stickiesCount = 0;
@@ -154,13 +273,29 @@ export function generateAiContext(
     }
   });
 
+  // Open checkboxes from connected notes
+  for (const cn of connectedNotes) {
+    const noteLines = cn.content.split(/\r?\n/);
+    for (const line of noteLines) {
+      const match = line.match(/^\s*-\s*\[ \]\s*(.+)$/);
+      if (match) {
+        const taskText = match[1].trim();
+        openTasks.push({
+          shortId: '',
+          text: `[${cn.title}] ${taskText}`,
+          author: ''
+        });
+      }
+    }
+  }
+
   // Check for Color Legend
   let legendText = '';
   const legendFrame = frames.find((f) => f.text.toLowerCase().includes('легенда'));
   if (legendFrame) {
     const items = frameContents.get(legendFrame.id) || [];
     if (items.length > 0) {
-      legendText = `Легенда цветов: ${items.map((it) => `${COLOR_NAMES[it.color] || it.color} = ${it.text}`).join('; ')}.`;
+      legendText = `Легенда цветов: ${items.map((it) => `${resolveColorName(it.color)} = ${it.text}`).join('; ')}.`;
     }
   }
 
@@ -171,7 +306,7 @@ export function generateAiContext(
   const lines: string[] = [];
   lines.push(`# Контекст доски: ${boardTitle}`);
   lines.push(`Формат: doks-ai/1. Экспорт: ${nowStr}.`);
-  lines.push(`Это выгрузка рабочей доски команды. Объекты имеют короткие id (n1, n2...).`);
+  lines.push(`Это выгрузка рабочей доски команды. Объекты имеют короткие id (n_xxxxxx или n1, n2...).`);
   if (legendText) {
     lines.push(legendText);
   } else {
@@ -196,7 +331,7 @@ export function generateAiContext(
   const formatNode = (n: BoardNodeData) => {
     const sid = idToShort.get(n.id)!;
     const typeLabel = n.type === 'sticky' ? 'стикер' : n.type === 'note' ? 'заметка' : n.type === 'frame' ? 'рамка' : n.type;
-    const colorLabel = COLOR_NAMES[n.color] || n.color;
+    const colorLabel = resolveColorName(n.color);
     const authorLabel = `автор: ${getAuthor(n.author)}`;
     const statusLabel = n.done ? '[x]' : '[ ]';
     const textLabel = n.text.replace(/\r?\n/g, ' ');
@@ -248,42 +383,16 @@ export function generateAiContext(
   lines.push('');
 
   // 6. Подключённые заметки
-  if (options.includeNotes !== 'none') {
-    const noteIdsToInclude = new Set<string>();
-    filteredNodes.forEach((n) => {
-      if (n.noteId) noteIdsToInclude.add(n.noteId);
-      // Scan wikilinks in text
-      const wikiMatches = n.text.matchAll(/\[\[(.*?)\]\]/g);
-      for (const m of wikiMatches) {
-        const title = m[1].split('|')[0].trim();
-        notes.forEach((meta, id) => {
-          if (!meta.deleted && meta.title === title) {
-            noteIdsToInclude.add(id);
-          }
-        });
+  if (connectedNotes.length > 0) {
+    lines.push(`## Подключённые заметки`);
+    for (const cn of connectedNotes) {
+      let content = cn.content;
+      if (options.compactNotes && content.length > (options.maxNoteLength || 500)) {
+        content = content.slice(0, options.maxNoteLength || 500) + `\n... [обрезано: ${content.length} симв.]`;
       }
-    });
-
-    if (noteIdsToInclude.size > 0) {
-      lines.push(`## Подключённые заметки`);
-      for (const nId of noteIdsToInclude) {
-        const meta = notes.get(nId);
-        if (!meta || meta.deleted) continue;
-
-        const noteDoc = docManager.getOrCreateDoc(getNoteDocName(nId));
-        let content = getNoteText(noteDoc).toString();
-
-        // Privacy check
-        if (content.includes('#private')) continue;
-
-        if (options.compactNotes && content.length > (options.maxNoteLength || 500)) {
-          content = content.slice(0, options.maxNoteLength || 500) + `\n... [обрезано: ${content.length} симв.]`;
-        }
-
-        lines.push(`### Заметка: ${meta.title}`);
-        lines.push(content);
-        lines.push('');
-      }
+      lines.push(`### Заметка: ${cn.title}`);
+      lines.push(content);
+      lines.push('');
     }
   }
 
@@ -291,14 +400,18 @@ export function generateAiContext(
   if (openTasks.length > 0) {
     lines.push(`## Открытые задачи`);
     openTasks.forEach((t) => {
-      lines.push(`- [ ] ${t.shortId} (${t.author}): ${t.text}`);
+      if (t.shortId) {
+        lines.push(`- [ ] ${t.shortId} (${t.author}): ${t.text}`);
+      } else {
+        lines.push(`- [ ] ${t.text}`);
+      }
     });
     lines.push('');
   }
 
   // 8. Подсказка в конце
   lines.push(`## Подсказка для ИИ`);
-  lines.push(`Если предлагаешь изменения, ссылайся на id объектов (\`n1\`, \`n2\`...) и названия заметок.`);
+  lines.push(`Если предлагаешь изменения, ссылайся на id объектов (\`n_xxxxxx\` или \`n1\`...) и названия заметок.`);
 
   const markdown = lines.join('\n');
   const charCount = markdown.length;

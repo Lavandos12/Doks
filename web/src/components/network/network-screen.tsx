@@ -187,7 +187,14 @@ export function NetworkScreen() {
 
         {/* Invite Card */}
         <div class="network-card">
-          <h3>Приглашение в команду</h3>
+          <div class="card-header-bar">
+            <h3>Приглашение и ключ команды</h3>
+            {status?.keyFingerprint && (
+              <span class="fingerprint-badge" title="Отпечаток ключа команды для сверки">
+                Отпечаток: <strong>{status.keyFingerprint}</strong>
+              </span>
+            )}
+          </div>
           <p class="card-desc">
             Передайте эту защищённую ссылку участнику вашей комнаты Radmin VPN для автоматического подключения:
           </p>
@@ -202,6 +209,36 @@ export function NetworkScreen() {
             <button class="btn-primary" onClick={copyInvite}>
               <Icon name={copyFeedback ? 'check' : 'share'} size={15} />
               <span>{copyFeedback ? 'Скопировано!' : 'Копировать'}</span>
+            </button>
+          </div>
+
+          <div class="key-management-bar" style={{ marginTop: '12px', display: 'flex', justifyContent: 'flex-end' }}>
+            <button
+              class="card-action-link danger"
+              onClick={async () => {
+                const confirmed = confirm(
+                  'Вы собираетесь сменить ключ команды.\n\nВнимание: Вы переходите в другую команду. Данные текущей команды останутся на диске (будет автоматически создана резервная копия), но синхронизироваться со старой командой перестанут.\n\nПродолжить?'
+                );
+                if (confirmed) {
+                  const newKey = prompt('Введите новый 64-символьный ключ команды (или оставьте пустым для генерации случайного):');
+                  if (newKey !== null) {
+                    const generatedKey = newKey.trim() || Array.from(crypto.getRandomValues(new Uint8Array(32))).map(b => b.toString(16).padStart(2, '0')).join('');
+                    if (generatedKey.length === 64) {
+                      await fetch('/api/team-key', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ teamKey: generatedKey })
+                      });
+                      fetchStatus();
+                    } else {
+                      alert('Ключ должен быть ровно 64 hex-символа');
+                    }
+                  }
+                }
+              }}
+            >
+              <Icon name="settings" size={13} />
+              <span>Сменить ключ команды</span>
             </button>
           </div>
         </div>

@@ -41,19 +41,39 @@ if (import.meta.url === pathToFileURL(process.argv[1] || '').href) {
     console.log(`[Doks Agent] Agent ID: ${agent.config.agentId}`);
     if (openBrowser) {
       console.log(`[Doks Agent] Opening browser at ${url}`);
-      exec(`start ${url}`);
+      const openCmd = process.platform === 'win32' ? 'start' : process.platform === 'darwin' ? 'open' : 'xdg-open';
+      exec(`${openCmd} ${url}`);
     }
   }).catch((err) => {
     console.error('[Doks Agent] Startup failed:', err);
     process.exit(1);
   });
 
-  const shutdown = async () => {
-    console.log('\n[Doks Agent] Shutting down...');
-    await agent.stop();
+  let isShuttingDown = false;
+  const shutdown = async (signal?: string) => {
+    if (isShuttingDown) return;
+    isShuttingDown = true;
+    console.log(`\n[Doks Agent] Received ${signal || 'shutdown signal'}, gracefully stopping...`);
+    try {
+      await agent.stop();
+    } catch (err) {
+      console.error('[Doks Agent] Error during stop:', err);
+    }
     process.exit(0);
   };
 
-  process.on('SIGINT', shutdown);
-  process.on('SIGTERM', shutdown);
+  process.on('SIGINT', () => shutdown('SIGINT'));
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  process.on('SIGBREAK', () => shutdown('SIGBREAK'));
+  process.on('SIGHUP', () => shutdown('SIGHUP'));
+
+  process.on('uncaughtException', (err) => {
+    console.error('[Doks Agent] Uncaught exception:', err);
+    shutdown('uncaughtException');
+  });
+
+  process.on('unhandledRejection', (reason) => {
+    console.error('[Doks Agent] Unhandled rejection:', reason);
+    shutdown('unhandledRejection');
+  });
 }

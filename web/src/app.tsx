@@ -21,6 +21,7 @@ import { NoteEditor } from './components/notes/editor.js';
 import { BoardCanvas } from './components/board/board-canvas.js';
 import { NetworkScreen } from './components/network/network-screen.js';
 import { HistoryScreen } from './components/history/history-screen.js';
+import { SearchScreen } from './components/search/search-screen.js';
 import { Icon } from './ui/icons.js';
 
 export function App() {
@@ -67,6 +68,7 @@ export function App() {
         <main class="main-viewport">
           {currentView.value === 'network' && <NetworkScreen />}
           {currentView.value === 'history' && <HistoryScreen />}
+          {currentView.value === 'search' && <SearchScreen />}
 
           {(currentView.value === 'notes' || currentView.value === 'board') && (
             isSplitView.value && splitTab ? (

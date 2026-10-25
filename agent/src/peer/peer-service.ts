@@ -5,7 +5,14 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import * as awarenessProtocol from 'y-protocols/awareness';
 import type { AgentConfig, PeerStatus } from '@doks/shared';
-import { uint8ArrayToBase64, base64ToUint8Array } from '@doks/shared';
+import {
+  uint8ArrayToBase64,
+  base64ToUint8Array,
+  DOC_INDEX,
+  getIndexMaps,
+  getBoardDocName,
+  getNoteDocName
+} from '@doks/shared';
 import { DocManager } from '../storage/doc-manager.js';
 import { AttachmentManager } from '../storage/attachments.js';
 import { PeerConnection } from './peer-connection.js';
@@ -60,6 +67,12 @@ export class PeerService extends EventEmitter {
         this.broadcastSync(docName, syncMsg);
       }
     });
+
+    // Section 7.2: Automatically sync documents listed in indexDoc
+    const indexDoc = this.docManager.getOrCreateDoc(DOC_INDEX);
+    const { notes, boards } = getIndexMaps(indexDoc);
+    notes.observeDeep(() => this.syncDocsFromIndex());
+    boards.observeDeep(() => this.syncDocsFromIndex());
 
     // Populate initial outbound peers
     for (const address of this.config.peers) {
@@ -351,6 +364,30 @@ export class PeerService extends EventEmitter {
       const step1 = this.docManager.createSyncStep1Message(docName);
       conn.sendSync(docName, step1);
     }
+    this.syncDocsFromIndex();
+  }
+
+  public syncDocsFromIndex(): void {
+    const indexDoc = this.docManager.getOrCreateDoc(DOC_INDEX);
+    const { notes, boards } = getIndexMaps(indexDoc);
+
+    const docNamesToSync: string[] = [];
+    boards.forEach((b, id) => {
+      if (!b.deleted) docNamesToSync.push(getBoardDocName(id));
+    });
+    notes.forEach((n, id) => {
+      if (!n.deleted) docNamesToSync.push(getNoteDocName(id));
+    });
+
+    for (const docName of docNamesToSync) {
+      this.docManager.getOrCreateDoc(docName);
+      for (const conn of this.connections.values()) {
+        if (conn.isAuthenticated) {
+          const step1 = this.docManager.createSyncStep1Message(docName);
+          conn.sendSync(docName, step1);
+        }
+      }
+    }
   }
 
   public broadcastSync(docName: string, update: Uint8Array): void {
@@ -383,12 +420,15 @@ export class PeerService extends EventEmitter {
   }
 
   public addPeer(rawAddress: string): void {
-    let address = rawAddress.trim();
-    let teamKeyFromInvite: string | undefined;
+    let clean = rawAddress.trim();
+    if (clean.startsWith('doks://')) {
+      clean = clean.slice(7);
+    }
 
-    if (address.includes('#')) {
-      const parts = address.split('#');
-      address = parts[0].trim();
+    let teamKeyFromInvite: string | undefined;
+    if (clean.includes('#')) {
+      const parts = clean.split('#');
+      clean = parts[0].trim();
       teamKeyFromInvite = parts[1]?.trim();
     }
 
@@ -402,17 +442,20 @@ export class PeerService extends EventEmitter {
       logger.info('[PeerService] Adopted teamKey from invite for peer mesh');
     }
 
-    if (!this.outboundPeers.has(address)) {
-      this.outboundPeers.set(address, {
-        address,
-        reconnectAttempts: 0
-      });
-      if (!this.config.peers.includes(address)) {
-        this.config.peers.push(address);
+    const addresses = clean.split(',').map((a) => a.trim()).filter(Boolean);
+    for (const address of addresses) {
+      if (!this.outboundPeers.has(address)) {
+        this.outboundPeers.set(address, {
+          address,
+          reconnectAttempts: 0
+        });
+        if (!this.config.peers.includes(address)) {
+          this.config.peers.push(address);
+        }
+        this.connectToPeer(address);
       }
-      this.connectToPeer(address);
-      this.emit('peers-changed', this.getPeersStatus());
     }
+    this.emit('peers-changed', this.getPeersStatus());
   }
 
   public removePeer(address: string): void {

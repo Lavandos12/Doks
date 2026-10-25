@@ -12,12 +12,14 @@
   "scripts": {
     "build": "npm run build --workspace=shared && npm run build --workspace=web && npm run build --workspace=agent",
     "test": "vitest run",
+    "e2e": "playwright test",
     "check": "npm run typecheck && npm run test && npm run build",
     "typecheck": "tsc --noEmit --project shared/tsconfig.json && tsc --noEmit --project agent/tsconfig.json && tsc --noEmit --project web/tsconfig.json && tsc --noEmit --project tests/tsconfig.json",
     "dev:agent": "npm run dev --workspace=agent",
     "dev:web": "npm run dev --workspace=web"
   },
   "devDependencies": {
+    "@playwright/test": "^1.64.1",
     "typescript": "^5.7.3",
     "vitest": "^2.1.8"
   }

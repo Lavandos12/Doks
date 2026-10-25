@@ -24,6 +24,7 @@ import { seedDefaultBoard } from './board-seed.js';
 import { Icon, type IconName } from '../../ui/icons.js';
 import { AiExportModal } from './ai-export-modal.js';
 import { NotePickerModal } from './note-picker-modal.js';
+import { BoardMinimap } from './board-minimap.js';
 
 export const CANVAS_COLORS: Record<string, string> = {
   '1': '#e06c75', // Red
@@ -138,6 +139,39 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
     }
     return map;
   }, [nodesList]);
+
+  // Container dimensions for virtualization & minimap (F9)
+  const [containerSize, setContainerSize] = useState({ width: window.innerWidth, height: window.innerHeight });
+
+  useEffect(() => {
+    const updateSize = () => {
+      if (containerRef.current) {
+        setContainerSize({
+          width: containerRef.current.clientWidth || window.innerWidth,
+          height: containerRef.current.clientHeight || window.innerHeight
+        });
+      }
+    };
+    updateSize();
+    window.addEventListener('resize', updateSize);
+    return () => window.removeEventListener('resize', updateSize);
+  }, []);
+
+  // Viewport virtualization: only render nodes within viewport + 25% margin (F9)
+  const visibleNodes = useMemo(() => {
+    if (nodesList.length < 40) return nodesList;
+    const marginX = (containerSize.width / viewport.zoom) * 0.25;
+    const marginY = (containerSize.height / viewport.zoom) * 0.25;
+    const left = -viewport.x / viewport.zoom - marginX;
+    const top = -viewport.y / viewport.zoom - marginY;
+    const right = left + (containerSize.width / viewport.zoom) + 2 * marginX;
+    const bottom = top + (containerSize.height / viewport.zoom) + 2 * marginY;
+
+    return nodesList.filter((n) => {
+      if (selectedNodeIds.has(n.id)) return true;
+      return n.x + n.w >= left && n.x <= right && n.y + n.h >= top && n.y <= bottom;
+    });
+  }, [nodesList, viewport, containerSize, selectedNodeIds]);
 
   // Sync Yjs docs and setup Awareness
   useEffect(() => {
@@ -265,6 +299,9 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
         if (e.key.toLowerCase() === 'f') setActiveTool('frame');
         if (e.key.toLowerCase() === 'c') setActiveTool('arrow');
         if (e.key.toLowerCase() === 'r') setActiveTool('shape');
+        if (e.key.toLowerCase() === 'i') {
+          fileAttachmentInputRef.current?.click();
+        }
       }
 
       // Delete selected
@@ -550,16 +587,27 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
         }));
       }
 
-      // 3. Drag multiple nodes
+      // 3. Drag multiple nodes (Grid snap by default, Alt key disables snapping) (F9)
       if (dragState) {
         const dx = (e.clientX - dragState.startX) / viewport.zoom;
         const dy = (e.clientY - dragState.startY) / viewport.zoom;
+        const GRID_SIZE = 16;
+        const shouldSnap = !e.altKey;
 
         dragState.initialPositions.forEach((pos, id) => {
           const nodeMap = yNodes.get(id);
           if (nodeMap) {
-            nodeMap.set('x', Math.round(pos.x + dx));
-            nodeMap.set('y', Math.round(pos.y + dy));
+            let targetX = pos.x + dx;
+            let targetY = pos.y + dy;
+            if (shouldSnap) {
+              targetX = Math.round(targetX / GRID_SIZE) * GRID_SIZE;
+              targetY = Math.round(targetY / GRID_SIZE) * GRID_SIZE;
+            } else {
+              targetX = Math.round(targetX);
+              targetY = Math.round(targetY);
+            }
+            nodeMap.set('x', targetX);
+            nodeMap.set('y', targetY);
           }
         });
       }
@@ -609,9 +657,13 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
 
     window.addEventListener('pointermove', handleGlobalPointerMove);
     window.addEventListener('pointerup', handleGlobalPointerUp);
+    window.addEventListener('mousemove', handleGlobalPointerMove as any);
+    window.addEventListener('mouseup', handleGlobalPointerUp as any);
     return () => {
       window.removeEventListener('pointermove', handleGlobalPointerMove);
       window.removeEventListener('pointerup', handleGlobalPointerUp);
+      window.removeEventListener('mousemove', handleGlobalPointerMove as any);
+      window.removeEventListener('mouseup', handleGlobalPointerUp as any);
     };
   }, [panState, dragState, resizeState, marqueeBox, connectingState, viewport, nodesList]);
 
@@ -820,7 +872,7 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
       }}
     >
       {/* 1. Miro-level Floating Toolbox */}
-      <div class="board-toolbox" onClick={(e) => e.stopPropagation()}>
+      <div class="board-toolbox" onMouseDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()}>
         <div class="toolbox-group">
           <button
             class={`tb-btn ${activeTool === 'select' ? 'active' : ''}`}
@@ -945,6 +997,7 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
           class="tb-btn text-[var(--accent)]"
           onClick={() => setShowAiModal(true)}
           title="Экспорт для ИИ (Ctrl+Shift+E)"
+          data-testid="ai-export-btn"
         >
           <Icon name="sparkles" size={17} />
         </button>
@@ -1067,8 +1120,8 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
           )}
         </svg>
 
-        {/* Nodes Layer */}
-        {nodesList.map((node) => {
+        {/* Nodes Layer (Virtualization enabled for large boards) */}
+        {visibleNodes.map((node) => {
           const isSelected = selectedNodeIds.has(node.id);
           const nodeColorHex = CANVAS_COLORS[node.color || ''] || CANVAS_COLORS.default;
           const isFrame = node.type === 'frame';
@@ -1341,6 +1394,17 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
           };
           createNoteCardAt(noteId, pos.x, pos.y);
           setIsNotePickerOpen(false);
+        }}
+      />
+
+      {/* Minimap (F9) */}
+      <BoardMinimap
+        nodes={nodesList}
+        viewport={viewport}
+        containerWidth={containerSize.width}
+        containerHeight={containerSize.height}
+        onNavigate={(newX, newY) => {
+          setViewport((prev) => ({ ...prev, x: newX, y: newY }));
         }}
       />
     </div>
