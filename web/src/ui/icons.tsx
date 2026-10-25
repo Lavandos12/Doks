@@ -50,6 +50,9 @@ export type IconName =
   | 'upload'
   | 'sparkles'
   | 'pin'
+  | 'paperclip'
+  | 'external-link'
+  | 'menu'
   | 'more-vertical';
 
 export function Icon({
@@ -347,6 +350,26 @@ export function Icon({
           <>
             <line x1="12" y1="17" x2="12" y2="22" />
             <path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z" />
+          </>
+        );
+      case 'paperclip':
+        return (
+          <path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+        );
+      case 'external-link':
+        return (
+          <>
+            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+            <polyline points="15 3 21 3 21 9" />
+            <line x1="10" y1="14" x2="21" y2="3" />
+          </>
+        );
+      case 'menu':
+        return (
+          <>
+            <line x1="4" x2="20" y1="12" y2="12" />
+            <line x1="4" x2="20" y1="6" y2="6" />
+            <line x1="4" x2="20" y1="18" y2="18" />
           </>
         );
       case 'more-vertical':

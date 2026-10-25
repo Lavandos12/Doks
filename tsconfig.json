@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.base.json",
+  "files": [],
+  "references": [
+    { "path": "./shared" },
+    { "path": "./agent" },
+    { "path": "./web" },
+    { "path": "./tests" }
+  ]
+}

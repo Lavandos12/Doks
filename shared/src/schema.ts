@@ -110,6 +110,59 @@ export function getNodeYText(nodeMap: Y.Map<any>): Y.Text {
 }
 
 /**
+ * Applies a granular diff (longest common prefix & suffix) to a Y.Text
+ * to prevent wiping the entire text and causing duplication during concurrent edits.
+ */
+export function applyTextDelta(yText: Y.Text, newStr: string): void {
+  const oldStr = yText.toString();
+  if (oldStr === newStr) return;
+
+  let start = 0;
+  const oldLen = oldStr.length;
+  const newLen = newStr.length;
+
+  // Longest common prefix
+  while (start < oldLen && start < newLen && oldStr[start] === newStr[start]) {
+    start++;
+  }
+
+  // Longest common suffix
+  let oldEnd = oldLen;
+  let newEnd = newLen;
+  while (oldEnd > start && newEnd > start && oldStr[oldEnd - 1] === newStr[newEnd - 1]) {
+    oldEnd--;
+    newEnd--;
+  }
+
+  const deleteCount = oldEnd - start;
+  if (deleteCount > 0) {
+    yText.delete(start, deleteCount);
+  }
+
+  const insertText = newStr.slice(start, newEnd);
+  if (insertText.length > 0) {
+    yText.insert(start, insertText);
+  }
+}
+
+/**
+ * Creates a new Y.Map populated with BoardNodeData.
+ */
+export function createNodeMap(data: Partial<BoardNodeData>): Y.Map<any> {
+  const nodeMap = new Y.Map<any>();
+  for (const [key, val] of Object.entries(data)) {
+    if (val !== undefined) {
+      if (key === 'text') {
+        nodeMap.set('text', new Y.Text(String(val ?? '')));
+      } else {
+        nodeMap.set(key, val);
+      }
+    }
+  }
+  return nodeMap;
+}
+
+/**
  * Sets properties on a node's Y.Map, ensuring each property is an individual key
  * so concurrent edits to different properties don't conflict.
  */
@@ -120,10 +173,7 @@ export function setNodeProperties(nodeMap: Y.Map<any>, data: Partial<BoardNodeDa
     } else if (key === 'text') {
       const yText = getNodeYText(nodeMap);
       const strVal = String(val ?? '');
-      if (yText.toString() !== strVal) {
-        yText.delete(0, yText.length);
-        yText.insert(0, strVal);
-      }
+      applyTextDelta(yText, strVal);
     } else {
       nodeMap.set(key, val);
     }

@@ -157,6 +157,11 @@ export function Sidebar() {
         class={`tree-note-item ${isSelected ? 'active' : ''}`}
         style={{ paddingLeft: `${level * 12 + 18}px` }}
         onClick={() => openTab('note', note.id, note.title)}
+        draggable={true}
+        onDragStart={(e) => {
+          e.dataTransfer?.setData('application/doks-note-id', note.id);
+          e.dataTransfer?.setData('text/plain', note.title);
+        }}
       >
         <Icon name="file-text" size={14} class="tree-note-icon" />
         <span class="tree-note-title" title={note.title}>{note.title}</span>

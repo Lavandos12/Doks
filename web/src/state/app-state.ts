@@ -41,10 +41,11 @@ export const isSplitView = signal<boolean>(false);
 // Modals
 export const isCommandPaletteOpen = signal<boolean>(false);
 export const isQuickSwitcherOpen = signal<boolean>(false);
+export const isImportWizardOpen = signal<boolean>(false);
 
 // Initialize index observer
 const indexDoc = yjsClient.getIndexDoc();
-const maps = getIndexMaps(indexDoc);
+export const maps = getIndexMaps(indexDoc);
 
 function syncIndexSignals() {
   const noteList: NoteMeta[] = [];

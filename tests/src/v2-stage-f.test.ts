@@ -159,6 +159,7 @@ describe('Stage F: Attachments, Chunked P2P Sync & Import/Export Wizard', () => 
   describe('HTTP Endpoints: Attachments, Import & Export', () => {
     let agent: Agent;
     let baseUrl: string;
+    let sessionCookie: string;
 
     beforeEach(async () => {
       agent = new Agent({
@@ -169,6 +170,7 @@ describe('Stage F: Attachments, Chunked P2P Sync & Import/Export Wizard', () => 
       });
       await agent.start();
       baseUrl = `http://127.0.0.1:${agent.config.webPort}`;
+      sessionCookie = `doks_session=${agent.httpServer['sessionToken']}`;
     });
 
     afterEach(async () => {
@@ -181,7 +183,8 @@ describe('Stage F: Attachments, Chunked P2P Sync & Import/Export Wizard', () => 
         method: 'POST',
         headers: {
           'Content-Type': 'application/octet-stream',
-          'x-file-name': 'sample.png'
+          'x-file-name': 'sample.png',
+          Cookie: sessionCookie
         },
         body: fileData
       });
@@ -200,7 +203,9 @@ describe('Stage F: Attachments, Chunked P2P Sync & Import/Export Wizard', () => 
       expect(indexed?.name).toContain('.png');
 
       // GET full attachment
-      const getRes = await fetch(`${baseUrl}/api/attachments/${uploadJson.hash}`);
+      const getRes = await fetch(`${baseUrl}/api/attachments/${uploadJson.hash}`, {
+        headers: { Cookie: sessionCookie }
+      });
       expect(getRes.status).toBe(200);
       const arrayBuf = await getRes.arrayBuffer();
       expect(Buffer.from(arrayBuf)).toEqual(fileData);
@@ -208,7 +213,8 @@ describe('Stage F: Attachments, Chunked P2P Sync & Import/Export Wizard', () => 
       // GET with Range header
       const rangeRes = await fetch(`${baseUrl}/api/attachments/${uploadJson.hash}`, {
         headers: {
-          Range: 'bytes=0-5'
+          Range: 'bytes=0-5',
+          Cookie: sessionCookie
         }
       });
       expect(rangeRes.status).toBe(206);
@@ -223,7 +229,8 @@ describe('Stage F: Attachments, Chunked P2P Sync & Import/Export Wizard', () => 
       const importNoteRes = await fetch(`${baseUrl}/api/import/file`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          Cookie: sessionCookie
         },
         body: JSON.stringify({
           fileName: 'tasks.csv',
@@ -243,7 +250,8 @@ describe('Stage F: Attachments, Chunked P2P Sync & Import/Export Wizard', () => 
       const importBoardRes = await fetch(`${baseUrl}/api/import/file`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          Cookie: sessionCookie
         },
         body: JSON.stringify({
           fileName: 'tasks-board.csv',
@@ -278,7 +286,9 @@ describe('Stage F: Attachments, Chunked P2P Sync & Import/Export Wizard', () => 
       getNoteText(noteDoc).insert(0, '# Hello from Export Test');
 
       // Export note
-      const exportNoteRes = await fetch(`${baseUrl}/api/export/note/${noteId}`);
+      const exportNoteRes = await fetch(`${baseUrl}/api/export/note/${noteId}`, {
+        headers: { Cookie: sessionCookie }
+      });
       expect(exportNoteRes.status).toBe(200);
       const noteContent = await exportNoteRes.text();
       expect(noteContent).toBe('# Hello from Export Test');
@@ -295,13 +305,17 @@ describe('Stage F: Attachments, Chunked P2P Sync & Import/Export Wizard', () => 
       });
 
       // Export board
-      const exportBoardRes = await fetch(`${baseUrl}/api/export/board/${boardId}`);
+      const exportBoardRes = await fetch(`${baseUrl}/api/export/board/${boardId}`, {
+        headers: { Cookie: sessionCookie }
+      });
       expect(exportBoardRes.status).toBe(200);
       const boardCanvas = await exportBoardRes.json();
       expect(boardCanvas.nodes).toBeDefined();
 
       // Export Vault as .zip
-      const exportVaultRes = await fetch(`${baseUrl}/api/export/vault`);
+      const exportVaultRes = await fetch(`${baseUrl}/api/export/vault`, {
+        headers: { Cookie: sessionCookie }
+      });
       expect(exportVaultRes.status).toBe(200);
       expect(exportVaultRes.headers.get('content-type')).toBe('application/zip');
       const zipBuffer = Buffer.from(await exportVaultRes.arrayBuffer());

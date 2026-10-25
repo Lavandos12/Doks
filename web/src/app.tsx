@@ -9,12 +9,14 @@ import {
   openTabs,
   createNote,
   createBoard,
-  theme
+  theme,
+  isImportWizardOpen
 } from './state/app-state.js';
 import { Sidebar } from './components/layout/sidebar.js';
 import { TabBar } from './components/layout/tab-bar.js';
 import { StatusBar } from './components/layout/status-bar.js';
 import { CommandPalette } from './components/layout/command-palette.js';
+import { ImportWizardModal } from './components/board/import-wizard-modal.js';
 import { NoteEditor } from './components/notes/editor.js';
 import { BoardCanvas } from './components/board/board-canvas.js';
 import { NetworkScreen } from './components/network/network-screen.js';
@@ -89,6 +91,10 @@ export function App() {
       </div>
 
       <CommandPalette />
+      <ImportWizardModal
+        isOpen={isImportWizardOpen.value}
+        onClose={() => (isImportWizardOpen.value = false)}
+      />
     </div>
   );
 }

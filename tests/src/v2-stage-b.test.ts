@@ -190,14 +190,9 @@ describe('Stage B: P1 and P2 Fixes Verification', () => {
 
     expect(agent.config.bindAddress).toBe('auto');
 
-    // Unauthenticated request to /api/status
+    // Unauthenticated request to /api/status is rejected with 401
     const res = await fetch(`http://127.0.0.1:13046/api/status`);
-    const data = await res.json() as any;
-
-    expect(data.agentId).toBe(agent.config.agentId);
-    expect(data.radminFound).toBeDefined();
-    expect(data.teamKey).toBeUndefined(); // B17: Hidden without auth
-    expect(data.inviteLink).toBeUndefined();
+    expect(res.status).toBe(401);
 
     // Authenticated request with session cookie
     const authRes = await fetch(`http://127.0.0.1:13046/api/status`, {
@@ -206,6 +201,8 @@ describe('Stage B: P1 and P2 Fixes Verification', () => {
       }
     });
     const authData = await authRes.json() as any;
+    expect(authData.agentId).toBe(agent.config.agentId);
+    expect(authData.radminFound).toBeDefined();
     expect(authData.teamKey).toBe(teamKey);
     expect(authData.inviteLink).toContain(teamKey);
 

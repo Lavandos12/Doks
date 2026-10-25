@@ -6,6 +6,8 @@ import {
   getBoardMaps,
   nodeMapToData,
   setNodeProperties,
+  applyTextDelta,
+  getNoteDocName,
   type BoardNodeData,
   type BoardEdgeData,
   type BoardNodeType
@@ -14,11 +16,14 @@ import { yjsClient, agentStatus } from '../../state/yjs-client.js';
 import {
   openTab,
   notes,
+  maps,
+  restoreNote,
   createNote
 } from '../../state/app-state.js';
 import { seedDefaultBoard } from './board-seed.js';
 import { Icon, type IconName } from '../../ui/icons.js';
 import { AiExportModal } from './ai-export-modal.js';
+import { NotePickerModal } from './note-picker-modal.js';
 
 export const CANVAS_COLORS: Record<string, string> = {
   '1': '#e06c75', // Red
@@ -109,6 +114,13 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
 
   // Internal clipboard for copy/paste
   const clipboardRef = useRef<BoardNodeData[]>([]);
+
+  // Note picker modal for note cards (F3)
+  const [isNotePickerOpen, setIsNotePickerOpen] = useState(false);
+  const [pickerPos, setPickerPos] = useState<{ x: number; y: number } | null>(null);
+
+  // Hidden attachment file input (F4)
+  const fileAttachmentInputRef = useRef<HTMLInputElement>(null);
 
   // Undo manager
   const undoManagerRef = useRef<Y.UndoManager | null>(null);
@@ -243,7 +255,13 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
         if (e.key.toLowerCase() === 'h') setActiveTool('hand');
         if (e.key.toLowerCase() === 's') setActiveTool('sticky');
         if (e.key.toLowerCase() === 't') setActiveTool('text');
-        if (e.key.toLowerCase() === 'n') setActiveTool('note');
+        if (e.key.toLowerCase() === 'n') {
+          // Open Note Picker Modal (F3)
+          const centerX = (window.innerWidth / 2 - viewport.x) / viewport.zoom;
+          const centerY = (window.innerHeight / 2 - viewport.y) / viewport.zoom;
+          setPickerPos({ x: centerX - 140, y: centerY - 110 });
+          setIsNotePickerOpen(true);
+        }
         if (e.key.toLowerCase() === 'f') setActiveTool('frame');
         if (e.key.toLowerCase() === 'c') setActiveTool('arrow');
         if (e.key.toLowerCase() === 'r') setActiveTool('shape');
@@ -409,6 +427,74 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
     setActiveTool('select');
   };
 
+  // Create a note card linked to an existing note (F3)
+  const createNoteCardAt = (noteId: string, x: number, y: number) => {
+    const id = crypto.randomUUID();
+    const nodeMap = new Y.Map();
+    boardDoc.transact(() => {
+      yNodes.set(id, nodeMap);
+      setNodeProperties(nodeMap, {
+        id,
+        type: 'note',
+        x: Math.round(x),
+        y: Math.round(y),
+        w: 300,
+        h: 240,
+        noteId,
+        text: '',
+        color: 'default',
+        author: agentStatus.value?.memberName || 'Вы',
+        done: false,
+        z: 1,
+        deleted: false
+      });
+    }, 'user');
+    setSelectedNodeIds(new Set([id]));
+    setActiveTool('select');
+  };
+
+  // Upload attachment file and place block or image on board (F4)
+  const handleUploadFileToBoard = async (file: File, x: number, y: number) => {
+    try {
+      const buffer = await file.arrayBuffer();
+      const res = await fetch('/api/attachments', {
+        method: 'POST',
+        headers: {
+          'Content-Type': file.type || 'application/octet-stream',
+          'x-file-name': encodeURIComponent(file.name)
+        },
+        body: buffer
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      const id = crypto.randomUUID();
+      const nodeMap = new Y.Map();
+      const isImage = (data.mimeType || '').startsWith('image/') && !data.mimeType.includes('svg');
+
+      boardDoc.transact(() => {
+        yNodes.set(id, nodeMap);
+        setNodeProperties(nodeMap, {
+          id,
+          type: isImage ? 'sticky' : 'file',
+          x: Math.round(x),
+          y: Math.round(y),
+          w: isImage ? 280 : 220,
+          h: isImage ? 200 : 110,
+          text: file.name,
+          fileHash: data.hash,
+          fileName: data.fileName,
+          author: agentStatus.value?.memberName || 'Вы',
+          done: false,
+          z: 1,
+          deleted: false
+        });
+      }, 'user');
+      setSelectedNodeIds(new Set([id]));
+    } catch (err) {
+      console.error('Failed to upload file to board:', err);
+    }
+  };
+
   // Sticky Chaining: create next sticky on Tab or Shift+Enter
   const chainNextSticky = (sourceNode: BoardNodeData, direction: 'right' | 'down') => {
     const spacing = 24;
@@ -563,9 +649,9 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
       return;
     }
     if (activeTool === 'note') {
-      // Pick or create note
-      const newNoteId = createNote();
-      createNodeAt('note', pos.x - 100, pos.y - 65, 'default', 'Карточка заметки');
+      setPickerPos({ x: pos.x - 150, y: pos.y - 120 });
+      setIsNotePickerOpen(true);
+      setActiveTool('select');
       return;
     }
 
@@ -704,6 +790,34 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
       ref={containerRef}
       onWheel={(e) => handleWheel(e as any)}
       onMouseDown={handleBackgroundPointerDown}
+      onDragOver={(e) => {
+        if (
+          e.dataTransfer?.types.includes('application/doks-note-id') ||
+          (e.dataTransfer?.files && e.dataTransfer.files.length > 0)
+        ) {
+          e.preventDefault();
+          e.dataTransfer.dropEffect = 'copy';
+        }
+      }}
+      onDrop={async (e) => {
+        e.preventDefault();
+        const rect = containerRef.current?.getBoundingClientRect();
+        if (!rect) return;
+        const canvasX = (e.clientX - rect.left - viewport.x) / viewport.zoom;
+        const canvasY = (e.clientY - rect.top - viewport.y) / viewport.zoom;
+
+        const noteId = e.dataTransfer?.getData('application/doks-note-id');
+        if (noteId) {
+          createNoteCardAt(noteId, canvasX, canvasY);
+          return;
+        }
+
+        if (e.dataTransfer?.files && e.dataTransfer.files.length > 0) {
+          for (let i = 0; i < e.dataTransfer.files.length; i++) {
+            await handleUploadFileToBoard(e.dataTransfer.files[i], canvasX + i * 20, canvasY + i * 20);
+          }
+        }
+      }}
     >
       {/* 1. Miro-level Floating Toolbox */}
       <div class="board-toolbox" onClick={(e) => e.stopPropagation()}>
@@ -743,7 +857,12 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
           </button>
           <button
             class={`tb-btn ${activeTool === 'note' ? 'active' : ''}`}
-            onClick={() => setActiveTool('note')}
+            onClick={() => {
+              const centerX = (window.innerWidth / 2 - viewport.x) / viewport.zoom;
+              const centerY = (window.innerHeight / 2 - viewport.y) / viewport.zoom;
+              setPickerPos({ x: centerX - 150, y: centerY - 120 });
+              setIsNotePickerOpen(true);
+            }}
             title="Карточка заметки (N)"
           >
             <Icon name="file-text" size={17} />
@@ -769,6 +888,30 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
           >
             <Icon name="square" size={17} />
           </button>
+          <button
+            class="tb-btn"
+            onClick={() => fileAttachmentInputRef.current?.click()}
+            title="Прикрепить файл или изображение"
+          >
+            <Icon name="paperclip" size={17} />
+          </button>
+          <input
+            type="file"
+            ref={fileAttachmentInputRef}
+            style={{ display: 'none' }}
+            multiple
+            onChange={async (e) => {
+              const input = e.target as HTMLInputElement;
+              if (input.files && input.files.length > 0) {
+                const centerX = (window.innerWidth / 2 - viewport.x) / viewport.zoom;
+                const centerY = (window.innerHeight / 2 - viewport.y) / viewport.zoom;
+                for (let i = 0; i < input.files.length; i++) {
+                  await handleUploadFileToBoard(input.files[i], centerX + i * 25, centerY + i * 25);
+                }
+                input.value = '';
+              }
+            }}
+          />
         </div>
 
         <div class="toolbox-divider" />
@@ -990,18 +1133,113 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
                     onClick={(e) => {
                       e.stopPropagation();
                       if (node.noteId) {
-                        openTab('note', node.noteId, node.text);
+                        const meta = maps.notes.get(node.noteId);
+                        openTab('note', node.noteId, meta?.title || node.text);
                       }
                     }}
                   >
-                    <Icon name="file-text" size={12} />
-                    <span>Заметка</span>
+                    <Icon name="external-link" size={12} />
+                    <span>Открыть</span>
                   </button>
                 )}
               </div>
 
-              {/* Node Content (Inline text editing with Miro Tab-chaining) */}
-              {isFrame ? (
+              {/* Node Content (Inline text editing or note card or attachment) */}
+              {isNote ? (
+                (() => {
+                  const noteMeta = node.noteId ? maps.notes.get(node.noteId) : null;
+                  const isDeleted = !noteMeta || noteMeta.deleted;
+
+                  if (isDeleted) {
+                    return (
+                      <div class="note-card-deleted-view" onMouseDown={(e) => e.stopPropagation()}>
+                        <span class="deleted-label">Заметка удалена</span>
+                        {node.noteId && (
+                          <button
+                            class="btn btn-secondary btn-sm"
+                            style={{ marginTop: '8px' }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              restoreNote(node.noteId!);
+                            }}
+                          >
+                            Восстановить
+                          </button>
+                        )}
+                      </div>
+                    );
+                  }
+
+                  const noteDoc = yjsClient.getOrCreateDoc(getNoteDocName(node.noteId!));
+                  const noteYText = noteDoc.getText('text');
+                  const noteContent = noteYText.toString();
+
+                  return (
+                    <div class="note-card-content-view">
+                      <textarea
+                        id={`node-textarea-${node.id}`}
+                        class="node-inline-textarea note-card-textarea"
+                        value={noteContent}
+                        placeholder="Текст заметки..."
+                        onMouseDown={(e) => e.stopPropagation()}
+                        onInput={(e) => {
+                          const val = (e.target as HTMLTextAreaElement).value;
+                          applyTextDelta(noteYText, val);
+                        }}
+                      />
+                    </div>
+                  );
+                })()
+              ) : node.fileHash ? (
+                (() => {
+                  const isImg = (node.fileName || '').match(/\.(png|jpe?g|gif|webp)$/i);
+                  const isAud = (node.fileName || '').match(/\.(mp3|ogg|wav)$/i);
+                  const isVid = (node.fileName || '').match(/\.(mp4|webm)$/i);
+
+                  if (isImg) {
+                    return (
+                      <div class="node-image-container" onMouseDown={(e) => e.stopPropagation()}>
+                        <img
+                          src={`/api/attachments/${node.fileHash}`}
+                          alt={node.fileName || node.text}
+                          class="node-rendered-img"
+                        />
+                      </div>
+                    );
+                  }
+                  if (isAud) {
+                    return (
+                      <div class="node-media-container" onMouseDown={(e) => e.stopPropagation()}>
+                        <audio controls src={`/api/attachments/${node.fileHash}`} style={{ width: '100%' }} />
+                      </div>
+                    );
+                  }
+                  if (isVid) {
+                    return (
+                      <div class="node-media-container" onMouseDown={(e) => e.stopPropagation()}>
+                        <video controls src={`/api/attachments/${node.fileHash}`} style={{ width: '100%', maxHeight: '100%' }} />
+                      </div>
+                    );
+                  }
+                  return (
+                    <div class="node-file-container" onMouseDown={(e) => e.stopPropagation()}>
+                      <Icon name="paperclip" size={24} />
+                      <span class="node-file-label" title={node.fileName || node.text}>
+                        {node.fileName || node.text}
+                      </span>
+                      <a
+                        href={`/api/attachments/${node.fileHash}`}
+                        download={node.fileName || 'file'}
+                        class="btn btn-secondary btn-sm"
+                        target="_blank"
+                        rel="noopener"
+                      >
+                        Скачать
+                      </a>
+                    </div>
+                  );
+                })()
+              ) : isFrame ? (
                 <div class="frame-label-area">
                   <span class="frame-label-text">{node.text}</span>
                 </div>
@@ -1092,6 +1330,19 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
           onClose={() => setShowAiModal(false)}
         />
       )}
+
+      <NotePickerModal
+        isOpen={isNotePickerOpen}
+        onClose={() => setIsNotePickerOpen(false)}
+        onSelectNote={(noteId) => {
+          const pos = pickerPos || {
+            x: (window.innerWidth / 2 - viewport.x) / viewport.zoom,
+            y: (window.innerHeight / 2 - viewport.y) / viewport.zoom
+          };
+          createNoteCardAt(noteId, pos.x, pos.y);
+          setIsNotePickerOpen(false);
+        }}
+      />
     </div>
   );
 }

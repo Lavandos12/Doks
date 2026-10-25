@@ -2248,3 +2248,297 @@ body, html {
   margin-bottom: 16px;
   font-size: 0.85rem;
 }
+
+/* File Menu (F4) */
+.file-menu-container {
+  position: relative;
+  display: flex;
+  align-items: center;
+  padding-left: 8px;
+  border-right: 1px solid var(--border-color);
+  margin-right: 4px;
+}
+
+.file-menu-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.file-menu-btn:hover, .file-menu-btn.active {
+  background: var(--bg-card-hover);
+  color: var(--text-primary);
+}
+
+.file-menu-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 8px;
+  margin-top: 6px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.35);
+  min-width: 220px;
+  z-index: 1000;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.file-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 0.82rem;
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: background 0.12s;
+}
+
+.file-menu-item:hover {
+  background: var(--bg-card-hover);
+  color: var(--accent);
+}
+
+.file-menu-item.disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.file-menu-separator {
+  height: 1px;
+  background: var(--border-color);
+  margin: 4px 0;
+}
+
+/* Note Picker Modal (F3) */
+.note-picker-dialog {
+  width: 480px;
+  max-width: 90vw;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.note-picker-search-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 8px 12px;
+}
+
+.note-picker-search-bar input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: var(--text-primary);
+  outline: none;
+  font-size: 0.88rem;
+}
+
+.note-picker-list {
+  max-height: 280px;
+  overflow-y: auto;
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.note-picker-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  background: var(--bg-secondary);
+  transition: background 0.15s;
+}
+
+.note-picker-item:hover {
+  background: var(--bg-card-hover);
+  color: var(--accent);
+}
+
+.note-picker-item-title {
+  flex: 1;
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.note-picker-item-date {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+/* Note Card on Canvas (F3) */
+.note-card-deleted-view {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--danger, #f87171);
+  padding: 16px;
+  text-align: center;
+  gap: 8px;
+}
+
+.note-card-content-view {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+}
+
+.note-card-textarea {
+  flex: 1;
+  width: 100%;
+  height: 100%;
+  background: transparent;
+  border: none;
+  color: var(--text-primary);
+  font-family: var(--font-mono, monospace);
+  font-size: 0.85rem;
+  line-height: 1.45;
+  resize: none;
+  outline: none;
+  padding: 8px;
+}
+
+/* Import Wizard Modal (F4) */
+.import-wizard-dialog {
+  width: 580px;
+  max-width: 90vw;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.import-dropzone {
+  border: 2px dashed var(--border-color);
+  border-radius: 10px;
+  padding: 36px 20px;
+  text-align: center;
+  cursor: pointer;
+  background: var(--bg-secondary);
+  transition: all 0.2s;
+}
+
+.import-dropzone:hover {
+  border-color: var(--accent);
+  background: var(--bg-card-hover);
+}
+
+.import-dropzone .dropzone-icon {
+  color: var(--accent);
+  margin-bottom: 12px;
+}
+
+.staged-files-list {
+  max-height: 260px;
+  overflow-y: auto;
+  margin: 12px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.staged-file-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  background: var(--bg-secondary);
+  border-radius: 6px;
+  font-size: 0.85rem;
+}
+
+.staged-file-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.staged-file-size {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.staged-file-type-select {
+  background: var(--bg-card);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  padding: 3px 6px;
+  font-size: 0.78rem;
+}
+
+/* Node Attachment Display (F4) */
+.node-image-container {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: 6px;
+}
+
+.node-rendered-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 6px;
+}
+
+.node-media-container {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+}
+
+.node-file-container {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+  gap: 8px;
+  text-align: center;
+}
+
+.node-file-label {
+  font-size: 0.82rem;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+  white-space: nowrap;
+}
+

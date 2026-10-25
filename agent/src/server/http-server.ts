@@ -119,47 +119,94 @@ export class AgentHttpServer {
         root: this.webDistPath,
         prefix: '/'
       });
+    } else {
+      // Fallback root endpoint to set session cookie even when web dist is not built
+      this.fastify.get('/', async (_req, reply) => {
+        reply.type('text/html').send('<!doctype html><html><body><h1>Doks</h1></body></html>');
+      });
     }
 
-    // Security hook: Host & Origin verification
+    // Global security headers on all responses
+    this.fastify.addHook('onSend', async (_req, reply) => {
+      reply.header('Referrer-Policy', 'no-referrer');
+      reply.header('X-Frame-Options', 'DENY');
+      if (!reply.hasHeader('Content-Security-Policy')) {
+        reply.header(
+          'Content-Security-Policy',
+          "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' data: blob:; connect-src 'self' ws: wss:;"
+        );
+      }
+    });
+
+    // Security hook: Host & Origin verification & Session Authentication
     this.fastify.addHook('onRequest', async (req, reply) => {
       const host = req.headers.host || '';
-      const allowedHosts = [
-        `127.0.0.1:${this.config.webPort}`,
-        `localhost:${this.config.webPort}`,
-        '127.0.0.1',
-        'localhost'
-      ];
+      const [hostName, hostPortStr] = host.split(':');
+      const allowedHostNames = ['127.0.0.1', 'localhost', '[::1]'];
+      const hostPort = hostPortStr ? parseInt(hostPortStr, 10) : 80;
 
-      const hostMatches = allowedHosts.some((h) => host === h);
-      if (!hostMatches) {
+      if (!allowedHostNames.includes(hostName) || (hostPortStr && hostPort !== this.config.webPort)) {
         reply.code(403).send({ error: 'Forbidden: Invalid Host header' });
         return;
       }
 
       const origin = req.headers.origin;
       if (origin) {
-        const isAllowedOrigin =
-          origin.startsWith('http://127.0.0.1') ||
-          origin.startsWith('http://localhost') ||
-          origin.startsWith('https://127.0.0.1') ||
-          origin.startsWith('https://localhost');
-        if (!isAllowedOrigin) {
+        try {
+          const originUrl = new URL(origin);
+          const isAllowedOriginHost = allowedHostNames.includes(originUrl.hostname);
+          const originPort = originUrl.port
+            ? parseInt(originUrl.port, 10)
+            : originUrl.protocol === 'https:'
+              ? 443
+              : 80;
+          const isAllowedOriginPort =
+            originPort === this.config.webPort ||
+            (!originUrl.port && (this.config.webPort === 80 || this.config.webPort === 443));
+
+          if (!isAllowedOriginHost || !isAllowedOriginPort) {
+            reply.code(403).send({ error: 'Forbidden: Invalid Origin header' });
+            return;
+          }
+        } catch {
           reply.code(403).send({ error: 'Forbidden: Invalid Origin header' });
           return;
         }
       }
 
-      // Check or issue session cookie
-      const token = req.cookies.doks_session;
-      if (!token) {
-        reply.setCookie('doks_session', this.sessionToken, {
-          path: '/',
-          httpOnly: true,
-          sameSite: 'strict'
-        });
+      // Check route authentication
+      const urlPath = req.url.split('?')[0];
+      const isApiOrWs = urlPath.startsWith('/api') || urlPath.startsWith('/ws');
+
+      if (isApiOrWs) {
+        if (!this.isValidSession(req)) {
+          reply.code(401).send({ error: 'Unauthorized: Valid doks_session cookie required' });
+          return;
+        }
+      } else {
+        // Issue session cookie for static routes if missing
+        if (!req.cookies?.doks_session) {
+          reply.setCookie('doks_session', this.sessionToken, {
+            path: '/',
+            httpOnly: true,
+            sameSite: 'strict'
+          });
+        }
       }
     });
+  }
+
+  private isValidSession(req: any): boolean {
+    const cookieToken = req.cookies?.doks_session;
+    const authHeader = req.headers?.authorization;
+    const bearerToken = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : undefined;
+    const token = cookieToken || bearerToken;
+    if (!token || typeof token !== 'string') return false;
+
+    const tokenBuf = Buffer.from(token);
+    const expectedBuf = Buffer.from(this.sessionToken);
+    if (tokenBuf.length !== expectedBuf.length) return false;
+    return crypto.timingSafeEqual(tokenBuf, expectedBuf);
   }
 
   private setupRoutes(): void {
@@ -297,22 +344,78 @@ export class AgentHttpServer {
       };
     });
 
-    // API: Get attachment (Supports Range requests)
+    // API: Get attachment (Supports Range requests, Security Headers & CSP Sandbox)
     this.fastify.get('/api/attachments/:hash', async (req, reply) => {
       if (!this.attachmentManager) {
         return reply.code(500).send({ error: 'Attachment manager not available' });
       }
       const { hash } = req.params as { hash: string };
+      const HASH_REGEX = /^[a-f0-9]{64}$/;
+      if (!HASH_REGEX.test(hash)) {
+        return reply.code(400).send({ error: 'Invalid attachment hash format' });
+      }
+
       const att = this.attachmentManager.getAttachment(hash);
       if (!att || !fs.existsSync(att.filePath)) {
         return reply.code(404).send({ error: 'Attachment not found' });
       }
 
+      // Security headers for attachments
+      reply.header('X-Content-Type-Options', 'nosniff');
+      reply.header('Content-Security-Policy', "sandbox; default-src 'none'");
+
+      // Whitelisted inline safe types: png, jpg, webp, gif, pdf, audio/*, video/* (never SVG, HTML, or JS inline)
+      const INLINE_SAFE_EXACT = new Set([
+        'image/png',
+        'image/jpeg',
+        'image/gif',
+        'image/webp',
+        'application/pdf'
+      ]);
+      const isInlineSafe =
+        INLINE_SAFE_EXACT.has(att.mimeType) ||
+        ((att.mimeType.startsWith('audio/') || att.mimeType.startsWith('video/')) && !att.mimeType.includes('svg'));
+
+      const safeFileName = (att.fileName || 'attachment.bin').replace(/["\r\n\t\\]/g, '_');
+      if (isInlineSafe) {
+        reply.header('Content-Disposition', 'inline');
+      } else {
+        reply.header('Content-Disposition', `attachment; filename="${encodeURIComponent(safeFileName)}"`);
+      }
+
       const range = req.headers.range;
       if (range) {
-        const parts = range.replace(/bytes=/, '').split('-');
-        const start = parseInt(parts[0], 10);
-        const end = parts[1] ? parseInt(parts[1], 10) : att.size - 1;
+        if (!range.startsWith('bytes=')) {
+          reply.header('Content-Range', `bytes */${att.size}`);
+          return reply.code(416).send({ error: 'Range Not Satisfiable' });
+        }
+        const rangeSpec = range.slice(6).trim();
+        let start: number;
+        let end: number;
+
+        if (rangeSpec.startsWith('-')) {
+          const suffixLen = parseInt(rangeSpec.slice(1), 10);
+          if (isNaN(suffixLen) || suffixLen <= 0) {
+            reply.header('Content-Range', `bytes */${att.size}`);
+            return reply.code(416).send({ error: 'Range Not Satisfiable' });
+          }
+          start = Math.max(0, att.size - suffixLen);
+          end = att.size - 1;
+        } else {
+          const parts = rangeSpec.split('-');
+          if (parts.length !== 2) {
+            reply.header('Content-Range', `bytes */${att.size}`);
+            return reply.code(416).send({ error: 'Range Not Satisfiable' });
+          }
+          start = parseInt(parts[0], 10);
+          end = parts[1] === '' ? att.size - 1 : parseInt(parts[1], 10);
+        }
+
+        if (isNaN(start) || isNaN(end) || start > end || start < 0 || end >= att.size || att.size === 0) {
+          reply.header('Content-Range', `bytes */${att.size}`);
+          return reply.code(416).send({ error: 'Range Not Satisfiable' });
+        }
+
         const chunkSize = end - start + 1;
         const stream = fs.createReadStream(att.filePath, { start, end });
         reply.code(206);
@@ -718,6 +821,15 @@ export class AgentHttpServer {
   }
 
   public async stop(): Promise<void> {
+    try {
+      if (this.fastify.server) {
+        if (typeof (this.fastify.server as any).closeAllConnections === 'function') {
+          (this.fastify.server as any).closeAllConnections();
+        } else if (typeof (this.fastify.server as any).closeIdleConnections === 'function') {
+          (this.fastify.server as any).closeIdleConnections();
+        }
+      }
+    } catch {}
     await this.fastify.close();
   }
 }

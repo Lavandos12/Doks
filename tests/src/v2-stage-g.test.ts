@@ -369,7 +369,10 @@ describe('Stage G: Deterministic AI Context Export (doks-ai/1)', () => {
 
     const res = await fetch(`${baseUrl}/api/export/ai`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        Cookie: `doks_session=${agent.httpServer['sessionToken']}`
+      },
       body: JSON.stringify({ boardId })
     });
 

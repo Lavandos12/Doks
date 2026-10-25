@@ -8,15 +8,19 @@ import {
   closeTab,
   togglePinTab,
   toggleSplitView,
-  createNote
+  createNote,
+  isImportWizardOpen
 } from '../../state/app-state.js';
 import { Icon } from '../../ui/icons.js';
+import { FileMenu } from './file-menu.js';
 
 export function TabBar() {
   const tabs = openTabs.value;
 
   return (
     <div class="tabs-bar">
+      <FileMenu onOpenImportWizard={() => (isImportWizardOpen.value = true)} />
+
       <div class="tabs-scroll-area">
         {tabs.map((tab) => {
           const isActive = tab.id === activeTabId.value;

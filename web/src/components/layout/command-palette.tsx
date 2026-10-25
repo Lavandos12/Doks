@@ -3,6 +3,9 @@ import { useState, useEffect, useRef } from 'preact/hooks';
 import {
   isCommandPaletteOpen,
   isQuickSwitcherOpen,
+  isImportWizardOpen,
+  activeTabId,
+  openTabs,
   notes,
   boards,
   openTab,
@@ -136,6 +139,67 @@ export function CommandPalette() {
           close();
         }
       },
+      {
+        id: 'cmd-import-wizard',
+        title: 'Мастер импорта файлов',
+        subtitle: 'Импорт Markdown, Canvas, CSV, DOCX, ZIP',
+        icon: 'upload',
+        action: () => {
+          isImportWizardOpen.value = true;
+          close();
+        }
+      },
+      {
+        id: 'cmd-export-vault',
+        title: 'Экспорт хранилища (.zip)',
+        subtitle: 'Полный архив заметок и досок',
+        icon: 'download',
+        action: () => {
+          window.open('/api/export/vault', '_blank');
+          close();
+        }
+      },
+      {
+        id: 'cmd-create-snapshot',
+        title: 'Создать резервную копию (снимок)',
+        subtitle: 'Мгновенный снимок всех документов',
+        icon: 'history',
+        action: async () => {
+          try {
+            await fetch('/api/snapshots', { method: 'POST' });
+          } catch {}
+          close();
+        }
+      },
+      ...(() => {
+        const activeTab = openTabs.value.find((t) => t.id === activeTabId.value);
+        const dynamicItems: PaletteItem[] = [];
+        if (activeTab?.type === 'note') {
+          dynamicItems.push({
+            id: 'cmd-export-active-note',
+            title: `Экспорт текущей заметки "${activeTab.title}" (.md)`,
+            subtitle: 'Скачать markdown-файл',
+            icon: 'file-text',
+            action: () => {
+              window.open(`/api/export/note/${activeTab.id}`, '_blank');
+              close();
+            }
+          });
+        }
+        if (activeTab?.type === 'board') {
+          dynamicItems.push({
+            id: 'cmd-export-active-board',
+            title: `Экспорт текущей доски "${activeTab.title}" (.canvas)`,
+            subtitle: 'Скачать JSON Canvas',
+            icon: 'layout',
+            action: () => {
+              window.open(`/api/export/board/${activeTab.id}`, '_blank');
+              close();
+            }
+          });
+        }
+        return dynamicItems;
+      })(),
       ...activeNotes.map((n) => ({
         id: `note-${n.id}`,
         title: n.title,

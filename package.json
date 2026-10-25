@@ -13,7 +13,7 @@
     "build": "npm run build --workspace=shared && npm run build --workspace=web && npm run build --workspace=agent",
     "test": "vitest run",
     "check": "npm run typecheck && npm run test && npm run build",
-    "typecheck": "tsc --noEmit --project tsconfig.json",
+    "typecheck": "tsc --noEmit --project shared/tsconfig.json && tsc --noEmit --project agent/tsconfig.json && tsc --noEmit --project web/tsconfig.json && tsc --noEmit --project tests/tsconfig.json",
     "dev:agent": "npm run dev --workspace=agent",
     "dev:web": "npm run dev --workspace=web"
   },

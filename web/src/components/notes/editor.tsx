@@ -207,8 +207,62 @@ export function NoteEditor({ noteId }: NoteEditorProps) {
     }
   };
 
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleUploadFileToNote = async (file: File) => {
+    try {
+      const buffer = await file.arrayBuffer();
+      const res = await fetch('/api/attachments', {
+        method: 'POST',
+        headers: {
+          'Content-Type': file.type || 'application/octet-stream',
+          'x-file-name': encodeURIComponent(file.name)
+        },
+        body: buffer
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      const isImg = (data.mimeType || '').startsWith('image/') && !data.mimeType.includes('svg');
+      const snippet = isImg ? `![[${data.fileName}]]` : `[[${data.fileName}]]`;
+      insertSnippet(snippet);
+    } catch (err) {
+      console.error('Failed to upload file to note:', err);
+    }
+  };
+
   return (
-    <div class="note-editor-wrapper">
+    <div
+      class="note-editor-wrapper"
+      onDragOver={(e) => {
+        if (e.dataTransfer?.files && e.dataTransfer.files.length > 0) {
+          e.preventDefault();
+          e.dataTransfer.dropEffect = 'copy';
+        }
+      }}
+      onDrop={async (e) => {
+        if (e.dataTransfer?.files && e.dataTransfer.files.length > 0) {
+          e.preventDefault();
+          for (let i = 0; i < e.dataTransfer.files.length; i++) {
+            await handleUploadFileToNote(e.dataTransfer.files[i]);
+          }
+        }
+      }}
+      onPaste={async (e) => {
+        const items = e.clipboardData?.items;
+        if (items) {
+          for (let i = 0; i < items.length; i++) {
+            if (items[i].type.startsWith('image/')) {
+              const file = items[i].getAsFile();
+              if (file) {
+                e.preventDefault();
+                await handleUploadFileToNote(file);
+                return;
+              }
+            }
+          }
+        }
+      }}
+    >
       {/* Note Header */}
       <div class="note-header">
         <div class="note-header-top">
@@ -260,6 +314,28 @@ export function NoteEditor({ noteId }: NoteEditorProps) {
               >
                 <Icon name="link" size={13} />
               </button>
+              <button
+                class="quick-insert-btn"
+                onClick={() => fileInputRef.current?.click()}
+                title="Прикрепить файл или изображение"
+              >
+                <Icon name="paperclip" size={13} />
+              </button>
+              <input
+                type="file"
+                ref={fileInputRef}
+                style={{ display: 'none' }}
+                multiple
+                onChange={async (e) => {
+                  const input = e.target as HTMLInputElement;
+                  if (input.files && input.files.length > 0) {
+                    for (let i = 0; i < input.files.length; i++) {
+                      await handleUploadFileToNote(input.files[i]);
+                    }
+                    input.value = '';
+                  }
+                }}
+              />
             </div>
 
             {/* Toggle Right Panel (Outline / Backlinks) */}
