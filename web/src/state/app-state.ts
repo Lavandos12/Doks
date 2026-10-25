@@ -1,6 +1,22 @@
 import { signal, computed } from '@preact/signals';
-import type { NoteMeta, BoardMeta, FolderMeta } from '@doks/shared';
-import { getIndexMaps, getNoteDocName, getBoardDocName, getBoardMaps } from '@doks/shared';
+import type {
+  NoteMeta,
+  BoardMeta,
+  FolderMeta,
+  WorkspaceScope,
+  BridgeTransferRequest,
+  BridgeTransferResponse
+} from '@doks/shared';
+import {
+  getIndexMaps,
+  getNoteDocName,
+  getBoardDocName,
+  getScopedIndexDocName,
+  getScopedNoteDocName,
+  getScopedBoardDocName,
+  getBoardMaps,
+  DOC_INDEX
+} from '@doks/shared';
 import { yjsClient } from './yjs-client.js';
 import { NotesSearchIndex } from '../search/indexer.js';
 
@@ -13,6 +29,19 @@ export interface TabItem {
   type: 'note' | 'board';
   title: string;
   pinned?: boolean;
+}
+
+// Two-Tier Workspace Scope
+const savedScope = typeof localStorage !== 'undefined' ? (localStorage.getItem('doks_scope') as WorkspaceScope) : null;
+export const currentScope = signal<WorkspaceScope>(savedScope || 'team');
+
+export function setScope(newScope: WorkspaceScope): void {
+  if (currentScope.value === newScope) return;
+  currentScope.value = newScope;
+  if (typeof localStorage !== 'undefined') {
+    localStorage.setItem('doks_scope', newScope);
+  }
+  syncIndexSignals();
 }
 
 // Persisted theme (B16)
@@ -46,30 +75,56 @@ export const isCommandPaletteOpen = signal<boolean>(false);
 export const isQuickSwitcherOpen = signal<boolean>(false);
 export const isImportWizardOpen = signal<boolean>(false);
 
-// Initialize index observer
-const indexDoc = yjsClient.getIndexDoc();
-export const maps = getIndexMaps(indexDoc);
+// Initialize dual-scope index observers
+const soloIndexDoc = yjsClient.getOrCreateDoc(getScopedIndexDocName('solo'));
+const teamIndexDoc = yjsClient.getOrCreateDoc(getScopedIndexDocName('team'));
+
+export const soloMaps = getIndexMaps(soloIndexDoc);
+export const teamMaps = getIndexMaps(teamIndexDoc);
+
+export function getActiveIndexDoc() {
+  return currentScope.value === 'solo' ? soloIndexDoc : teamIndexDoc;
+}
+
+export function getActiveMaps() {
+  return currentScope.value === 'solo' ? soloMaps : teamMaps;
+}
+
+// Proxied maps property for backward compatibility with components expecting active scope maps
+export const maps = new Proxy({} as ReturnType<typeof getIndexMaps>, {
+  get(_target, prop) {
+    return (getActiveMaps() as any)[prop];
+  }
+});
 
 function syncIndexSignals() {
+  const activeMaps = getActiveMaps();
+
   const noteList: NoteMeta[] = [];
-  maps.notes.forEach((val) => noteList.push(val));
+  activeMaps.notes.forEach((val) => {
+    noteList.push({ ...val, scope: currentScope.value });
+  });
   notes.value = noteList;
 
   const boardList: BoardMeta[] = [];
-  maps.boards.forEach((val) => boardList.push(val));
+  activeMaps.boards.forEach((val) => {
+    boardList.push({ ...val, scope: currentScope.value });
+  });
   boards.value = boardList;
 
   const folderList: FolderMeta[] = [];
-  maps.folders.forEach((val) => folderList.push(val));
+  activeMaps.folders.forEach((val) => {
+    folderList.push({ ...val, scope: currentScope.value });
+  });
   folders.value = folderList;
 
   // Sync tab titles if doc renamed
   const updatedTabs = openTabs.value.map((tab) => {
     if (tab.type === 'note') {
-      const n = maps.notes.get(tab.id);
+      const n = activeMaps.notes.get(tab.id);
       if (n && n.title !== tab.title) return { ...tab, title: n.title };
     } else if (tab.type === 'board') {
-      const b = maps.boards.get(tab.id);
+      const b = activeMaps.boards.get(tab.id);
       if (b && b.title !== tab.title) return { ...tab, title: b.title };
     }
     return tab;
@@ -77,13 +132,13 @@ function syncIndexSignals() {
   openTabs.value = updatedTabs;
 
   // Incremental Search Indexing (F6)
-  maps.notes.forEach((val, id) => {
+  activeMaps.notes.forEach((val, id) => {
     if (val.deleted) {
       searchIndex.removeDoc(id);
     } else {
       let text = '';
       try {
-        const noteDoc = yjsClient.getOrCreateDoc(getNoteDocName(id));
+        const noteDoc = yjsClient.getOrCreateDoc(getScopedNoteDocName(currentScope.value, id));
         text = noteDoc.getText('text').toString();
       } catch {}
       const tags = text.match(/#[a-zA-Zа-яА-Я0-9_-]+/g) || [];
@@ -98,13 +153,13 @@ function syncIndexSignals() {
     }
   });
 
-  maps.boards.forEach((val, id) => {
+  activeMaps.boards.forEach((val, id) => {
     if (val.deleted) {
       searchIndex.removeDoc(id);
     } else {
       let boardText = '';
       try {
-        const bDoc = yjsClient.getOrCreateDoc(getBoardDocName(id));
+        const bDoc = yjsClient.getOrCreateDoc(getScopedBoardDocName(currentScope.value, id));
         const { nodes } = getBoardMaps(bDoc);
         const parts: string[] = [];
         nodes.forEach((nodeMap) => {
@@ -124,19 +179,25 @@ function syncIndexSignals() {
   });
 }
 
-maps.notes.observe(() => syncIndexSignals());
-maps.boards.observe(() => syncIndexSignals());
-maps.folders.observe(() => syncIndexSignals());
+soloMaps.notes.observe(() => syncIndexSignals());
+soloMaps.boards.observe(() => syncIndexSignals());
+soloMaps.folders.observe(() => syncIndexSignals());
+
+teamMaps.notes.observe(() => syncIndexSignals());
+teamMaps.boards.observe(() => syncIndexSignals());
+teamMaps.folders.observe(() => syncIndexSignals());
+
 syncIndexSignals();
 
 export function openTab(type: 'note' | 'board', id: string, title?: string): void {
+  const activeMaps = getActiveMaps();
   const existing = openTabs.value.find((t) => t.id === id);
   if (!existing) {
     const docTitle =
       title ||
       (type === 'note'
-        ? maps.notes.get(id)?.title || 'Без названия'
-        : maps.boards.get(id)?.title || 'Безымянная доска');
+        ? activeMaps.notes.get(id)?.title || 'Без названия'
+        : activeMaps.boards.get(id)?.title || 'Безымянная доска');
     openTabs.value = [...openTabs.value, { id, type, title: docTitle }];
   }
 
@@ -196,6 +257,9 @@ export function toggleSplitView(): void {
 }
 
 export function createNote(title = 'Новая заметка', folder: string | null = null): string {
+  const scope = currentScope.value;
+  const activeDoc = getActiveIndexDoc();
+  const activeMaps = getActiveMaps();
   const id = crypto.randomUUID();
   const meta: NoteMeta = {
     id,
@@ -203,15 +267,16 @@ export function createNote(title = 'Новая заметка', folder: string |
     folder,
     createdAt: Date.now(),
     updatedAt: Date.now(),
-    deleted: false
+    deleted: false,
+    scope
   };
 
-  indexDoc.transact(() => {
-    maps.notes.set(id, meta);
+  activeDoc.transact(() => {
+    activeMaps.notes.set(id, meta);
   });
 
   // Pre-seed note doc
-  const noteDoc = yjsClient.getOrCreateDoc(getNoteDocName(id));
+  const noteDoc = yjsClient.getOrCreateDoc(getScopedNoteDocName(scope, id));
   const text = noteDoc.getText('text');
   if (text.length === 0) {
     text.insert(0, `# ${title}\n\n`);
@@ -222,6 +287,9 @@ export function createNote(title = 'Новая заметка', folder: string |
 }
 
 export function createBoard(title = 'Новая доска', folder: string | null = null): string {
+  const scope = currentScope.value;
+  const activeDoc = getActiveIndexDoc();
+  const activeMaps = getActiveMaps();
   const id = crypto.randomUUID();
   const meta: BoardMeta = {
     id,
@@ -229,11 +297,12 @@ export function createBoard(title = 'Новая доска', folder: string | nu
     folder,
     createdAt: Date.now(),
     updatedAt: Date.now(),
-    deleted: false
+    deleted: false,
+    scope
   };
 
-  indexDoc.transact(() => {
-    maps.boards.set(id, meta);
+  activeDoc.transact(() => {
+    activeMaps.boards.set(id, meta);
   });
 
   openTab('board', id, title);
@@ -241,16 +310,20 @@ export function createBoard(title = 'Новая доска', folder: string | nu
 }
 
 export function createFolder(name = 'Новая папка', parent: string | null = null): string {
+  const scope = currentScope.value;
+  const activeDoc = getActiveIndexDoc();
+  const activeMaps = getActiveMaps();
   const id = crypto.randomUUID();
   const meta: FolderMeta = {
     id,
     name,
     parent,
-    deleted: false
+    deleted: false,
+    scope
   };
 
-  indexDoc.transact(() => {
-    maps.folders.set(id, meta);
+  activeDoc.transact(() => {
+    activeMaps.folders.set(id, meta);
   });
 
   return id;
@@ -260,27 +333,29 @@ export function createFolder(name = 'Новая папка', parent: string | nu
  * Renames a note and automatically updates wikilinks [[Old Title]] -> [[New Title]] across all notes (B19).
  */
 export function renameNote(id: string, newTitle: string): void {
-  const existing = maps.notes.get(id);
+  const activeDoc = getActiveIndexDoc();
+  const activeMaps = getActiveMaps();
+  const existing = activeMaps.notes.get(id);
   if (!existing || existing.title === newTitle) return;
 
   const oldTitle = existing.title;
 
-  indexDoc.transact(() => {
-    maps.notes.set(id, {
+  activeDoc.transact(() => {
+    activeMaps.notes.set(id, {
       ...existing,
       title: newTitle,
       updatedAt: Date.now()
     });
   });
 
-  // B19: Refactor wikilinks across all active notes
+  // B19: Refactor wikilinks across active notes
   const escaped = oldTitle.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&');
   const regex = new RegExp(`\\[\\[\\s*${escaped}(\\s*\\|[^\\]]*)?\\]\\]`, 'gi');
 
-  maps.notes.forEach((meta, otherNoteId) => {
+  activeMaps.notes.forEach((meta, otherNoteId) => {
     if (meta.deleted) return;
     try {
-      const otherDoc = yjsClient.getOrCreateDoc(getNoteDocName(otherNoteId));
+      const otherDoc = yjsClient.getOrCreateDoc(getScopedNoteDocName(currentScope.value, otherNoteId));
       const text = otherDoc.getText('text');
       const content = text.toString();
 
@@ -300,9 +375,10 @@ export function renameNote(id: string, newTitle: string): void {
 }
 
 export function renameBoard(id: string, newTitle: string): void {
-  const existing = maps.boards.get(id);
+  const activeMaps = getActiveMaps();
+  const existing = activeMaps.boards.get(id);
   if (existing) {
-    maps.boards.set(id, {
+    activeMaps.boards.set(id, {
       ...existing,
       title: newTitle
     });
@@ -310,9 +386,10 @@ export function renameBoard(id: string, newTitle: string): void {
 }
 
 export function renameFolder(id: string, newName: string): void {
-  const existing = maps.folders.get(id);
+  const activeMaps = getActiveMaps();
+  const existing = activeMaps.folders.get(id);
   if (existing) {
-    maps.folders.set(id, {
+    activeMaps.folders.set(id, {
       ...existing,
       name: newName
     });
@@ -320,9 +397,10 @@ export function renameFolder(id: string, newName: string): void {
 }
 
 export function moveNote(id: string, newFolder: string | null): void {
-  const existing = maps.notes.get(id);
+  const activeMaps = getActiveMaps();
+  const existing = activeMaps.notes.get(id);
   if (existing) {
-    maps.notes.set(id, {
+    activeMaps.notes.set(id, {
       ...existing,
       folder: newFolder,
       updatedAt: Date.now()
@@ -331,9 +409,10 @@ export function moveNote(id: string, newFolder: string | null): void {
 }
 
 export function deleteNote(id: string): void {
-  const existing = maps.notes.get(id);
+  const activeMaps = getActiveMaps();
+  const existing = activeMaps.notes.get(id);
   if (existing) {
-    maps.notes.set(id, {
+    activeMaps.notes.set(id, {
       ...existing,
       deleted: true,
       deletedAt: Date.now()
@@ -343,9 +422,10 @@ export function deleteNote(id: string): void {
 }
 
 export function restoreNote(id: string): void {
-  const existing = maps.notes.get(id);
+  const activeMaps = getActiveMaps();
+  const existing = activeMaps.notes.get(id);
   if (existing) {
-    maps.notes.set(id, {
+    activeMaps.notes.set(id, {
       ...existing,
       deleted: false,
       deletedAt: undefined,
@@ -355,9 +435,10 @@ export function restoreNote(id: string): void {
 }
 
 export function deleteBoard(id: string): void {
-  const existing = maps.boards.get(id);
+  const activeMaps = getActiveMaps();
+  const existing = activeMaps.boards.get(id);
   if (existing) {
-    maps.boards.set(id, {
+    activeMaps.boards.set(id, {
       ...existing,
       deleted: true,
       deletedAt: Date.now()
@@ -367,9 +448,10 @@ export function deleteBoard(id: string): void {
 }
 
 export function deleteFolder(id: string): void {
-  const existing = maps.folders.get(id);
+  const activeMaps = getActiveMaps();
+  const existing = activeMaps.folders.get(id);
   if (existing) {
-    maps.folders.set(id, {
+    activeMaps.folders.set(id, {
       ...existing,
       deleted: true,
       deletedAt: Date.now()
@@ -377,9 +459,38 @@ export function deleteFolder(id: string): void {
   }
 }
 
+/**
+ * Cross-Scope Bridge: Transfer nodes and linked notes between Solo and Team
+ */
+export async function transferNodesAcrossScopes(req: BridgeTransferRequest): Promise<BridgeTransferResponse> {
+  const res = await fetch('/api/bridge/transfer', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(req)
+  });
+  const data: BridgeTransferResponse = await res.json();
+  if (data.success && req.toScope) {
+    setScope(req.toScope);
+    openTab('board', req.targetBoardId);
+  }
+  return data;
+}
+
 // Global hotkey listeners for desktop feel
 if (typeof window !== 'undefined') {
   window.addEventListener('keydown', (e: KeyboardEvent) => {
+    // Alt+1: Solo Scope
+    if (e.altKey && e.key === '1') {
+      e.preventDefault();
+      setScope('solo');
+    }
+
+    // Alt+2: Team Scope
+    if (e.altKey && e.key === '2') {
+      e.preventDefault();
+      setScope('team');
+    }
+
     // Ctrl+W: Close active tab
     if (e.ctrlKey && e.key.toLowerCase() === 'w') {
       e.preventDefault();

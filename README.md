@@ -12,16 +12,16 @@
 | Feature | Status | Description |
 |---|---|---|
 | **Local-First Architecture** | ✅ Working | 100% offline-ready, connects exclusively to `127.0.0.1`, mirrors directly to standard `.md` and `.canvas` files |
+| **Two-Tier Workspaces (Solo & Team)** | ✅ Working | Private personal workspace (`solo`, zero network leakage) and collaborative mesh workspace (`team`) with single-click promotion bridge |
 | **Miro-Level Canvas & Boards** | ✅ Working | Sticky notes, frames, note cards, arrow connectors, multi-selection, Tab-chaining, minimap, grid snap (16px) |
 | **Obsidian-Level Notes** | ✅ Working | CodeMirror 6, Live Preview, callouts (`[!note]`, `[!warning]`), frontmatter properties, outline panel, `[[wikilinks]]` refactoring |
-| **Decentralized P2P Mesh** | ✅ Working | Mutual WebSocket mesh over Radmin VPN, transitive relaying (A↔B↔C), HMAC-SHA256 handshake authentication |
+| **True P2P Decentralized Mesh** | ✅ Working | Mutual WebSocket mesh over Radmin VPN/LAN, Ed25519 peer identities, AEAD AES-256-GCM encryption, UDP beacon discovery |
+| **Backpressure & Large Media** | ✅ Working | Dual-queue transmission prioritizing CRDT/Awareness over chunked 256 KB binary attachments |
 | **Full-Text Search** | ✅ Working | MiniSearch with Russian normalization (`ё` = `е`), title, body, and hashtag search (`Ctrl+Shift+F`) |
-| **Attachments & P2P Sync** | ✅ Working | Content-addressed storage (SHA-256), 256 KB chunked P2P transfer with integrity verification, video/audio streaming |
 | **AI Context Export (`doks-ai/1`)** | ✅ Working | Generates structured, deterministic board context for Claude, Gemini, or ChatGPT in < 0.5s; short IDs `n_xxxx`, open tasks |
-| **Snapshots & Trash** | ✅ Working | Soft deletion with 30-day retention, point-in-time state snapshots, memory-efficient streaming `.zip` export |
+| **Snapshots & Trash** | ✅ Working | Soft deletion with 30-day retention, scoped point-in-time state snapshots, memory-efficient streaming `.zip` export |
 | **Bilingual UI** | ✅ Working | Instant English/Russian switching with reactive state persistence in localStorage |
 | **Dedicated Hub Mode** | 📋 Planned | Headless agent deployment on a VPS as a persistent peer (mesh architecture already supports this) |
-| **DHT Swarm / WebRTC Transport** | 📋 Planned | Pluggable `Transport` abstraction for serverless zero-config peer discovery without manual IP entry |
 
 ---
 
@@ -32,7 +32,7 @@ Automated end-to-end and integration benchmarks measured across Vitest and Playw
 - **CRDT P2P Sync Latency:** Under 50 ms on local loopback/LAN and < 120 ms over Radmin VPN between distinct peer processes.
 - **AI Context Compilation (`doks-ai/1`):** Complete board export with 1,000 nodes, frames, and connected notes executes in under 20 ms.
 - **Streaming Vault ZIP Export:** Zero MB memory spike (pure streaming Store-mode pipeline without buffering whole archives in RAM).
-- **End-to-End Suite:** All 6 full multi-agent collaborative browser scenarios pass in ~6.0 seconds.
+- **End-to-End Suite:** All 7 full multi-agent collaborative browser scenarios (including dual-scope cross-promotion) pass in ~11.0 seconds.
 
 ---
 
@@ -40,7 +40,7 @@ Automated end-to-end and integration benchmarks measured across Vitest and Playw
 
 - **Platform Focus (v1):** Windows 10/11 and Radmin VPN (`26.0.0.0/8`). Cross-platform support (`doks.sh`) is provided for Linux/macOS, but automatic network adapter probing is optimized for Windows Radmin in version 1.
 - **Mobile Support:** Mobile clients (iOS/Android) are not supported in version 1.
-- **Peer Discovery:** Initial connection requires sharing an invite link (`doks://addr1,addr2#teamKey`) or entering a peer's IP manually.
+- **Peer Discovery:** Auto-discovery works over LAN and Radmin VPN subnets via UDP beacon on port `41234`. Cross-NAT internet connections require manual invite links (`doks://addr1,addr2#teamKey`).
 - **Local Agent Process:** Requires running the lightweight local Doks Node.js background agent on each peer machine.
 
 ---
@@ -71,6 +71,8 @@ chmod +x doks.sh
 
 | Shortcut | Action |
 |---|---|
+| `Alt+1` | Switch to **Solo Workspace** (private local vault) |
+| `Alt+2` | Switch to **Team Workspace** (collaborative mesh) |
 | `Ctrl+P` | Command palette |
 | `Ctrl+O` | Quick note/board switcher |
 | `Ctrl+Shift+F` | Global full-text search |

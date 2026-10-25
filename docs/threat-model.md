@@ -26,21 +26,24 @@ Doks operates as a local-first application where each user runs a local agent co
 ### 2.1. DNS Rebinding & Cross-Origin Requests
 - **Threat:** A malicious website visited in the user's browser attempts to query `http://127.0.0.1:3000/api` or establish a WebSocket connection to exfiltrate vault notes.
 - **Mitigation:**
-  - Strict `Origin` and `Host` header checks reject all requests whose origin does not match `127.0.0.1` or `localhost`.
-  - Cryptographic session cookie (`doks_session`) is issued on index load and required for all subsequent API endpoints and WebSocket upgrades.
+  - Strict `new URL(origin)` parsing rejects all requests where the origin host does not strictly match `127.0.0.1`, `localhost`, or the configured bind IP, or where the port does not match the configured HTTP port.
+  - Cryptographic session cookie (`doks_session`) and `X-Doks-Token` header are required for all mutating API endpoints and WebSocket upgrades.
 
-### 2.2. Malicious File Attachments (SVG Stored XSS)
-- **Threat:** An attacker uploads a crafted SVG or HTML file containing `<script>` tags, which executes JavaScript in the context of `127.0.0.1:3000` when viewed.
+### 2.2. Malicious File Attachments (Stored XSS)
+- **Threat:** An attacker uploads a crafted SVG, XML, or HTML file containing `<script>` tags, which executes JavaScript in the context of `127.0.0.1:3000` when viewed.
 - **Mitigation:**
-  - Content Security Policy (CSP): `sandbox allow-scripts=none; default-src 'none'`.
+  - Content Security Policy (CSP): `sandbox; default-src 'none'; style-src 'unsafe-inline'`.
   - Headers: `X-Content-Type-Options: nosniff`.
-  - Content-Disposition: `attachment; filename="..."` forced on sensitive MIME types.
+  - Content-Disposition: `attachment; filename="..."` forced on `.svg`, `.html`, `.xml`, and executable file types.
+  - Disk storage uses collision-free sanitized names `<sanitized-name>-<hash8>.<ext>` to avoid path collisions or escaping.
 
-### 2.3. Unauthorized Peer Injection & Mesh Tampering
-- **Threat:** An unauthorized node in the same Radmin VPN subnet attempts to connect to agent port `4747` and inject forged CRDT updates.
+### 2.3. Unauthorized Peer Injection & Wire Eavesdropping
+- **Threat:** An unauthorized node in the VPN subnet attempts to connect to agent port `4747` to eavesdrop or inject forged CRDT updates.
 - **Mitigation:**
-  - Mutual HMAC-SHA256 handshake. Both sides challenge each other with random nonces signed by `teamKey`.
-  - Constant-time verification (`crypto.timingSafeEqual`) prevents timing oracle attacks.
+  - Persistent Ed25519 identity keypairs per node (`.doks/node-identity.json`).
+  - Cryptographic challenge-response handshake signed with Ed25519 and authenticated against pre-shared `teamKey`.
+  - Full AEAD wire encryption using AES-256-GCM with HKDF-SHA256 derived traffic keys.
+  - 12-byte monotonic nonces and 16-byte authentication tags reject replay attacks and unauthorized message tampering.
   - Nodes failing the handshake are immediately terminated and banned from sync.
 
 ### 2.4. Path Traversal & Filename Sanitization
@@ -48,3 +51,10 @@ Doks operates as a local-first application where each user runs a local agent co
 - **Mitigation:**
   - All filenames are sanitized with Windows safe character rules.
   - Paths are strictly resolved and asserted to remain within `path.resolve(vaultDir)`.
+
+### 2.5. Personal Data Leakage across Network (Solo Scope Isolation)
+- **Threat:** Private notes or draft canvas stickies created in the personal workspace are inadvertently broadcast to remote peers.
+- **Mitigation:**
+  - Hard network barrier in `DocManager` via `assertNotSoloForPeer(docName)`.
+  - Outbound filter in `PeerService.broadcastUpdate` and `relayMessage` drops any update containing the `solo:` prefix.
+  - Inbound request filter rejects sync subscriptions for `solo` documents with zero leakage.

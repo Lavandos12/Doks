@@ -55,5 +55,6 @@ export class Agent {
     this.snapshotManager.destroy();
     this.fileMirror.destroy();
     this.docManager.destroy();
+    this.stateStore.destroy();
   }
 }

@@ -1,5 +1,13 @@
 import * as Y from 'yjs';
-import type { NoteMeta, BoardMeta, FolderMeta, AttachmentMeta, BoardNodeData, BoardEdgeData } from './types.js';
+import type {
+  NoteMeta,
+  BoardMeta,
+  FolderMeta,
+  AttachmentMeta,
+  BoardNodeData,
+  BoardEdgeData,
+  WorkspaceScope
+} from './types.js';
 
 export const DOC_INDEX = 'doks-index';
 export const DOC_NOTE_PREFIX = 'doks-note-';
@@ -14,27 +22,65 @@ export function getBoardDocName(id: string): string {
 }
 
 export function isNoteDoc(name: string): boolean {
-  return name.startsWith(DOC_NOTE_PREFIX) || name.startsWith('eluma-note-');
+  const { entityName } = parseScopedDocName(name);
+  return entityName.startsWith(DOC_NOTE_PREFIX) || entityName.startsWith('eluma-note-');
 }
 
 export function isBoardDoc(name: string): boolean {
-  return name.startsWith(DOC_BOARD_PREFIX) || name.startsWith('eluma-board-');
+  const { entityName } = parseScopedDocName(name);
+  return entityName.startsWith(DOC_BOARD_PREFIX) || entityName.startsWith('eluma-board-');
 }
 
 export function getEntityIdFromDocName(name: string): string {
-  if (name.startsWith(DOC_NOTE_PREFIX)) {
-    return name.slice(DOC_NOTE_PREFIX.length);
+  const { entityName } = parseScopedDocName(name);
+  if (entityName.startsWith(DOC_NOTE_PREFIX)) {
+    return entityName.slice(DOC_NOTE_PREFIX.length);
   }
-  if (name.startsWith('eluma-note-')) {
-    return name.slice('eluma-note-'.length);
+  if (entityName.startsWith('eluma-note-')) {
+    return entityName.slice('eluma-note-'.length);
   }
-  if (name.startsWith(DOC_BOARD_PREFIX)) {
-    return name.slice(DOC_BOARD_PREFIX.length);
+  if (entityName.startsWith(DOC_BOARD_PREFIX)) {
+    return entityName.slice(DOC_BOARD_PREFIX.length);
   }
-  if (name.startsWith('eluma-board-')) {
-    return name.slice('eluma-board-'.length);
+  if (entityName.startsWith('eluma-board-')) {
+    return entityName.slice('eluma-board-'.length);
   }
-  return name;
+  return entityName;
+}
+
+export function parseScopedDocName(docName: string): { scope: WorkspaceScope; entityName: string } {
+  if (docName.startsWith('solo:')) {
+    return { scope: 'solo', entityName: docName.slice(5) };
+  }
+  if (docName.startsWith('team:')) {
+    return { scope: 'team', entityName: docName.slice(5) };
+  }
+  return { scope: 'team', entityName: docName };
+}
+
+export function getScopedDocName(scope: WorkspaceScope, name: string): string {
+  const parsed = parseScopedDocName(name);
+  return `${scope}:${parsed.entityName}`;
+}
+
+export function isSoloDoc(docName: string): boolean {
+  return docName.startsWith('solo:');
+}
+
+export function isTeamDoc(docName: string): boolean {
+  return !isSoloDoc(docName);
+}
+
+export function getScopedIndexDocName(scope: WorkspaceScope): string {
+  return `${scope}:${DOC_INDEX}`;
+}
+
+export function getScopedNoteDocName(scope: WorkspaceScope, id: string): string {
+  return `${scope}:${DOC_NOTE_PREFIX}${id}`;
+}
+
+export function getScopedBoardDocName(scope: WorkspaceScope, id: string): string {
+  return `${scope}:${DOC_BOARD_PREFIX}${id}`;
 }
 
 export interface IndexDocStructure {
@@ -92,7 +138,11 @@ export function nodeMapToData(id: string, map: Y.Map<any>): BoardNodeData {
     url: map.get('url') || undefined,
     z: map.get('z') ?? 1,
     deleted: map.get('deleted') || false,
-    deletedAt: map.get('deletedAt') || undefined
+    deletedAt: map.get('deletedAt') || undefined,
+    scope: map.get('scope') || undefined,
+    originId: map.get('originId') || undefined,
+    promotedAt: map.get('promotedAt') || undefined,
+    promotedBy: map.get('promotedBy') || undefined
   };
 }
 
@@ -111,9 +161,10 @@ export function getNodeYText(nodeMap: Y.Map<any>): Y.Text {
 
 /**
  * Applies a granular diff (longest common prefix & suffix) to a Y.Text
- * to prevent wiping the entire text and causing duplication during concurrent edits.
+ * wrapped in an atomic transaction to prevent wiping the entire text and causing
+ * duplication or character loss during concurrent edits.
  */
-export function applyTextDelta(yText: Y.Text, newStr: string): void {
+export function applyStringDiffToYText(yText: Y.Text, newStr: string): void {
   const oldStr = yText.toString();
   if (oldStr === newStr) return;
 
@@ -135,15 +186,25 @@ export function applyTextDelta(yText: Y.Text, newStr: string): void {
   }
 
   const deleteCount = oldEnd - start;
-  if (deleteCount > 0) {
-    yText.delete(start, deleteCount);
-  }
-
   const insertText = newStr.slice(start, newEnd);
-  if (insertText.length > 0) {
-    yText.insert(start, insertText);
+
+  const performDiff = () => {
+    if (deleteCount > 0) {
+      yText.delete(start, deleteCount);
+    }
+    if (insertText.length > 0) {
+      yText.insert(start, insertText);
+    }
+  };
+
+  if (yText.doc) {
+    yText.doc.transact(performDiff, 'apply-diff');
+  } else {
+    performDiff();
   }
 }
+
+export const applyTextDelta = applyStringDiffToYText;
 
 /**
  * Creates a new Y.Map populated with BoardNodeData.
@@ -173,7 +234,7 @@ export function setNodeProperties(nodeMap: Y.Map<any>, data: Partial<BoardNodeDa
     } else if (key === 'text') {
       const yText = getNodeYText(nodeMap);
       const strVal = String(val ?? '');
-      applyTextDelta(yText, strVal);
+      applyStringDiffToYText(yText, strVal);
     } else {
       nodeMap.set(key, val);
     }

@@ -73,7 +73,7 @@ export class FileMirror {
 
     // Listen to document updates
     this.docManager.on('update', ({ docName, origin }) => {
-      if (origin !== 'external-file') {
+      if (origin !== 'external-file' && origin !== 'fs-watcher') {
         this.scheduleWrite(docName);
       }
     });

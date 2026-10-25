@@ -15,6 +15,10 @@ export class StateStore {
     this.cleanupTempFiles();
   }
 
+  public getStateDir(): string {
+    return this.stateDir;
+  }
+
   private cleanupTempFiles(): void {
     try {
       const files = fs.readdirSync(this.stateDir);

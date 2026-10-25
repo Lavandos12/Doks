@@ -24,6 +24,7 @@ export class FileWatcher {
   private fileMirror?: FileMirror;
   private watcher?: FSWatcher;
   private dmp: DiffMatchPatch;
+  private pendingChanges = new Map<string, NodeJS.Timeout>();
 
   constructor(vaultPath: string, docManager: DocManager, fileMirror?: FileMirror) {
     this.vaultPath = vaultPath;
@@ -41,9 +42,19 @@ export class FileWatcher {
       ignored: /(^|[\/\\])\../ // ignore dotfiles
     });
 
-    this.watcher.on('add', (filePath) => this.handleFileChange(filePath));
-    this.watcher.on('change', (filePath) => this.handleFileChange(filePath));
+    this.watcher.on('add', (filePath) => this.queueFileChange(filePath));
+    this.watcher.on('change', (filePath) => this.queueFileChange(filePath));
     this.watcher.on('unlink', (filePath) => this.handleFileDelete(filePath));
+  }
+
+  private queueFileChange(filePath: string): void {
+    const existing = this.pendingChanges.get(filePath);
+    if (existing) clearTimeout(existing);
+    const timer = setTimeout(() => {
+      this.pendingChanges.delete(filePath);
+      this.handleFileChange(filePath);
+    }, 150);
+    this.pendingChanges.set(filePath, timer);
   }
 
   private handleFileChange(filePath: string): void {
@@ -161,7 +172,7 @@ export class FileWatcher {
           index += text.length;
         }
       }
-    }, 'external-file');
+    }, 'fs-watcher');
   }
 
   private handleCanvasChange(filePath: string, rawContent: string): void {
@@ -219,7 +230,7 @@ export class FileWatcher {
             yEdges.set(id, { ...edge, deleted: true });
           }
         });
-      }, 'external-file');
+      }, 'fs-watcher');
     } catch (err) {
       console.error(`[FileWatcher] Error syncing canvas from ${filePath}:`, err);
     }
@@ -230,6 +241,11 @@ export class FileWatcher {
   }
 
   public async stop(): Promise<void> {
+    for (const timer of this.pendingChanges.values()) {
+      clearTimeout(timer);
+    }
+    this.pendingChanges.clear();
+
     if (this.watcher) {
       await this.watcher.close();
       this.watcher = undefined;

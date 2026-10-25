@@ -1,3 +1,13 @@
+export type WorkspaceScope = 'solo' | 'team';
+
+export interface BoardSummary {
+  id: string;
+  scope: WorkspaceScope;
+  title: string;
+  updatedAt: number;
+  nodeCount: number;
+}
+
 export interface NoteMeta {
   id: string;
   title: string;
@@ -6,6 +16,10 @@ export interface NoteMeta {
   updatedAt: number;
   deleted: boolean;
   deletedAt?: number;
+  scope?: WorkspaceScope;
+  originId?: string;
+  promotedAt?: number;
+  promotedBy?: string;
 }
 
 export interface BoardMeta {
@@ -16,6 +30,10 @@ export interface BoardMeta {
   updatedAt: number;
   deleted: boolean;
   deletedAt?: number;
+  scope?: WorkspaceScope;
+  originId?: string;
+  promotedAt?: number;
+  promotedBy?: string;
 }
 
 export interface FolderMeta {
@@ -24,6 +42,7 @@ export interface FolderMeta {
   parent: string | null;
   deleted: boolean;
   deletedAt?: number;
+  scope?: WorkspaceScope;
 }
 
 export type BoardNodeType = 'sticky' | 'text' | 'note' | 'frame' | 'shape' | 'file' | 'image' | 'link';
@@ -37,6 +56,7 @@ export interface AttachmentMeta {
   addedAt: number;
   deleted: boolean;
   deletedAt?: number;
+  scope?: WorkspaceScope;
 }
 
 export interface BoardNodeData {
@@ -57,6 +77,10 @@ export interface BoardNodeData {
   z: number;
   deleted: boolean;
   deletedAt?: number;
+  scope?: WorkspaceScope;
+  originId?: string;
+  promotedAt?: number;
+  promotedBy?: string;
 }
 
 export interface BoardEdgeData {
@@ -69,6 +93,7 @@ export interface BoardEdgeData {
   color?: string;
   deleted: boolean;
   deletedAt?: number;
+  scope?: WorkspaceScope;
 }
 
 export interface UserPresence {
@@ -111,4 +136,23 @@ export interface SnapshotMeta {
   dateStr: string;
   docsCount: number;
   sizeBytes: number;
+  scope?: WorkspaceScope;
+}
+
+export interface BridgeTransferRequest {
+  fromScope: WorkspaceScope;
+  toScope: WorkspaceScope;
+  boardId: string;
+  targetBoardId: string;
+  nodeIds: string[];
+  includeLinkedNotes?: boolean;
+  mode?: 'copy' | 'move';
+}
+
+export interface BridgeTransferResponse {
+  success: boolean;
+  transferredNodeCount: number;
+  transferredNoteCount: number;
+  frameId?: string;
+  error?: string;
 }

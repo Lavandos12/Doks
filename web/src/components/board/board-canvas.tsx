@@ -3,6 +3,7 @@ import { useEffect, useRef, useState, useMemo } from 'preact/hooks';
 import * as Y from 'yjs';
 import {
   getBoardDocName,
+  getScopedBoardDocName,
   getBoardMaps,
   nodeMapToData,
   setNodeProperties,
@@ -18,13 +19,15 @@ import {
   notes,
   maps,
   restoreNote,
-  createNote
+  createNote,
+  currentScope
 } from '../../state/app-state.js';
 import { seedDefaultBoard } from './board-seed.js';
 import { Icon, type IconName } from '../../ui/icons.js';
 import { AiExportModal } from './ai-export-modal.js';
 import { NotePickerModal } from './note-picker-modal.js';
 import { BoardMinimap } from './board-minimap.js';
+import { TransferModal } from './transfer-modal.js';
 import { t } from '../../i18n/index.js';
 
 export const CANVAS_COLORS: Record<string, string> = {
@@ -120,6 +123,16 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
   // Note picker modal for note cards (F3)
   const [isNotePickerOpen, setIsNotePickerOpen] = useState(false);
   const [pickerPos, setPickerPos] = useState<{ x: number; y: number } | null>(null);
+  const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
+  const [transferNodeIds, setTransferNodeIds] = useState<string[]>([]);
+
+  const handleOpenTransferModal = () => {
+    const ids = selectedNodeIds.size > 0
+      ? Array.from(selectedNodeIds)
+      : nodesList.filter((n) => !n.deleted).map((n) => n.id);
+    setTransferNodeIds(ids);
+    setIsTransferModalOpen(true);
+  };
 
   // Hidden attachment file input (F4)
   const fileAttachmentInputRef = useRef<HTMLInputElement>(null);
@@ -127,7 +140,7 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
   // Undo manager
   const undoManagerRef = useRef<Y.UndoManager | null>(null);
 
-  const docName = getBoardDocName(boardId);
+  const docName = getScopedBoardDocName(currentScope.value, boardId);
   const boardDoc = yjsClient.getOrCreateDoc(docName);
   const awareness = yjsClient.getOrCreateAwareness(docName);
   const { nodes: yNodes, edges: yEdges } = getBoardMaps(boardDoc);
@@ -991,6 +1004,25 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
           </button>
         )}
 
+        {/* Cross-scope promotion or fork */}
+        {selectedNodeIds.size > 0 && (
+          <button
+            class={`tb-btn highlight-${currentScope.value === 'solo' ? 'promote' : 'fork'}`}
+            onMouseDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleOpenTransferModal();
+            }}
+            title={currentScope.value === 'solo' ? 'Опубликовать выбранное в Команду' : 'Форкнуть выбранное в Соло'}
+            data-testid="scope-transfer-btn"
+          >
+            <Icon name={currentScope.value === 'solo' ? 'upload' : 'download'} size={16} />
+            <span class="tb-btn-label">
+              {currentScope.value === 'solo' ? 'В команду' : 'В соло'}
+            </span>
+          </button>
+        )}
+
         <div class="toolbox-divider" />
 
         {/* AI Context Export */}
@@ -1235,7 +1267,11 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
                         class="node-inline-textarea note-card-textarea"
                         value={noteContent}
                         placeholder="Текст заметки..."
-                        onMouseDown={(e) => e.stopPropagation()}
+                        onMouseDown={(e) => {
+                          e.stopPropagation();
+                          setSelectedNodeIds(new Set([node.id]));
+                        }}
+                        onFocus={() => setSelectedNodeIds(new Set([node.id]))}
                         onInput={(e) => {
                           const val = (e.target as HTMLTextAreaElement).value;
                           applyTextDelta(noteYText, val);
@@ -1303,7 +1339,11 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
                   class="node-inline-textarea"
                   value={node.text}
                   placeholder="Введите текст..."
-                  onMouseDown={(e) => e.stopPropagation()}
+                  onMouseDown={(e) => {
+                    e.stopPropagation();
+                    setSelectedNodeIds(new Set([node.id]));
+                  }}
+                  onFocus={() => setSelectedNodeIds(new Set([node.id]))}
                   onInput={(e) => {
                     const map = yNodes.get(node.id);
                     if (map) {
@@ -1396,6 +1436,14 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
           createNoteCardAt(noteId, pos.x, pos.y);
           setIsNotePickerOpen(false);
         }}
+      />
+
+      <TransferModal
+        isOpen={isTransferModalOpen}
+        onClose={() => setIsTransferModalOpen(false)}
+        fromScope={currentScope.value}
+        boardId={boardId}
+        nodeIds={transferNodeIds}
       />
 
       {/* Minimap (F9) */}

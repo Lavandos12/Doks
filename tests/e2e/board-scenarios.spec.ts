@@ -292,4 +292,49 @@ test.describe('F12: Playwright E2E Scenarios for Doks', () => {
     console.log(`[Benchmark] 1000 objects loaded in ${loadTimeMs}ms, panning FPS ~${estimatedFps}fps`);
     expect(loadTimeMs).toBeLessThan(8000);
   });
+
+  test('Scenario 7: Scope Switcher & Cross-Scope Bridge Promotion', async ({ page }) => {
+    await page.goto(`http://127.0.0.1:${port1}`);
+
+    // Verify scope switcher pill exists
+    const soloBtn = page.locator('.scope-pill-btn:has-text("Соло")');
+    const teamBtn = page.locator('.scope-pill-btn:has-text("Команда")');
+    await expect(soloBtn).toBeVisible();
+    await expect(teamBtn).toBeVisible();
+
+    // Switch to Solo
+    await soloBtn.click();
+    await expect(soloBtn).toHaveClass(/active/);
+
+    // Open board in Solo
+    await openBoard(page);
+
+    // Create a sticky note
+    await page.click('button[title*="Стикер"]');
+    const canvas = page.locator('.board-container');
+    await canvas.click({ position: { x: 350, y: 250 } });
+
+    const textarea = page.locator('.node-inline-textarea').first();
+    await expect(textarea).toBeVisible();
+    await textarea.fill('Приватная идея для переноса');
+    await textarea.click();
+
+    // Verify "В команду" promotion button is visible in toolbox
+    const transferBtn = page.locator('[data-testid="scope-transfer-btn"]');
+    await expect(transferBtn).toBeVisible();
+    await transferBtn.click();
+
+    // Transfer Modal opens
+    const modal = page.locator('.transfer-modal');
+    await expect(modal).toBeVisible();
+    await expect(modal).toContainText('Опубликовать в Команду');
+
+    // Submit transfer
+    const submitBtn = modal.locator('button.btn-primary');
+    await submitBtn.click();
+
+    // Modal closes and active scope becomes Team
+    await expect(modal).not.toBeVisible({ timeout: 5000 });
+    await expect(teamBtn).toHaveClass(/active/);
+  });
 });

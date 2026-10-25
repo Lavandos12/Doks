@@ -48,21 +48,24 @@ export class SnapshotManager {
 
     let totalBytes = 0;
     const docs = this.docManager.getAllDocs();
+    const docMap: Record<string, string> = {};
 
     for (const [docName, doc] of docs.entries()) {
       const update = Y.encodeStateAsUpdate(doc);
-      const safeName = docName.replace(/[^a-zA-Z0-9_-]/g, '_');
+      const safeName = Buffer.from(docName, 'utf8').toString('hex');
       const filePath = path.join(snapDir, `${safeName}.bin`);
       fs.writeFileSync(filePath, Buffer.from(update));
       totalBytes += update.byteLength;
+      docMap[safeName] = docName;
     }
 
-    const meta: SnapshotMeta = {
+    const meta: SnapshotMeta & { docs?: Record<string, string> } = {
       id: snapId,
       timestamp,
       dateStr: new Date(timestamp).toLocaleString('ru-RU'),
       docsCount: docs.size,
-      sizeBytes: totalBytes
+      sizeBytes: totalBytes,
+      docs: docMap
     };
 
     fs.writeFileSync(
@@ -109,15 +112,50 @@ export class SnapshotManager {
     try {
       const files = fs.readdirSync(snapDir).filter((f) => f.endsWith('.bin'));
 
+      let manifest: Record<string, string> = {};
+      const metaPath = path.join(snapDir, 'meta.json');
+      if (fs.existsSync(metaPath)) {
+        try {
+          const meta = JSON.parse(fs.readFileSync(metaPath, 'utf8'));
+          if (meta.docs) manifest = meta.docs;
+        } catch {}
+      }
+
+      let restoredAny = false;
+
       for (const f of files) {
-        const docName = f.slice(0, -4);
-        if (targetDocName && docName !== targetDocName) {
-          continue;
+        const fileKey = f.slice(0, -4);
+        let docName = manifest[fileKey];
+        if (!docName) {
+          try {
+            const decoded = Buffer.from(fileKey, 'hex').toString('utf8');
+            if (decoded.includes(':') || decoded.includes('doks-') || decoded.includes('eluma-')) {
+              docName = decoded;
+            }
+          } catch {}
+        }
+        if (!docName) {
+          docName = fileKey;
+        }
+
+        if (targetDocName) {
+          const normalizedTarget = targetDocName.includes(':') ? targetDocName : `team:${targetDocName}`;
+          const normalizedDoc = docName.includes(':') ? docName : `team:${docName}`;
+          const safeTarget = targetDocName.replace(/[^a-zA-Z0-9_-]/g, '_');
+          if (
+            docName !== targetDocName &&
+            normalizedDoc !== normalizedTarget &&
+            fileKey !== safeTarget &&
+            !docName.endsWith(targetDocName)
+          ) {
+            continue;
+          }
         }
 
         const filePath = path.join(snapDir, f);
         const buffer = fs.readFileSync(filePath);
         if (buffer.length > 0) {
+          restoredAny = true;
           const snapDoc = new Y.Doc();
           Y.applyUpdate(snapDoc, new Uint8Array(buffer));
 
@@ -154,7 +192,7 @@ export class SnapshotManager {
           }
         }
       }
-      return true;
+      return restoredAny;
     } catch (err) {
       console.error(`[SnapshotManager] Failed to restore snapshot ${snapshotId}:`, err);
       return false;

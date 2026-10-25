@@ -155,7 +155,11 @@ export class AgentHttpServer {
       if (origin) {
         try {
           const originUrl = new URL(origin);
-          const isAllowedOriginHost = allowedHostNames.includes(originUrl.hostname);
+          const allowedOriginHosts = ['127.0.0.1', 'localhost', '[::1]'];
+          if (this.config.bindAddress && this.config.bindAddress !== 'auto') {
+            allowedOriginHosts.push(this.config.bindAddress);
+          }
+          const isAllowedOriginHost = allowedOriginHosts.includes(originUrl.hostname);
           const originPort = originUrl.port
             ? parseInt(originUrl.port, 10)
             : originUrl.protocol === 'https:'
@@ -201,7 +205,8 @@ export class AgentHttpServer {
     const cookieToken = req.cookies?.doks_session;
     const authHeader = req.headers?.authorization;
     const bearerToken = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : undefined;
-    const token = cookieToken || bearerToken;
+    const xDoksToken = req.headers?.['x-doks-token'];
+    const token = cookieToken || bearerToken || xDoksToken;
     if (!token || typeof token !== 'string') return false;
 
     const tokenBuf = Buffer.from(token);
@@ -315,6 +320,45 @@ export class AgentHttpServer {
       return this.snapshotManager.listSnapshots();
     });
 
+    // API: List boards with scope metadata
+    this.fastify.get('/api/boards', async (req) => {
+      const scopeQuery = (req.query as any)?.scope;
+      const soloBoards = this.docManager.listBoards('solo');
+      const teamBoards = this.docManager.listBoards('team');
+      if (scopeQuery === 'solo') return soloBoards;
+      if (scopeQuery === 'team') return teamBoards;
+      return [...soloBoards, ...teamBoards];
+    });
+
+    // API: Cross-scope bridge transfer (Promote to Team / Fork to Solo)
+    this.fastify.post('/api/bridge/transfer', async (req, reply) => {
+      const body = req.body as any;
+      if (!body || !body.fromScope || !body.toScope || !body.boardId || !body.targetBoardId || !Array.isArray(body.nodeIds)) {
+        return reply.code(400).send({
+          success: false,
+          error: 'Missing required fields: fromScope, toScope, boardId, targetBoardId, nodeIds'
+        });
+      }
+
+      try {
+        const result = this.docManager.transferNodes({
+          fromScope: body.fromScope,
+          toScope: body.toScope,
+          boardId: body.boardId,
+          targetBoardId: body.targetBoardId,
+          nodeIds: body.nodeIds,
+          includeLinkedNotes: body.includeLinkedNotes !== false,
+          mode: body.mode || 'copy'
+        });
+        return result;
+      } catch (err: any) {
+        return reply.code(500).send({
+          success: false,
+          error: err.message || 'Transfer failed'
+        });
+      }
+    });
+
     // API: Create snapshot
     this.fastify.post('/api/snapshots', async () => {
       if (!this.snapshotManager) return { error: 'Snapshots disabled' };
@@ -403,9 +447,11 @@ export class AgentHttpServer {
 
       // Security headers for attachments
       reply.header('X-Content-Type-Options', 'nosniff');
-      reply.header('Content-Security-Policy', "sandbox; default-src 'none'");
+      reply.header('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; sandbox");
 
       // Whitelisted inline safe types: png, jpg, webp, gif, pdf, audio/*, video/* (never SVG, HTML, or JS inline)
+      const ext = path.extname(att.fileName || '').toLowerCase();
+      const FORCED_ATTACHMENT_EXTS = new Set(['.svg', '.html', '.htm', '.xml', '.js', '.mjs', '.exe', '.bat', '.cmd', '.sh', '.vbs', '.ps1']);
       const INLINE_SAFE_EXACT = new Set([
         'image/png',
         'image/jpeg',
@@ -414,8 +460,9 @@ export class AgentHttpServer {
         'application/pdf'
       ]);
       const isInlineSafe =
-        INLINE_SAFE_EXACT.has(att.mimeType) ||
-        ((att.mimeType.startsWith('audio/') || att.mimeType.startsWith('video/')) && !att.mimeType.includes('svg'));
+        !FORCED_ATTACHMENT_EXTS.has(ext) &&
+        (INLINE_SAFE_EXACT.has(att.mimeType) ||
+        ((att.mimeType.startsWith('audio/') || att.mimeType.startsWith('video/')) && !att.mimeType.includes('svg') && !att.mimeType.includes('xml')));
 
       const safeFileName = (att.fileName || 'attachment.bin').replace(/["\r\n\t\\]/g, '_');
       if (isInlineSafe) {

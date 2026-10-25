@@ -18,7 +18,9 @@ import {
   theme,
   setTheme,
   searchQuery,
-  isCommandPaletteOpen
+  isCommandPaletteOpen,
+  currentScope,
+  setScope
 } from '../../state/app-state.js';
 import { t } from '../../i18n/index.js';
 import { Icon } from '../../ui/icons.js';
@@ -246,6 +248,14 @@ export function Sidebar() {
 
       {/* 2. Explorer Primary Pane */}
       <div class="explorer-pane">
+        <div class="sidebar-scope-banner">
+          <div class={`scope-indicator-badge ${currentScope.value}`}>
+            <span class="scope-dot" />
+            <span class="scope-badge-title">
+              {currentScope.value === 'solo' ? '🔒 Личное (Соло)' : '🌐 Общее (Команда)'}
+            </span>
+          </div>
+        </div>
         {currentView.value === 'notes' && (
           <div class="explorer-section">
             <div class="explorer-header">

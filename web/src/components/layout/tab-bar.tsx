@@ -9,7 +9,9 @@ import {
   togglePinTab,
   toggleSplitView,
   createNote,
-  isImportWizardOpen
+  isImportWizardOpen,
+  currentScope,
+  setScope
 } from '../../state/app-state.js';
 import { Icon } from '../../ui/icons.js';
 import { FileMenu } from './file-menu.js';
@@ -20,6 +22,26 @@ export function TabBar() {
   return (
     <div class="tabs-bar">
       <FileMenu onOpenImportWizard={() => (isImportWizardOpen.value = true)} />
+
+      {/* Two-Tier Scope Switcher (Solo vs Team) */}
+      <div class="scope-switcher-pill" role="tablist" aria-label="Пространство">
+        <button
+          class={`scope-pill-btn ${currentScope.value === 'solo' ? 'active solo' : ''}`}
+          onClick={() => setScope('solo')}
+          title="Личное пространство (только на этом ПК, Alt+1)"
+        >
+          <span class="scope-icon">🔒</span>
+          <span class="scope-label">Соло</span>
+        </button>
+        <button
+          class={`scope-pill-btn ${currentScope.value === 'team' ? 'active team' : ''}`}
+          onClick={() => setScope('team')}
+          title="Командное пространство (P2P меш-синхронизация, Alt+2)"
+        >
+          <span class="scope-icon">🌐</span>
+          <span class="scope-label">Команда</span>
+        </button>
+      </div>
 
       <div class="tabs-scroll-area">
         {tabs.map((tab) => {

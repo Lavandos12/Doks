@@ -1,6 +1,6 @@
 {
   "name": "@doks/agent",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Local agent backend for Doks: P2P mesh sync, storage, and HTTP/WS server",
   "license": "Apache-2.0",
   "type": "module",

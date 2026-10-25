@@ -11,11 +11,14 @@ import {
   DOC_INDEX,
   getIndexMaps,
   getBoardDocName,
-  getNoteDocName
+  getNoteDocName,
+  isSoloDoc
 } from '@doks/shared';
 import { DocManager } from '../storage/doc-manager.js';
 import { AttachmentManager } from '../storage/attachments.js';
 import { PeerConnection } from './peer-connection.js';
+import { PeerDiscoveryService, type DiscoveredPeer } from './peer-discovery.js';
+import { getOrGenerateNodeIdentity, type NodeIdentity } from '../security.js';
 import { findAvailablePort, findRadminIp } from '../network.js';
 import { logger } from '../logger.js';
 
@@ -30,6 +33,8 @@ export class PeerService extends EventEmitter {
   private config: AgentConfig;
   private docManager: DocManager;
   private attachmentManager?: AttachmentManager;
+  private nodeIdentity: NodeIdentity;
+  private discoveryService?: PeerDiscoveryService;
   private wss?: WebSocketServer;
   private connections = new Map<string, PeerConnection>(); // key: peerId
   private outboundPeers = new Map<string, OutboundPeerState>(); // key: address
@@ -59,9 +64,14 @@ export class PeerService extends EventEmitter {
     this.config = config;
     this.docManager = docManager;
     this.attachmentManager = attachmentManager;
+    this.nodeIdentity = getOrGenerateNodeIdentity(this.config.statePath);
 
     // Listen to local document updates to broadcast to peers
     this.docManager.on('update', ({ docName, update, origin }) => {
+      // Step 2 & 1.2: Hard network isolation - solo documents NEVER emit network packets!
+      if (isSoloDoc(docName)) {
+        return;
+      }
       if (origin !== 'peer' && origin !== 'relay') {
         const syncMsg = this.docManager.createUpdateSyncMessage(update);
         this.broadcastSync(docName, syncMsg);
@@ -99,6 +109,25 @@ export class PeerService extends EventEmitter {
       this.config.peerPort = freePort;
     }
 
+    // Start UDP discovery service for automated LAN/VPN peer discovery
+    try {
+      this.discoveryService = new PeerDiscoveryService({
+        teamKey: this.config.teamKey,
+        wsPort: this.config.peerPort,
+        peerId: this.nodeIdentity.peerId,
+        bindAddress: host
+      });
+      this.discoveryService.on('peer', (peer: DiscoveredPeer) => {
+        // If already connected to this peer, skip redundant connection
+        if (this.connections.has(peer.peerId)) return;
+        logger.info(`[PeerDiscovery] Discovered peer beacon at ${peer.address}:${peer.wsPort} (${peer.peerId})`);
+        this.addPeer(`${peer.address}:${peer.wsPort}`);
+      });
+      await this.discoveryService.start();
+    } catch (err: any) {
+      logger.warn(`[PeerDiscovery] Discovery service startup failed: ${err.message}`);
+    }
+
     return new Promise((resolve, reject) => {
       try {
         this.wss = new WebSocketServer({
@@ -134,9 +163,10 @@ export class PeerService extends EventEmitter {
       socket,
       isOutbound: false,
       remoteAddress,
-      localPeerId: this.config.agentId,
+      localPeerId: this.nodeIdentity.peerId || this.config.agentId,
       localMemberName: this.config.memberName,
-      teamKey: this.config.teamKey
+      teamKey: this.config.teamKey,
+      nodeIdentity: this.nodeIdentity
     });
 
     this.setupConnectionEvents(conn);
@@ -163,9 +193,10 @@ export class PeerService extends EventEmitter {
         socket,
         isOutbound: true,
         remoteAddress: address,
-        localPeerId: this.config.agentId,
+        localPeerId: this.nodeIdentity.peerId || this.config.agentId,
         localMemberName: this.config.memberName,
-        teamKey: this.config.teamKey
+        teamKey: this.config.teamKey,
+        nodeIdentity: this.nodeIdentity
       });
 
       peerState.connection = conn;
@@ -206,6 +237,10 @@ export class PeerService extends EventEmitter {
   }
 
   private setupConnectionEvents(conn: PeerConnection, outboundAddress?: string): void {
+    conn.on('error', (_err) => {
+      // Socket / connection error handled in close event
+    });
+
     conn.on('authenticated', () => {
       const remotePeerId = conn.remotePeerId!;
       console.log(`[PeerService] Peer authenticated: ${conn.remoteMemberName} (${remotePeerId})`);
@@ -219,10 +254,13 @@ export class PeerService extends EventEmitter {
       // Deduplication check
       const existing = this.connections.get(remotePeerId);
       if (existing && existing !== conn) {
-        const keepOutbound = this.config.agentId > remotePeerId;
+        const myId = this.nodeIdentity.peerId || this.config.agentId;
+        const keepOutbound = myId > remotePeerId;
         if (keepOutbound === conn.isOutbound) {
+          (existing as any).isDeduplicated = true;
           existing.close();
         } else {
+          (conn as any).isDeduplicated = true;
           conn.close();
           return;
         }
@@ -289,6 +327,12 @@ export class PeerService extends EventEmitter {
     });
 
     conn.on('sync', ({ docName, data }) => {
+      // Step 2 & 1.2: Hard network isolation - peers cannot sync solo documents
+      if (isSoloDoc(docName)) {
+        console.warn(`[PeerService] Blocked peer sync attempt for solo doc: ${docName}`);
+        return;
+      }
+
       // Apply sync message to docManager
       const response = this.docManager.handleSyncMessage(docName, data, 'peer');
       if (response) {
@@ -302,7 +346,14 @@ export class PeerService extends EventEmitter {
     });
 
     conn.on('relay', ({ originPeerId, docName, data, hopCount }) => {
-      if (originPeerId === this.config.agentId) return; // avoid looping back to origin
+      const myId = this.nodeIdentity.peerId || this.config.agentId;
+      if (originPeerId === myId || originPeerId === this.config.agentId) return; // avoid looping back to origin
+
+      // Step 2 & 1.2: Hard network isolation
+      if (isSoloDoc(docName)) {
+        console.warn(`[PeerService] Blocked relayed solo doc: ${docName}`);
+        return;
+      }
 
       // B20: Hash check to avoid re-processing or infinite relay loops
       const msgHash = crypto.createHash('sha256')
@@ -330,6 +381,8 @@ export class PeerService extends EventEmitter {
     });
 
     conn.on('awareness', ({ docName, data }) => {
+      if (isSoloDoc(docName)) return;
+
       try {
         awarenessProtocol.applyAwarenessUpdate(this.docManager.getAwareness(), data, conn.remotePeerId);
       } catch (err) {
@@ -352,7 +405,7 @@ export class PeerService extends EventEmitter {
         this.emit('peer-disconnected', { peerId: conn.remotePeerId });
       }
 
-      if (outboundAddress) {
+      if (outboundAddress && !(conn as any).isDeduplicated) {
         this.scheduleReconnect(outboundAddress);
       }
     });
@@ -361,6 +414,7 @@ export class PeerService extends EventEmitter {
   private syncAllDocsWithPeer(conn: PeerConnection): void {
     const docNames = this.docManager.getAllDocNames();
     for (const docName of docNames) {
+      if (isSoloDoc(docName)) continue; // STRICT ISOLATION
       const step1 = this.docManager.createSyncStep1Message(docName);
       conn.sendSync(docName, step1);
     }
@@ -373,13 +427,14 @@ export class PeerService extends EventEmitter {
 
     const docNamesToSync: string[] = [];
     boards.forEach((b, id) => {
-      if (!b.deleted) docNamesToSync.push(getBoardDocName(id));
+      if (!b.deleted && b.scope !== 'solo') docNamesToSync.push(getBoardDocName(id));
     });
     notes.forEach((n, id) => {
-      if (!n.deleted) docNamesToSync.push(getNoteDocName(id));
+      if (!n.deleted && n.scope !== 'solo') docNamesToSync.push(getNoteDocName(id));
     });
 
     for (const docName of docNamesToSync) {
+      if (isSoloDoc(docName)) continue;
       this.docManager.getOrCreateDoc(docName);
       for (const conn of this.connections.values()) {
         if (conn.isAuthenticated) {
@@ -391,6 +446,7 @@ export class PeerService extends EventEmitter {
   }
 
   public broadcastSync(docName: string, update: Uint8Array): void {
+    if (isSoloDoc(docName)) return; // STRICT ISOLATION
     for (const conn of this.connections.values()) {
       if (conn.isAuthenticated) {
         conn.sendSync(docName, update);
@@ -399,6 +455,7 @@ export class PeerService extends EventEmitter {
   }
 
   public broadcastAwareness(docName: string, data: Uint8Array): void {
+    if (isSoloDoc(docName)) return; // STRICT ISOLATION
     for (const conn of this.connections.values()) {
       if (conn.isAuthenticated) {
         conn.sendAwareness(docName, data);
@@ -412,6 +469,7 @@ export class PeerService extends EventEmitter {
     data: Uint8Array,
     hopCount: number
   ): void {
+    if (isSoloDoc(docName)) return; // STRICT ISOLATION
     for (const [peerId, conn] of this.connections.entries()) {
       if (peerId !== excludePeerId && conn.isAuthenticated) {
         conn.sendRelay(excludePeerId, docName, data, hopCount);
@@ -510,6 +568,11 @@ export class PeerService extends EventEmitter {
 
   public async stop(): Promise<void> {
     this.isDestroyed = true;
+
+    if (this.discoveryService) {
+      await this.discoveryService.stop();
+      this.discoveryService = undefined;
+    }
 
     for (const state of this.outboundPeers.values()) {
       if (state.reconnectTimeout) {
