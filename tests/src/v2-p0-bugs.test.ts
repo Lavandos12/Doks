@@ -42,7 +42,7 @@ describe('Stage A: P0 Bug Reproduction & Verification (B1–B5)', () => {
   // B1: Data loss on crash (incremental updates must be preserved via length-prefixed records / WAL)
   it('B1: preserves multiple incremental updates after sudden stop without compaction', () => {
     baseDir = createTestDir('b1-wal-test');
-    const stateDir = path.join(baseDir, '.eluma', 'state');
+    const stateDir = path.join(baseDir, '.doks', 'state');
     const store = new StateStore(stateDir);
 
     const docName = 'test-doc-wal';

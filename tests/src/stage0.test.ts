@@ -49,7 +49,7 @@ describe('Stage 0: Skeleton Synchronization', () => {
     });
 
     // 3. Edit text in Agent 1
-    const docName = 'eluma-note-test-stage0';
+    const docName = 'doks-note-test-stage0';
     const doc1 = agent1.agent.docManager.getOrCreateDoc(docName);
     const text1 = doc1.getText('text');
     text1.insert(0, 'Текст из Агента 1');

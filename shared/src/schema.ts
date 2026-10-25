@@ -1,9 +1,9 @@
 import * as Y from 'yjs';
 import type { NoteMeta, BoardMeta, FolderMeta, AttachmentMeta, BoardNodeData, BoardEdgeData } from './types.js';
 
-export const DOC_INDEX = 'eluma-index';
-export const DOC_NOTE_PREFIX = 'eluma-note-';
-export const DOC_BOARD_PREFIX = 'eluma-board-';
+export const DOC_INDEX = 'doks-index';
+export const DOC_NOTE_PREFIX = 'doks-note-';
+export const DOC_BOARD_PREFIX = 'doks-board-';
 
 export function getNoteDocName(id: string): string {
   return `${DOC_NOTE_PREFIX}${id}`;
@@ -14,19 +14,25 @@ export function getBoardDocName(id: string): string {
 }
 
 export function isNoteDoc(name: string): boolean {
-  return name.startsWith(DOC_NOTE_PREFIX);
+  return name.startsWith(DOC_NOTE_PREFIX) || name.startsWith('eluma-note-');
 }
 
 export function isBoardDoc(name: string): boolean {
-  return name.startsWith(DOC_BOARD_PREFIX);
+  return name.startsWith(DOC_BOARD_PREFIX) || name.startsWith('eluma-board-');
 }
 
 export function getEntityIdFromDocName(name: string): string {
   if (name.startsWith(DOC_NOTE_PREFIX)) {
     return name.slice(DOC_NOTE_PREFIX.length);
   }
+  if (name.startsWith('eluma-note-')) {
+    return name.slice('eluma-note-'.length);
+  }
   if (name.startsWith(DOC_BOARD_PREFIX)) {
     return name.slice(DOC_BOARD_PREFIX.length);
+  }
+  if (name.startsWith('eluma-board-')) {
+    return name.slice('eluma-board-'.length);
   }
   return name;
 }

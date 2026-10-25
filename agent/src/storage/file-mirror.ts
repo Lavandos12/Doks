@@ -6,6 +6,8 @@ import {
   isNoteDoc,
   isBoardDoc,
   getEntityIdFromDocName,
+  getNoteDocName,
+  getBoardDocName,
   getIndexMaps,
   getBoardMaps,
   nodeMapToData,
@@ -14,6 +16,7 @@ import {
   type BoardEdgeData
 } from '@doks/shared';
 import { DocManager } from './doc-manager.js';
+import { logger } from '../logger.js';
 
 const WINDOWS_RESERVED = /^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])$/i;
 
@@ -51,14 +54,20 @@ export class FileMirror {
   constructor(vaultPath: string, docManager: DocManager, debounceMs = 3000) {
     this.vaultPath = vaultPath;
     this.boardsPath = path.join(vaultPath, 'boards');
-    const elumaDir = path.join(path.dirname(vaultPath), '.eluma');
-    this.mirrorJsonPath = path.join(elumaDir, 'mirror.json');
+    const doksDir = path.join(path.dirname(vaultPath), '.doks');
+    this.mirrorJsonPath = path.join(doksDir, 'mirror.json');
+    const legacyMirrorJson = path.join(path.dirname(vaultPath), '.eluma', 'mirror.json');
+    if (!fs.existsSync(this.mirrorJsonPath) && fs.existsSync(legacyMirrorJson)) {
+      try {
+        fs.cpSync(legacyMirrorJson, this.mirrorJsonPath);
+      } catch {}
+    }
     this.docManager = docManager;
     this.debounceMs = debounceMs;
 
     fs.mkdirSync(this.vaultPath, { recursive: true });
     fs.mkdirSync(this.boardsPath, { recursive: true });
-    fs.mkdirSync(elumaDir, { recursive: true });
+    fs.mkdirSync(doksDir, { recursive: true });
 
     this.loadRegistry();
 
@@ -305,11 +314,11 @@ export class FileMirror {
     const { notes, boards } = getIndexMaps(indexDoc);
 
     notes.forEach((_, noteId) => {
-      this.flushDoc(`eluma-note-${noteId}`);
+      this.flushDoc(getNoteDocName(noteId));
     });
 
     boards.forEach((_, boardId) => {
-      this.flushDoc(`eluma-board-${boardId}`);
+      this.flushDoc(getBoardDocName(boardId));
     });
   }
 

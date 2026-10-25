@@ -5,21 +5,13 @@ import * as Y from 'yjs';
 export class StateStore {
   private stateDir: string;
   private updateCounts = new Map<string, number>();
-  private compactionTimer?: NodeJS.Timeout;
 
-  constructor(stateDir: string, autoCompactionIntervalMs = 60000) {
+  constructor(stateDir: string) {
     this.stateDir = stateDir;
     fs.mkdirSync(this.stateDir, { recursive: true });
 
     // Clean up any stale .tmp files from previous crashes
     this.cleanupTempFiles();
-
-    // Periodic compaction timer (every 60s by default)
-    if (autoCompactionIntervalMs > 0) {
-      this.compactionTimer = setInterval(() => {
-        // Will be called by DocManager or compactAll
-      }, autoCompactionIntervalMs);
-    }
   }
 
   private cleanupTempFiles(): void {
@@ -155,9 +147,6 @@ export class StateStore {
   }
 
   public destroy(): void {
-    if (this.compactionTimer) {
-      clearInterval(this.compactionTimer);
-      this.compactionTimer = undefined;
-    }
+    // Clean shutdown
   }
 }

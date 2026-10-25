@@ -507,7 +507,7 @@ export class AgentHttpServer {
         } catch {}
 
         reply.header('Content-Type', 'application/zip');
-        reply.header('Content-Disposition', 'attachment; filename="eluma-vault.zip"');
+        reply.header('Content-Disposition', 'attachment; filename="doks-vault.zip"');
         return reply.send(zipBuffer);
       } catch (err: any) {
         if (fs.existsSync(tempZip)) {
@@ -606,7 +606,7 @@ export class AgentHttpServer {
         const subscribedDocs = new Set<string>();
 
         const isDocSubscribed = (docName: string) => {
-          return subscribedDocs.size === 0 || subscribedDocs.has(docName) || docName === 'eluma-index';
+          return subscribedDocs.size === 0 || subscribedDocs.has(docName) || docName === DOC_INDEX || docName === 'eluma-index';
         };
 
         // Handle sync and awareness between local web UI and docManager

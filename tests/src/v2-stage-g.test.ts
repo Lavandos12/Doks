@@ -45,7 +45,7 @@ describe('Stage G: Deterministic AI Context Export (doks-ai/1)', () => {
     const boardId = 'board-roadmap';
     boards.set(boardId, {
       id: boardId,
-      title: 'Дорожная карта Eluma',
+      title: 'Дорожная карта Doks',
       folder: null,
       createdAt: Date.now(),
       updatedAt: Date.now(),
@@ -134,7 +134,7 @@ describe('Stage G: Deterministic AI Context Export (doks-ai/1)', () => {
     });
 
     const md = result.markdown;
-    expect(md).toContain('# Контекст доски: Дорожная карта Eluma');
+    expect(md).toContain('# Контекст доски: Дорожная карта Doks');
     expect(md).toContain('Формат: doks-ai/1. Экспорт: 2026-10-24 21:40.');
     expect(md).toContain('Объектов: 4 (стикеров 3, рамок 1).');
     expect(md).toContain('Выполнено: 1 из 3 стикеров.');

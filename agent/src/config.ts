@@ -5,6 +5,7 @@ import crypto from 'node:crypto';
 import type { AgentConfig } from '@doks/shared';
 import { generateTeamKey } from './security.js';
 import { findRadminIp } from './network.js';
+import { logger } from './logger.js';
 
 const AUTHOR_COLORS = [
   '#3b82f6', // blue
@@ -26,18 +27,44 @@ export interface ConfigOptions {
 }
 
 export function loadOrCreateConfig(options: ConfigOptions = {}): AgentConfig {
-  const baseDir = options.baseDir || path.join(os.homedir(), 'Eluma');
-  const elumaDir = path.join(baseDir, '.eluma');
-  const configPath = path.join(elumaDir, 'config.json');
+  let baseDir = options.baseDir;
+  if (!baseDir) {
+    const legacyElumaDir = path.join(os.homedir(), 'Eluma');
+    const defaultDoksDir = path.join(os.homedir(), 'Doks');
+    if (!fs.existsSync(defaultDoksDir) && fs.existsSync(legacyElumaDir)) {
+      try {
+        fs.cpSync(legacyElumaDir, defaultDoksDir, { recursive: true });
+        logger.info('[Migration] Migrated ~/Eluma to ~/Doks');
+      } catch (err) {
+        logger.warn('[Migration] Failed to migrate ~/Eluma to ~/Doks:', err);
+      }
+    }
+    baseDir = defaultDoksDir;
+  }
+
+  const doksDir = path.join(baseDir, '.doks');
+  const legacyDotEluma = path.join(baseDir, '.eluma');
+  if (fs.existsSync(legacyDotEluma) && !fs.existsSync(doksDir)) {
+    try {
+      fs.cpSync(legacyDotEluma, doksDir, { recursive: true });
+      logger.info('[Migration] Migrated .eluma to .doks');
+    } catch (err) {
+      logger.warn('[Migration] Failed to migrate .eluma to .doks:', err);
+    }
+  }
+
+  const configPath = path.join(doksDir, 'config.json');
   const vaultPath = path.join(baseDir, 'vault');
-  const statePath = path.join(elumaDir, 'state');
-  const snapshotsPath = path.join(elumaDir, 'snapshots');
+  const statePath = path.join(doksDir, 'state');
+  const snapshotsPath = path.join(doksDir, 'snapshots');
+  const blobsPath = path.join(doksDir, 'blobs');
 
   // Ensure directories exist
-  fs.mkdirSync(elumaDir, { recursive: true });
+  fs.mkdirSync(doksDir, { recursive: true });
   fs.mkdirSync(vaultPath, { recursive: true });
   fs.mkdirSync(statePath, { recursive: true });
   fs.mkdirSync(snapshotsPath, { recursive: true });
+  fs.mkdirSync(blobsPath, { recursive: true });
 
   let existing: Partial<AgentConfig> = {};
   if (fs.existsSync(configPath)) {
@@ -48,17 +75,17 @@ export function loadOrCreateConfig(options: ConfigOptions = {}): AgentConfig {
     }
   }
 
-  // Stage H: Migration from v1.0 - back up existing state before applying v2 schema
-  const backupV1Path = path.join(elumaDir, 'backup-v1');
+  // Safe migration: preserve backup-v1
+  const backupV1Path = path.join(doksDir, 'backup-v1');
   if (fs.existsSync(statePath) && !fs.existsSync(backupV1Path) && (!existing.version || existing.version < 2)) {
     try {
       const stateFiles = fs.readdirSync(statePath);
       if (stateFiles.length > 0) {
         fs.cpSync(statePath, backupV1Path, { recursive: true });
-        console.log('[Migration] Created backup of v1.0 state at .eluma/backup-v1');
+        logger.info('[Migration] Created backup of v1.0 state at .doks/backup-v1');
       }
     } catch (e) {
-      console.warn('[Migration] Failed to backup v1 state:', e);
+      logger.warn('[Migration] Failed to backup v1 state:', e);
     }
   }
 
@@ -73,7 +100,7 @@ export function loadOrCreateConfig(options: ConfigOptions = {}): AgentConfig {
   const peers = options.peers ?? existing.peers ?? [];
 
   const config: AgentConfig = {
-    version: 2,
+    version: 3,
     agentId,
     memberName,
     memberColor,
@@ -91,7 +118,7 @@ export function loadOrCreateConfig(options: ConfigOptions = {}): AgentConfig {
 }
 
 export function saveConfig(config: AgentConfig): void {
-  const elumaDir = path.dirname(config.statePath);
-  const configPath = path.join(elumaDir, 'config.json');
+  const doksDir = path.dirname(config.statePath);
+  const configPath = path.join(doksDir, 'config.json');
   fs.writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf8');
 }

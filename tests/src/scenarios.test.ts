@@ -293,7 +293,7 @@ describe('Mandatory Integration Scenarios (ТЗ раздел 13)', () => {
       originalDoc.getText('text').insert(0, 'Важные надежные данные');
       stateStore.compactDoc(docName, originalDoc);
 
-      const realFilePath = path.join(testDir, '.eluma', 'state', `${docName}.bin`);
+      const realFilePath = path.join(testDir, '.doks', 'state', `${docName}.bin`);
       expect(fs.existsSync(realFilePath)).toBe(true);
 
       // Simulate a crashed write that left a dangling .tmp file

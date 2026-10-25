@@ -1,7 +1,8 @@
 {
   "name": "doks-root",
-  "version": "1.0.0",
+  "version": "0.2.0",
   "private": true,
+  "license": "Apache-2.0",
   "workspaces": [
     "shared",
     "agent",
@@ -11,6 +12,8 @@
   "scripts": {
     "build": "npm run build --workspace=shared && npm run build --workspace=web && npm run build --workspace=agent",
     "test": "vitest run",
+    "check": "npm run typecheck && npm run test && npm run build",
+    "typecheck": "tsc --noEmit --project tsconfig.json",
     "dev:agent": "npm run dev --workspace=agent",
     "dev:web": "npm run dev --workspace=web"
   },

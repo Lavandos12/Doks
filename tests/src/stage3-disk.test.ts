@@ -126,11 +126,11 @@ describe('Stage 3: Disk Mirroring (.md, .canvas), State Persistence & Agent Rest
     expect(canvasJson.edges.length).toBe(1);
     expect(canvasJson.edges[0].label).toBe('поток данных');
 
-    // Verify .eluma/state/ files exist
-    const stateDir = path.join(baseDir, '.eluma', 'state');
+    // Verify .doks/state/ files exist
+    const stateDir = path.join(baseDir, '.doks', 'state');
     expect(fs.existsSync(path.join(stateDir, `${DOC_INDEX}.bin`))).toBe(true);
-    expect(fs.existsSync(path.join(stateDir, `eluma-note-${noteId}.bin`))).toBe(true);
-    expect(fs.existsSync(path.join(stateDir, `eluma-board-${boardId}.bin`))).toBe(true);
+    expect(fs.existsSync(path.join(stateDir, `doks-note-${noteId}.bin`))).toBe(true);
+    expect(fs.existsSync(path.join(stateDir, `doks-board-${boardId}.bin`))).toBe(true);
 
     // 3. Stop agent completely
     await agent.stop();
@@ -143,7 +143,7 @@ describe('Stage 3: Disk Mirroring (.md, .canvas), State Persistence & Agent Rest
     });
     await restoredAgent.start();
 
-    // 5. Check that data is restored from .eluma/state
+    // 5. Check that data is restored from .doks/state
     const restoredIndex = restoredAgent.docManager.getOrCreateDoc(DOC_INDEX);
     const restoredMaps = getIndexMaps(restoredIndex);
 

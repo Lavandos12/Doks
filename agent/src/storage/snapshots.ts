@@ -36,7 +36,7 @@ export class SnapshotManager {
   }
 
   /**
-   * Creates a full state snapshot of all documents in .eluma/snapshots/<timestamp>/
+   * Creates a full state snapshot of all documents in .doks/snapshots/<timestamp>/
    */
   public createSnapshot(): SnapshotMeta {
     const timestamp = Date.now();

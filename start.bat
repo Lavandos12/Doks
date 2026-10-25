@@ -1,11 +1,11 @@
 @echo off
 chcp 65001 >nul
-title Doks Agent (Eluma Workspace v2.0)
+title Doks Agent (Doks Workspace v0.2.0)
 
 cd /d "%~dp0"
 
 echo ====================================================
-echo        Doks (Eluma Workspace) v2.0
+echo        Doks Workspace v0.2.0
 echo     Локальная совместная площадка для команды
 echo ====================================================
 echo.
@@ -29,7 +29,7 @@ if not exist "agent\dist\index.js" (
     )
 )
 
-echo [Doks] Запуск локального агента Eluma...
+echo [Doks] Запуск локального агента Doks...
 echo Для остановки нажмите Ctrl+C или закройте это окно.
 echo.
 

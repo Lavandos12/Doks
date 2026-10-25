@@ -5,6 +5,7 @@ import chokidar, { type FSWatcher } from 'chokidar';
 import DiffMatchPatch from 'diff-match-patch';
 import * as Y from 'yjs';
 import {
+  DOC_INDEX,
   getNoteDocName,
   getBoardDocName,
   getBoardMaps,
@@ -14,6 +15,7 @@ import {
 } from '@doks/shared';
 import { DocManager } from './doc-manager.js';
 import type { FileMirror } from './file-mirror.js';
+import { logger } from '../logger.js';
 
 export class FileWatcher {
   private vaultPath: string;
@@ -110,7 +112,7 @@ export class FileWatcher {
 
       const fileName = path.basename(filePath, '.canvas');
       // Look up boardId from index doc or match by title
-      const indexDoc = this.docManager.getOrCreateDoc('eluma-index');
+      const indexDoc = this.docManager.getOrCreateDoc(DOC_INDEX);
       const boardsMap = indexDoc.getMap<any>('boards');
 
       let boardId: string | undefined;

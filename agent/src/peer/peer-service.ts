@@ -10,6 +10,7 @@ import { DocManager } from '../storage/doc-manager.js';
 import { AttachmentManager } from '../storage/attachments.js';
 import { PeerConnection } from './peer-connection.js';
 import { findAvailablePort, findRadminIp } from '../network.js';
+import { logger } from '../logger.js';
 
 interface OutboundPeerState {
   address: string;
@@ -393,12 +394,12 @@ export class PeerService extends EventEmitter {
 
     if (teamKeyFromInvite && teamKeyFromInvite.length === 64) {
       this.config.teamKey = teamKeyFromInvite;
-      const elumaDir = path.dirname(this.config.statePath);
-      const configPath = path.join(elumaDir, 'config.json');
+      const doksDir = path.dirname(this.config.statePath);
+      const configPath = path.join(doksDir, 'config.json');
       try {
         fs.writeFileSync(configPath, JSON.stringify(this.config, null, 2), 'utf8');
       } catch {}
-      console.log(`[PeerService] Adopted teamKey from invite for peer mesh`);
+      logger.info('[PeerService] Adopted teamKey from invite for peer mesh');
     }
 
     if (!this.outboundPeers.has(address)) {

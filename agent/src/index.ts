@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 import { exec } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 import { Agent } from './agent.js';
