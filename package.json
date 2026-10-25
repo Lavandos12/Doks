@@ -1,8 +1,30 @@
 {
   "name": "doks-root",
   "version": "0.2.0",
+  "description": "Local-first collaborative workspace for markdown notes and infinite canvas whiteboards",
   "private": true,
   "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/doks-org/doks.git"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "keywords": [
+    "local-first",
+    "crdt",
+    "yjs",
+    "p2p",
+    "notes",
+    "canvas",
+    "markdown",
+    "whiteboard",
+    "obsidian-compatible"
+  ],
+  "bin": {
+    "doks": "./agent/dist/index.js"
+  },
   "workspaces": [
     "shared",
     "agent",

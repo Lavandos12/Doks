@@ -7,27 +7,54 @@ const LEVEL_WEIGHT: Record<LogLevel, number> = {
   error: 3
 };
 
-const currentLevel: LogLevel = (process.env.DOKS_LOG as LogLevel) || 'info';
+function getEnvLevel(): LogLevel {
+  const env = (process.env.DOKS_LOG || 'info').toLowerCase();
+  if (env in LEVEL_WEIGHT) return env as LogLevel;
+  return 'info';
+}
 
-export const logger = {
-  debug: (...args: any[]) => {
-    if (LEVEL_WEIGHT[currentLevel] <= LEVEL_WEIGHT.debug) {
-      console.debug('[DEBUG]', ...args);
-    }
-  },
-  info: (...args: any[]) => {
-    if (LEVEL_WEIGHT[currentLevel] <= LEVEL_WEIGHT.info) {
-      console.log('[INFO]', ...args);
-    }
-  },
-  warn: (...args: any[]) => {
-    if (LEVEL_WEIGHT[currentLevel] <= LEVEL_WEIGHT.warn) {
-      console.warn('[WARN]', ...args);
-    }
-  },
-  error: (...args: any[]) => {
-    if (LEVEL_WEIGHT[currentLevel] <= LEVEL_WEIGHT.error) {
-      console.error('[ERROR]', ...args);
+export class Logger {
+  private module: string;
+
+  constructor(module = 'Doks') {
+    this.module = module;
+  }
+
+  private format(level: LogLevel, message: string): string {
+    const timestamp = new Date().toISOString();
+    return `[${timestamp}] [${level.toUpperCase()}] [${this.module}] ${message}`;
+  }
+
+  public debug(message: string, ...args: any[]): void {
+    if (LEVEL_WEIGHT[getEnvLevel()] <= LEVEL_WEIGHT.debug) {
+      console.debug(this.format('debug', message), ...args);
     }
   }
-};
+
+  public info(message: string, ...args: any[]): void {
+    if (LEVEL_WEIGHT[getEnvLevel()] <= LEVEL_WEIGHT.info) {
+      console.log(this.format('info', message), ...args);
+    }
+  }
+
+  public warn(message: string, ...args: any[]): void {
+    if (LEVEL_WEIGHT[getEnvLevel()] <= LEVEL_WEIGHT.warn) {
+      console.warn(this.format('warn', message), ...args);
+    }
+  }
+
+  public error(message: string, ...args: any[]): void {
+    if (LEVEL_WEIGHT[getEnvLevel()] <= LEVEL_WEIGHT.error) {
+      console.error(this.format('error', message), ...args);
+    }
+  }
+
+  public forModule(moduleName: string): Logger {
+    return new Logger(moduleName);
+  }
+}
+
+export const logger = new Logger('Doks');
+export function createLogger(moduleName: string): Logger {
+  return new Logger(moduleName);
+}

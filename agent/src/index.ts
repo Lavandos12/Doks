@@ -19,6 +19,31 @@ export * from './server/http-server.js';
 // If run directly from CLI
 if (import.meta.url === pathToFileURL(process.argv[1] || '').href) {
   const args = process.argv.slice(2);
+
+  if (args.includes('--help') || args.includes('-h')) {
+    console.log(`
+Doks v0.2.0 - Local-first collaborative workspace for teams
+
+Usage:
+  doks [options]
+
+Options:
+  --open              Open browser on startup
+  --dir <path>        Vault data directory (default: ~/Doks)
+  --port <number>     Web UI & API port (default: 3000)
+  --peer-port <num>   Peer service port (default: 4747)
+  --key <secret>      Team authentication key (64 hex characters)
+  --version, -v       Show version number
+  --help, -h          Show this help message
+`);
+    process.exit(0);
+  }
+
+  if (args.includes('--version') || args.includes('-v')) {
+    console.log('0.2.0');
+    process.exit(0);
+  }
+
   let baseDir: string | undefined;
   let webPort: number | undefined;
   let peerPort: number | undefined;

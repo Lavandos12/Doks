@@ -1,8 +1,24 @@
 {
   "name": "@doks/agent",
   "version": "0.2.0",
+  "description": "Local agent backend for Doks: P2P mesh sync, storage, and HTTP/WS server",
   "license": "Apache-2.0",
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/doks-org/doks.git"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "keywords": [
+    "doks",
+    "p2p",
+    "mesh",
+    "yjs",
+    "crdt",
+    "agent"
+  ],
   "bin": {
     "doks": "./dist/index.js"
   },

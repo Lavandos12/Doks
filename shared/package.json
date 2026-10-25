@@ -1,8 +1,16 @@
 {
   "name": "@doks/shared",
   "version": "0.2.0",
+  "description": "Shared schemas, types, and protocol utilities for Doks",
   "license": "Apache-2.0",
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/doks-org/doks.git"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
