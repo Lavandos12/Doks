@@ -10,19 +10,12 @@ import {
   decodeMessage,
   uint8ArrayToBase64,
   base64ToUint8Array,
-  DOC_INDEX
+  DOC_INDEX,
+  type WorkspaceScope
 } from '@doks/shared';
+import { api, type AgentStatusResponse } from '../api/client.js';
 
-export interface AgentStatusInfo {
-  agentId: string;
-  memberName: string;
-  memberColor: string;
-  effectiveIp: string;
-  radminFound: boolean;
-  connectedCount: number;
-  inviteLink?: string;
-  peers: any[];
-}
+export type AgentStatusInfo = AgentStatusResponse;
 
 export const connectionState = signal<'connected' | 'connecting' | 'disconnected'>('connecting');
 export const agentStatus = signal<AgentStatusInfo | null>(null);
@@ -35,8 +28,15 @@ export class YjsClient {
   private isConnected = false;
   private reconnectTimer?: number;
   private statusPollTimer?: number;
+  private currentScope: WorkspaceScope = 'team';
 
   constructor() {
+    if (typeof localStorage !== 'undefined') {
+      const saved = localStorage.getItem('doks_scope') as WorkspaceScope;
+      if (saved === 'solo' || saved === 'team') {
+        this.currentScope = saved;
+      }
+    }
     this.initSocket();
     this.startStatusPolling();
   }
@@ -45,69 +45,81 @@ export class YjsClient {
     if (typeof window === 'undefined') return;
     const fetchStatus = async () => {
       try {
-        const res = await fetch('/api/status');
-        if (res.ok) {
-          const data = await res.json();
-          agentStatus.value = data;
-        }
+        const data = await api.getStatus();
+        agentStatus.value = data;
       } catch {}
     };
     fetchStatus();
     this.statusPollTimer = window.setInterval(fetchStatus, 4000);
   }
 
-  private initSocket(): void {
+  public switchScope(newScope: WorkspaceScope): void {
+    if (this.currentScope === newScope) return;
+    this.currentScope = newScope;
+    if (this.socket) {
+      try {
+        this.socket.close();
+      } catch {}
+    }
+    this.initSocket();
+  }
+
+  private async initSocket(): Promise<void> {
     if (typeof window === 'undefined') return;
     connectionState.value = 'connecting';
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const host = window.location.host || '127.0.0.1:3000';
-    const wsUrl = `${protocol}//${host}/ws`;
 
-    this.socket = new WebSocket(wsUrl);
+    try {
+      await api.ensureAuthenticated();
+      const wsUrl = api.getWsUrl(this.currentScope);
 
-    this.socket.onopen = () => {
-      this.isConnected = true;
-      connectionState.value = 'connected';
-      console.log('[YjsClient] Connected to local agent');
-      // Resync all active documents
-      for (const docName of this.activeSubscriptions) {
-        this.subscribeDoc(docName);
-      }
-    };
+      this.socket = new WebSocket(wsUrl);
 
-    this.socket.onmessage = (event) => {
-      try {
-        const msg = decodeMessage(event.data);
-        if (msg.type === 'sync') {
-          const doc = this.getOrCreateDoc(msg.docName);
-          const data = base64ToUint8Array(msg.data);
-          const decoder = decoding.createDecoder(data);
-          const encoder = encoding.createEncoder();
-
-          syncProtocol.readSyncMessage(decoder, encoder, doc, 'agent');
-
-          if (encoding.length(encoder) > 0) {
-            this.sendSync(msg.docName, encoding.toUint8Array(encoder));
-          }
-        } else if (msg.type === 'awareness') {
-          const awareness = this.getOrCreateAwareness(msg.docName);
-          const data = base64ToUint8Array(msg.data);
-          awarenessProtocol.applyAwarenessUpdate(awareness, data, 'agent');
+      this.socket.onopen = () => {
+        this.isConnected = true;
+        connectionState.value = 'connected';
+        console.log(`[YjsClient] Connected to local agent (${this.currentScope})`);
+        // Resync all active documents
+        for (const docName of this.activeSubscriptions) {
+          this.subscribeDoc(docName);
         }
-      } catch (err) {
-        console.error('[YjsClient] WS message error:', err);
-      }
-    };
+      };
 
-    this.socket.onclose = () => {
-      this.isConnected = false;
-      connectionState.value = 'disconnected';
+      this.socket.onmessage = (event) => {
+        try {
+          const msg = decodeMessage(event.data);
+          if (msg.type === 'sync') {
+            const doc = this.getOrCreateDoc(msg.docName);
+            const data = base64ToUint8Array(msg.data);
+            const decoder = decoding.createDecoder(data);
+            const encoder = encoding.createEncoder();
+
+            syncProtocol.readSyncMessage(decoder, encoder, doc, 'agent');
+
+            if (encoding.length(encoder) > 0) {
+              this.sendSync(msg.docName, encoding.toUint8Array(encoder));
+            }
+          } else if (msg.type === 'awareness') {
+            const awareness = this.getOrCreateAwareness(msg.docName);
+            const data = base64ToUint8Array(msg.data);
+            awarenessProtocol.applyAwarenessUpdate(awareness, data, 'agent');
+          }
+        } catch (err) {
+          console.error('[YjsClient] WS message error:', err);
+        }
+      };
+
+      this.socket.onclose = () => {
+        this.isConnected = false;
+        connectionState.value = 'disconnected';
+        this.scheduleReconnect();
+      };
+
+      this.socket.onerror = () => {
+        // Error triggers onclose
+      };
+    } catch (err) {
       this.scheduleReconnect();
-    };
-
-    this.socket.onerror = () => {
-      // Error triggers onclose
-    };
+    }
   }
 
   private scheduleReconnect(): void {

@@ -75,6 +75,8 @@ export interface BoardNodeData {
   fileName?: string;
   url?: string;
   z: number;
+  locked?: boolean;
+  fontSize?: number;
   deleted: boolean;
   deletedAt?: number;
   scope?: WorkspaceScope;

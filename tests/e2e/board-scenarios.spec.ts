@@ -105,10 +105,10 @@ test.describe('F12: Playwright E2E Scenarios for Doks', () => {
     const box1 = await stickyNode.boundingBox();
     expect(box1).not.toBeNull();
 
-    // Drag sticky by dragging its surface
-    await page.mouse.move(box1!.x + 20, box1!.y + 10);
+    // Drag sticky by dragging its surface/header
+    await page.mouse.move(box1!.x + 60, box1!.y + 10);
     await page.mouse.down();
-    await page.mouse.move(box1!.x + 120, box1!.y + 80);
+    await page.mouse.move(box1!.x + 160, box1!.y + 80);
     await page.mouse.up();
 
     // Wait for drag update
@@ -336,5 +336,92 @@ test.describe('F12: Playwright E2E Scenarios for Doks', () => {
     // Modal closes and active scope becomes Team
     await expect(modal).not.toBeVisible({ timeout: 5000 });
     await expect(teamBtn).toHaveClass(/active/);
+  });
+
+  test('Scenario 8: Auto-return to Select tool after creating a node', async ({ page }) => {
+    await page.goto(`http://127.0.0.1:${port1}`);
+    await openBoard(page);
+
+    const selectToolBtn = page.locator('button[data-tool="select"]');
+    const stickyToolBtn = page.locator('button[data-tool="sticky"]');
+
+    // Click on Sticky tool
+    await stickyToolBtn.click();
+    await expect(stickyToolBtn).toHaveClass(/active/);
+
+    // Click canvas to place sticky
+    const canvas = page.locator('.board-container');
+    await canvas.click({ position: { x: 320, y: 220 } });
+
+    // Verify tool auto-returned to Select tool immediately
+    await expect(selectToolBtn).toHaveClass(/active/);
+    await expect(stickyToolBtn).not.toHaveClass(/active/);
+  });
+
+  test('Scenario 9: Frame container parenting moves contained children', async ({ page }) => {
+    await page.goto(`http://127.0.0.1:${port1}`);
+    await openBoard(page);
+
+    // 1. Create a frame
+    const frameToolBtn = page.locator('button[data-tool="frame"]');
+    await frameToolBtn.click();
+    const canvas = page.locator('.board-container');
+    await canvas.click({ position: { x: 400, y: 300 } });
+
+    // Wait for frame node to render
+    const frameNode = page.locator('.board-node-box.type-frame').first();
+    await expect(frameNode).toBeVisible();
+    const frameBox = await frameNode.boundingBox();
+    expect(frameBox).not.toBeNull();
+
+    // 2. Create a sticky inside the frame bounds
+    const stickyToolBtn = page.locator('button[data-tool="sticky"]');
+    await stickyToolBtn.click();
+    await canvas.click({ position: { x: frameBox!.x + 80, y: frameBox!.y + 80 } });
+
+    const stickyNode = page.locator('.board-node-box.type-sticky').first();
+    await expect(stickyNode).toBeVisible();
+    const stickyInitialBox = await stickyNode.boundingBox();
+    expect(stickyInitialBox).not.toBeNull();
+
+    // 3. Drag the frame by its header/label area
+    await page.mouse.move(frameBox!.x + 40, frameBox!.y + 16);
+    await page.mouse.down();
+    await page.mouse.move(frameBox!.x + 140, frameBox!.y + 116);
+    await page.mouse.up();
+
+    // Verify both frame and child sticky moved by delta (~100px)
+    await page.waitForTimeout(200);
+    const stickyNewBox = await stickyNode.boundingBox();
+    expect(stickyNewBox).not.toBeNull();
+    expect(stickyNewBox!.x).toBeGreaterThan(stickyInitialBox!.x + 40);
+  });
+
+  test('Scenario 10: Workspace Modes switcher (Canvas, Split, Vault)', async ({ page }) => {
+    await page.goto(`http://127.0.0.1:${port1}`);
+    await openBoard(page);
+
+    // Verify segmented workspace mode switcher
+    const splitBtn = page.locator('.workspace-mode-btn[data-mode="split"]');
+    const vaultBtn = page.locator('.workspace-mode-btn[data-mode="vault"]');
+    const canvasBtn = page.locator('.workspace-mode-btn[data-mode="canvas"]');
+
+    await expect(canvasBtn).toBeVisible();
+    await expect(splitBtn).toBeVisible();
+    await expect(vaultBtn).toBeVisible();
+
+    // Switch to Split mode
+    await splitBtn.click();
+    await expect(splitBtn).toHaveClass(/active/);
+    await expect(page.locator('.app-split-container')).toBeVisible();
+
+    // Switch to Vault mode
+    await vaultBtn.click();
+    await expect(vaultBtn).toHaveClass(/active/);
+
+    // Switch back to Canvas mode
+    await canvasBtn.click();
+    await expect(canvasBtn).toHaveClass(/active/);
+    await expect(page.locator('.board-container')).toBeVisible();
   });
 });

@@ -14,7 +14,11 @@ import {
   toggleSplitView,
   theme,
   setTheme,
-  currentView
+  currentView,
+  setScope,
+  currentScope,
+  setWorkspaceMode,
+  workspaceMode
 } from '../../state/app-state.js';
 import { Icon, type IconName } from '../../ui/icons.js';
 
@@ -79,6 +83,56 @@ export function CommandPalette() {
   } else {
     // Command palette: system actions + documents
     items = [
+      {
+        id: 'cmd-scope-solo',
+        title: 'Переключить в Соло (Личное)',
+        subtitle: 'Локальное хранилище на этом ПК (Alt+1)',
+        icon: 'lock',
+        action: () => {
+          setScope('solo');
+          close();
+        }
+      },
+      {
+        id: 'cmd-scope-team',
+        title: 'Переключить в Команду (P2P меш)',
+        subtitle: 'Синхронизация с соавторами (Alt+2)',
+        icon: 'globe-mesh',
+        action: () => {
+          setScope('team');
+          close();
+        }
+      },
+      {
+        id: 'cmd-mode-canvas',
+        title: 'Режим: Холст',
+        subtitle: 'Полноэкранная бесконечная доска',
+        icon: 'layout-canvas',
+        action: () => {
+          setWorkspaceMode('canvas');
+          close();
+        }
+      },
+      {
+        id: 'cmd-mode-split',
+        title: 'Режим: Сплит',
+        subtitle: 'Холст и редактор рядом (Ctrl+\\)',
+        icon: 'layout-split',
+        action: () => {
+          setWorkspaceMode('split');
+          close();
+        }
+      },
+      {
+        id: 'cmd-mode-vault',
+        title: 'Режим: Заметки',
+        subtitle: 'Полноэкранная база знаний',
+        icon: 'layout-doc',
+        action: () => {
+          setWorkspaceMode('vault');
+          close();
+        }
+      },
       {
         id: 'cmd-new-note',
         title: 'Создать новую заметку',

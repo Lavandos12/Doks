@@ -32,7 +32,7 @@ Automated end-to-end and integration benchmarks measured across Vitest and Playw
 - **CRDT P2P Sync Latency:** Under 50 ms on local loopback/LAN and < 120 ms over Radmin VPN between distinct peer processes.
 - **AI Context Compilation (`doks-ai/1`):** Complete board export with 1,000 nodes, frames, and connected notes executes in under 20 ms.
 - **Streaming Vault ZIP Export:** Zero MB memory spike (pure streaming Store-mode pipeline without buffering whole archives in RAM).
-- **End-to-End Suite:** All 7 full multi-agent collaborative browser scenarios (including dual-scope cross-promotion) pass in ~11.0 seconds.
+- **End-to-End Suite:** All 10 full multi-agent collaborative browser scenarios (including dual-scope cross-promotion, tool auto-return, frame parenting, and workspace mode switcher) pass in ~8.8 seconds.
 
 ---
 

@@ -1,11 +1,11 @@
 @echo off
 chcp 65001 >nul
-title Doks Agent (Doks Workspace v0.2.0)
+title Doks Agent (Doks Workspace v1.0.0)
 
 cd /d "%~dp0"
 
 echo ====================================================
-echo        Doks Workspace v0.2.0
+echo        Doks Workspace v1.0.0
 echo     Локальная совместная площадка для команды
 echo ====================================================
 echo.

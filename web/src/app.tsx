@@ -17,6 +17,8 @@ import { TabBar } from './components/layout/tab-bar.js';
 import { StatusBar } from './components/layout/status-bar.js';
 import { CommandPalette } from './components/layout/command-palette.js';
 import { ImportWizardModal } from './components/board/import-wizard-modal.js';
+import { DialogContainer } from './ui/dialogs.js';
+import { ToastContainer } from './ui/toast.js';
 import { NoteEditor } from './components/notes/editor.js';
 import { BoardCanvas } from './components/board/board-canvas.js';
 import { NetworkScreen } from './components/network/network-screen.js';
@@ -72,7 +74,7 @@ export function App() {
 
           {(currentView.value === 'notes' || currentView.value === 'board') && (
             isSplitView.value && splitTab ? (
-              <div class="split-view-container">
+              <div class="split-view-container app-split-container">
                 <div class="split-pane primary">
                   {renderDocContent(activeTab)}
                 </div>
@@ -97,6 +99,8 @@ export function App() {
         isOpen={isImportWizardOpen.value}
         onClose={() => (isImportWizardOpen.value = false)}
       />
+      <DialogContainer />
+      <ToastContainer />
     </div>
   );
 }

@@ -12,6 +12,9 @@ const AUTHOR_COLORS = [
   '#06b6d4', // cyan
 ];
 
+import { showConfirm, showPrompt } from '../../ui/dialogs.js';
+import { showToast } from '../../ui/toast.js';
+
 export function NetworkScreen() {
   const [status, setStatus] = useState<any>(null);
   const [newPeerAddr, setNewPeerAddr] = useState('');
@@ -216,11 +219,18 @@ export function NetworkScreen() {
             <button
               class="card-action-link danger"
               onClick={async () => {
-                const confirmed = confirm(
-                  'Вы собираетесь сменить ключ команды.\n\nВнимание: Вы переходите в другую команду. Данные текущей команды останутся на диске (будет автоматически создана резервная копия), но синхронизироваться со старой командой перестанут.\n\nПродолжить?'
-                );
+                const confirmed = await showConfirm({
+                  title: 'Смена ключа команды',
+                  message: 'Вы собираетесь сменить ключ команды. Внимание: Вы переходите в другую команду. Данные текущей команды останутся на диске (будет автоматически создана резервная копия), но синхронизироваться со старой командой перестанут.\n\nПродолжить?',
+                  confirmText: 'Продолжить',
+                  danger: true
+                });
                 if (confirmed) {
-                  const newKey = prompt('Введите новый 64-символьный ключ команды (или оставьте пустым для генерации случайного):');
+                  const newKey = await showPrompt({
+                    title: 'Новый ключ команды',
+                    message: 'Введите 64-символьный ключ команды (или оставьте пустым для генерации нового случайного ключа):',
+                    placeholder: '64 hex-символа...'
+                  });
                   if (newKey !== null) {
                     const generatedKey = newKey.trim() || Array.from(crypto.getRandomValues(new Uint8Array(32))).map(b => b.toString(16).padStart(2, '0')).join('');
                     if (generatedKey.length === 64) {
@@ -229,9 +239,10 @@ export function NetworkScreen() {
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ teamKey: generatedKey })
                       });
+                      showToast('Ключ команды успешно изменен', 'success');
                       fetchStatus();
                     } else {
-                      alert('Ключ должен быть ровно 64 hex-символа');
+                      showToast('Ключ должен быть ровно 64 hex-символа', 'error');
                     }
                   }
                 }

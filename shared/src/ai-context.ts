@@ -6,6 +6,8 @@ import {
   getBoardMaps,
   getNoteDocName,
   getBoardDocName,
+  getScopedIndexDocName,
+  getScopedBoardDocName,
   getNoteText,
   nodeMapToData
 } from './schema.js';
@@ -21,6 +23,7 @@ export interface AiExportOptions {
   compactNotes?: boolean;
   maxNoteLength?: number;
   timestamp?: string; // Deterministic timestamp for testing
+  workspaceScope?: 'solo' | 'team';
 }
 
 export interface AiExportResult {
@@ -114,13 +117,18 @@ export function generateAiContext(
   docManager: { getOrCreateDoc: (name: string) => Y.Doc },
   options: AiExportOptions
 ): AiExportResult {
-  const indexDoc = docManager.getOrCreateDoc(DOC_INDEX);
+  const wsScope = options.workspaceScope || 'team';
+  const indexDoc = docManager.getOrCreateDoc(getScopedIndexDocName(wsScope));
   const { notes, boards } = getIndexMaps(indexDoc);
 
-  const boardMeta = boards.get(options.boardId);
+  let boardMeta = boards.get(options.boardId);
+  if (!boardMeta && wsScope !== 'team') {
+    const fallbackIndex = docManager.getOrCreateDoc(DOC_INDEX);
+    boardMeta = getIndexMaps(fallbackIndex).boards.get(options.boardId);
+  }
   const boardTitle = boardMeta?.title || 'Без названия';
 
-  const boardDoc = docManager.getOrCreateDoc(getBoardDocName(options.boardId));
+  const boardDoc = docManager.getOrCreateDoc(getScopedBoardDocName(wsScope, options.boardId));
   const { nodes: yNodes, edges: yEdges } = getBoardMaps(boardDoc);
 
   // 1. Collect all non-deleted nodes

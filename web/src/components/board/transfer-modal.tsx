@@ -104,7 +104,9 @@ export function TransferModal({
       <div class="modal-card transfer-modal" onClick={(e) => e.stopPropagation()}>
         <div class="modal-header">
           <div class="modal-header-icon-title">
-            <span class="scope-icon-large">{isPromote ? '🌐' : '🔒'}</span>
+            <span class="scope-icon-large">
+              <Icon name={isPromote ? 'globe-mesh' : 'lock'} size={24} />
+            </span>
             <div>
               <h3 class="modal-title">
                 {isPromote ? 'Опубликовать в Команду' : 'Форкнуть в Соло'}

@@ -41,6 +41,7 @@ export function setScope(newScope: WorkspaceScope): void {
   if (typeof localStorage !== 'undefined') {
     localStorage.setItem('doks_scope', newScope);
   }
+  yjsClient.switchScope(newScope);
   syncIndexSignals();
 }
 
@@ -69,6 +70,64 @@ export const openTabs = signal<TabItem[]>([]);
 export const activeTabId = signal<string | null>(null);
 export const splitTabId = signal<string | null>(null);
 export const isSplitView = signal<boolean>(false);
+
+export type WorkspaceMode = 'canvas' | 'split' | 'vault';
+export const workspaceMode = signal<WorkspaceMode>('canvas');
+
+export function setWorkspaceMode(mode: WorkspaceMode): void {
+  workspaceMode.value = mode;
+  if (mode === 'split') {
+    isSplitView.value = true;
+    ensureSplitTabs();
+  } else if (mode === 'canvas') {
+    isSplitView.value = false;
+    currentView.value = 'board';
+    const activeBoard = boards.value.find((b) => !b.deleted);
+    if (activeBoard && (!activeTabId.value || openTabs.value.find((t) => t.id === activeTabId.value)?.type !== 'board')) {
+      openTab('board', activeBoard.id, activeBoard.title);
+    }
+  } else if (mode === 'vault') {
+    isSplitView.value = false;
+    currentView.value = 'notes';
+    const activeNote = notes.value.find((n) => !n.deleted);
+    if (activeNote && (!activeTabId.value || openTabs.value.find((t) => t.id === activeTabId.value)?.type !== 'note')) {
+      openTab('note', activeNote.id, activeNote.title);
+    }
+  }
+}
+
+export function ensureSplitTabs(): void {
+  let boardTab = openTabs.value.find((t) => t.type === 'board');
+  let noteTab = openTabs.value.find((t) => t.type === 'note');
+
+  if (!boardTab) {
+    const b = boards.value.find((x) => !x.deleted);
+    if (b) {
+      openTab('board', b.id, b.title);
+      boardTab = openTabs.value.find((t) => t.id === b.id);
+    } else {
+      const newId = createBoard('Главный план');
+      boardTab = openTabs.value.find((t) => t.id === newId);
+    }
+  }
+
+  if (!noteTab) {
+    const n = notes.value.find((x) => !x.deleted);
+    if (n) {
+      openTab('note', n.id, n.title);
+      noteTab = openTabs.value.find((t) => t.id === n.id);
+    } else {
+      const newId = createNote('Заметка');
+      noteTab = openTabs.value.find((t) => t.id === newId);
+    }
+  }
+
+  if (boardTab && noteTab) {
+    activeTabId.value = boardTab.id;
+    splitTabId.value = noteTab.id;
+    isSplitView.value = true;
+  }
+}
 
 // Modals
 export const isCommandPaletteOpen = signal<boolean>(false);
@@ -511,11 +570,17 @@ if (typeof window !== 'undefined') {
       }
     }
 
-    // Ctrl+P: Command palette
-    if (e.ctrlKey && !e.shiftKey && e.key.toLowerCase() === 'p') {
+    // Ctrl+P or Ctrl+K: Command palette
+    if ((e.ctrlKey || e.metaKey) && !e.shiftKey && (e.key.toLowerCase() === 'p' || e.key.toLowerCase() === 'k')) {
       e.preventDefault();
       isCommandPaletteOpen.value = !isCommandPaletteOpen.value;
       isQuickSwitcherOpen.value = false;
+    }
+
+    // Ctrl+\: Toggle Split View
+    if ((e.ctrlKey || e.metaKey) && e.key === '\\') {
+      e.preventDefault();
+      setWorkspaceMode(workspaceMode.value === 'split' ? 'canvas' : 'split');
     }
 
     // Ctrl+O: Quick switcher

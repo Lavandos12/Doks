@@ -28,6 +28,11 @@ import {
   nodeMapToData,
   getNoteDocName,
   getBoardDocName,
+  getScopedIndexDocName,
+  getScopedNoteDocName,
+  getScopedBoardDocName,
+  applyTextDelta,
+  type WorkspaceScope,
   generateAiContext,
   type AiExportOptions
 } from '@doks/shared';
@@ -167,6 +172,8 @@ export class AgentHttpServer {
               : 80;
           const isAllowedOriginPort =
             originPort === this.config.webPort ||
+            originPort === 5173 ||
+            originPort === 5174 ||
             (!originUrl.port && (this.config.webPort === 80 || this.config.webPort === 443));
 
           if (!isAllowedOriginHost || !isAllowedOriginPort) {
@@ -206,7 +213,8 @@ export class AgentHttpServer {
     const authHeader = req.headers?.authorization;
     const bearerToken = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : undefined;
     const xDoksToken = req.headers?.['x-doks-token'];
-    const token = cookieToken || bearerToken || xDoksToken;
+    const queryToken = (req.query as any)?.token;
+    const token = cookieToken || bearerToken || xDoksToken || queryToken;
     if (!token || typeof token !== 'string') return false;
 
     const tokenBuf = Buffer.from(token);
@@ -219,7 +227,7 @@ export class AgentHttpServer {
     // API: Config & Peer status
     this.fastify.get('/api/status', async (req) => {
       const radminIp = findRadminIp();
-      const hasAuth = req.cookies.doks_session === this.sessionToken;
+      const hasAuth = this.isValidSession(req);
       return {
         agentId: this.config.agentId,
         memberName: this.config.memberName,
@@ -231,6 +239,7 @@ export class AgentHttpServer {
         radminFound: Boolean(radminIp),
         peers: this.peerService.getPeersStatus(),
         connectedCount: this.peerService.getConnectedCount(),
+        token: hasAuth ? this.sessionToken : undefined,
         // B17: Do not expose raw teamKey without session authentication
         teamKey: hasAuth ? this.config.teamKey : undefined,
         keyFingerprint:
@@ -330,6 +339,162 @@ export class AgentHttpServer {
       return [...soloBoards, ...teamBoards];
     });
 
+    // API: Create board
+    this.fastify.post('/api/boards', async (req) => {
+      const body = (req.body as any) || {};
+      const scope = (body.scope === 'solo' ? 'solo' : 'team') as WorkspaceScope;
+      const title = (body.title || 'Новая доска').trim();
+      const folder = body.folder || null;
+      const boardId = crypto.randomUUID();
+      const indexDoc = this.docManager.getOrCreateDoc(getScopedIndexDocName(scope));
+      const { boards } = getIndexMaps(indexDoc);
+      const now = Date.now();
+      const meta = {
+        id: boardId,
+        title,
+        folder,
+        createdAt: now,
+        updatedAt: now,
+        deleted: false,
+        scope
+      };
+      indexDoc.transact(() => {
+        boards.set(boardId, meta);
+      });
+      return meta;
+    });
+
+    // API: Rename/update board
+    this.fastify.put('/api/boards/:id', async (req, reply) => {
+      const { id } = req.params as { id: string };
+      const body = (req.body as any) || {};
+      const scope = (body.scope === 'solo' ? 'solo' : 'team') as WorkspaceScope;
+      const indexDoc = this.docManager.getOrCreateDoc(getScopedIndexDocName(scope));
+      const { boards } = getIndexMaps(indexDoc);
+      const existing = boards.get(id);
+      if (!existing || existing.deleted) {
+        return reply.code(404).send({ error: 'Board not found' });
+      }
+      indexDoc.transact(() => {
+        boards.set(id, {
+          ...existing,
+          title: body.title !== undefined ? body.title : existing.title,
+          folder: body.folder !== undefined ? body.folder : existing.folder,
+          updatedAt: Date.now()
+        });
+      });
+      return { success: true };
+    });
+
+    // API: Delete board
+    this.fastify.delete('/api/boards/:id', async (req, reply) => {
+      const { id } = req.params as { id: string };
+      const scopeQuery = (req.query as any)?.scope;
+      const scope = (scopeQuery === 'solo' ? 'solo' : 'team') as WorkspaceScope;
+      const indexDoc = this.docManager.getOrCreateDoc(getScopedIndexDocName(scope));
+      const { boards } = getIndexMaps(indexDoc);
+      const existing = boards.get(id);
+      if (!existing) {
+        return reply.code(404).send({ error: 'Board not found' });
+      }
+      indexDoc.transact(() => {
+        boards.set(id, {
+          ...existing,
+          deleted: true,
+          deletedAt: Date.now(),
+          updatedAt: Date.now()
+        });
+      });
+      return { success: true };
+    });
+
+    // API: List notes
+    this.fastify.get('/api/notes', async (req) => {
+      const scopeQuery = (req.query as any)?.scope;
+      const scope = (scopeQuery === 'solo' ? 'solo' : 'team') as WorkspaceScope;
+      const indexDoc = this.docManager.getOrCreateDoc(getScopedIndexDocName(scope));
+      const { notes } = getIndexMaps(indexDoc);
+      const list: any[] = [];
+      notes.forEach((meta) => {
+        if (!meta.deleted) list.push({ ...meta, scope });
+      });
+      return list;
+    });
+
+    // API: Create note
+    this.fastify.post('/api/notes', async (req) => {
+      const body = (req.body as any) || {};
+      const scope = (body.scope === 'solo' ? 'solo' : 'team') as WorkspaceScope;
+      const title = (body.title || 'Новая заметка').trim();
+      const folder = body.folder || null;
+      const noteId = crypto.randomUUID();
+      const indexDoc = this.docManager.getOrCreateDoc(getScopedIndexDocName(scope));
+      const { notes } = getIndexMaps(indexDoc);
+      const now = Date.now();
+      const meta = {
+        id: noteId,
+        title,
+        folder,
+        createdAt: now,
+        updatedAt: now,
+        deleted: false,
+        scope
+      };
+      indexDoc.transact(() => {
+        notes.set(noteId, meta);
+      });
+      return meta;
+    });
+
+    // API: Update note
+    this.fastify.put('/api/notes/:id', async (req, reply) => {
+      const { id } = req.params as { id: string };
+      const body = (req.body as any) || {};
+      const scope = (body.scope === 'solo' ? 'solo' : 'team') as WorkspaceScope;
+      const indexDoc = this.docManager.getOrCreateDoc(getScopedIndexDocName(scope));
+      const { notes } = getIndexMaps(indexDoc);
+      const existing = notes.get(id);
+      if (!existing || existing.deleted) {
+        return reply.code(404).send({ error: 'Note not found' });
+      }
+      indexDoc.transact(() => {
+        notes.set(id, {
+          ...existing,
+          title: body.title !== undefined ? body.title : existing.title,
+          folder: body.folder !== undefined ? body.folder : existing.folder,
+          updatedAt: Date.now()
+        });
+      });
+      if (body.content !== undefined) {
+        const noteDoc = this.docManager.getOrCreateDoc(getScopedNoteDocName(scope, id));
+        const yText = getNoteText(noteDoc);
+        applyTextDelta(yText, body.content);
+      }
+      return { success: true };
+    });
+
+    // API: Delete note
+    this.fastify.delete('/api/notes/:id', async (req, reply) => {
+      const { id } = req.params as { id: string };
+      const scopeQuery = (req.query as any)?.scope;
+      const scope = (scopeQuery === 'solo' ? 'solo' : 'team') as WorkspaceScope;
+      const indexDoc = this.docManager.getOrCreateDoc(getScopedIndexDocName(scope));
+      const { notes } = getIndexMaps(indexDoc);
+      const existing = notes.get(id);
+      if (!existing) {
+        return reply.code(404).send({ error: 'Note not found' });
+      }
+      indexDoc.transact(() => {
+        notes.set(id, {
+          ...existing,
+          deleted: true,
+          deletedAt: Date.now(),
+          updatedAt: Date.now()
+        });
+      });
+      return { success: true };
+    });
+
     // API: Cross-scope bridge transfer (Promote to Team / Fork to Solo)
     this.fastify.post('/api/bridge/transfer', async (req, reply) => {
       const body = req.body as any;
@@ -374,6 +539,14 @@ export class AgentHttpServer {
         return reply.code(400).send({ error: 'snapshotId is required' });
       }
       const success = this.snapshotManager.restoreSnapshot(body.snapshotId, body.docName);
+      return { success };
+    });
+
+    this.fastify.post('/api/snapshots/:id/restore', async (req, reply) => {
+      if (!this.snapshotManager) return reply.code(400).send({ error: 'Snapshots disabled' });
+      const { id } = req.params as { id: string };
+      const body = (req.body as any) || {};
+      const success = this.snapshotManager.restoreSnapshot(id, body.docName);
       return { success };
     });
 
@@ -683,8 +856,13 @@ export class AgentHttpServer {
     });
 
     // API: Export Vault as .zip (Streaming ZIP without execSync - F10)
-    this.fastify.get('/api/export/vault', async (req, reply) => {
-      const vaultDir = this.config.vaultPath;
+    const handleVaultZipExport = async (req: any, reply: any) => {
+      const scope = (req.query as any)?.scope;
+      let vaultDir = this.config.vaultPath;
+      if (scope === 'solo') {
+        const soloDir = path.join(vaultDir, 'solo');
+        if (fs.existsSync(soloDir)) vaultDir = soloDir;
+      }
       if (!fs.existsSync(vaultDir)) {
         return reply.code(404).send({ error: 'Vault directory does not exist' });
       }
@@ -699,19 +877,22 @@ export class AgentHttpServer {
           return reply.code(500).send({ error: `Export failed: ${err.message}` });
         }
       }
-    });
+    };
+    this.fastify.get('/api/export/vault', handleVaultZipExport);
+    this.fastify.get('/api/export/zip', handleVaultZipExport);
 
     // API: Export single note
     this.fastify.get('/api/export/note/:id', async (req, reply) => {
       const { id } = req.params as { id: string };
-      const indexDoc = this.docManager.getOrCreateDoc(DOC_INDEX);
+      const scope = ((req.query as any)?.scope === 'solo' ? 'solo' : 'team') as WorkspaceScope;
+      const indexDoc = this.docManager.getOrCreateDoc(getScopedIndexDocName(scope));
       const { notes } = getIndexMaps(indexDoc);
       const meta = notes.get(id);
       if (!meta || meta.deleted) {
         return reply.code(404).send({ error: 'Note not found' });
       }
 
-      const noteDoc = this.docManager.getOrCreateDoc(getNoteDocName(id));
+      const noteDoc = this.docManager.getOrCreateDoc(getScopedNoteDocName(scope, id));
       const content = getNoteText(noteDoc).toString();
       const safeTitle = encodeURIComponent(meta.title || 'note');
       reply.header('Content-Type', 'text/markdown; charset=utf-8');
@@ -722,14 +903,15 @@ export class AgentHttpServer {
     // API: Export single board
     this.fastify.get('/api/export/board/:id', async (req, reply) => {
       const { id } = req.params as { id: string };
-      const indexDoc = this.docManager.getOrCreateDoc(DOC_INDEX);
+      const scope = ((req.query as any)?.scope === 'solo' ? 'solo' : 'team') as WorkspaceScope;
+      const indexDoc = this.docManager.getOrCreateDoc(getScopedIndexDocName(scope));
       const { boards } = getIndexMaps(indexDoc);
       const meta = boards.get(id);
       if (!meta || meta.deleted) {
         return reply.code(404).send({ error: 'Board not found' });
       }
 
-      const boardDoc = this.docManager.getOrCreateDoc(getBoardDocName(id));
+      const boardDoc = this.docManager.getOrCreateDoc(getScopedBoardDocName(scope, id));
       const { nodes, edges } = getBoardMaps(boardDoc);
       const canvasNodes: any[] = [];
       const canvasEdges: any[] = [];
@@ -773,6 +955,21 @@ export class AgentHttpServer {
     });
 
     // API: Export AI Context (Section 5)
+    this.fastify.get('/api/export/ai', async (req, reply) => {
+      const query = (req.query as any) || {};
+      if (!query.boardId) {
+        return reply.code(400).send({ error: 'boardId is required' });
+      }
+      const options: any = {
+        boardId: query.boardId,
+        scope: query.scope || 'all',
+        includeNotes: query.includeNotes || 'cards',
+        includeAttachments: query.includeAttachments || 'list',
+        workspaceScope: query.workspaceScope || 'team'
+      };
+      return generateAiContext(this.docManager, options);
+    });
+
     this.fastify.post('/api/export/ai', async (req, reply) => {
       const body = req.body as AiExportOptions;
       if (!body?.boardId) {
@@ -786,11 +983,17 @@ export class AgentHttpServer {
     // WebSocket bridge for browser client
     this.fastify.register(async (fastify) => {
       fastify.get('/ws', { websocket: true }, (socket, req) => {
+        const queryScope = ((req.query as any)?.scope === 'solo' ? 'solo' : 'team') as WorkspaceScope;
         // B21: Selective doc subscription set per socket
         const subscribedDocs = new Set<string>();
 
         const isDocSubscribed = (docName: string) => {
-          return subscribedDocs.size === 0 || subscribedDocs.has(docName) || docName === DOC_INDEX || docName === 'eluma-index';
+          return (
+            subscribedDocs.size === 0 ||
+            subscribedDocs.has(docName) ||
+            docName === DOC_INDEX ||
+            docName === `${queryScope}:${DOC_INDEX}`
+          );
         };
 
         // Handle sync and awareness between local web UI and docManager
@@ -816,14 +1019,16 @@ export class AgentHttpServer {
                 );
               }
             } else if (msg.type === 'awareness') {
-              // B11: Apply browser awareness state and broadcast to mesh
+              // Apply browser awareness state and broadcast to mesh if not solo
               const data = base64ToUint8Array(msg.data);
               try {
-                awarenessProtocol.applyAwarenessUpdate(this.docManager.getAwareness(), data, 'client');
+                awarenessProtocol.applyAwarenessUpdate(this.docManager.getAwareness(queryScope), data, 'client');
               } catch (err) {
                 console.error('[HttpServer] Awareness error:', err);
               }
-              this.peerService.broadcastAwareness(msg.docName, data);
+              if (queryScope !== 'solo') {
+                this.peerService.broadcastAwareness(msg.docName, data);
+              }
             } else if (msg.type === 'subscribe') {
               // B21: selective subscription
               subscribedDocs.add(msg.docName);
@@ -838,8 +1043,13 @@ export class AgentHttpServer {
         });
 
         // Forward doc updates to the browser
-        const updateListener = ({ docName, update, origin }: any) => {
-          if (origin !== 'client' && socket.readyState === socket.OPEN && isDocSubscribed(docName)) {
+        const updateListener = ({ scope: docScope, docName, update, origin }: any) => {
+          if (origin === 'client' || socket.readyState !== socket.OPEN) return;
+          if (docScope && docScope !== queryScope && !docName.startsWith(queryScope)) {
+            return;
+          }
+
+          if (isDocSubscribed(docName)) {
             const syncMsg = this.docManager.createUpdateSyncMessage(update);
             socket.send(
               encodeMessage({
@@ -851,8 +1061,9 @@ export class AgentHttpServer {
           }
         };
 
-        // B11: Forward peer awareness updates to the browser
+        // Forward peer awareness updates to the browser (only for team scope)
         const peerAwarenessListener = ({ docName, data }: { docName: string; data: Uint8Array }) => {
+          if (queryScope === 'solo') return;
           if (socket.readyState === socket.OPEN && isDocSubscribed(docName)) {
             socket.send(
               encodeMessage({

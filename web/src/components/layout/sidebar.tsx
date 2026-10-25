@@ -12,6 +12,7 @@ import {
   createBoard,
   createFolder,
   renameFolder,
+  renameBoard,
   deleteNote,
   deleteBoard,
   deleteFolder,
@@ -24,6 +25,7 @@ import {
 } from '../../state/app-state.js';
 import { t } from '../../i18n/index.js';
 import { Icon } from '../../ui/icons.js';
+import { showConfirm } from '../../ui/dialogs.js';
 
 export function Sidebar() {
   const [newFolderName, setNewFolderName] = useState('');
@@ -32,6 +34,8 @@ export function Sidebar() {
   const [collapsedFolders, setCollapsedFolders] = useState<Record<string, boolean>>({});
   const [editingFolderId, setEditingFolderId] = useState<string | null>(null);
   const [editingFolderName, setEditingFolderName] = useState('');
+  const [editingBoardId, setEditingBoardId] = useState<string | null>(null);
+  const [editingBoardTitle, setEditingBoardTitle] = useState('');
 
   const activeNotes = notes.value.filter((n) => !n.deleted);
   const activeBoards = boards.value.filter((b) => !b.deleted);
@@ -131,8 +135,14 @@ export function Sidebar() {
             <button
               class="tree-action-btn danger"
               title="Удалить папку"
-              onClick={() => {
-                if (confirm(`Удалить папку "${folder.name}"?`)) {
+              onClick={async () => {
+                const ok = await showConfirm({
+                  title: 'Удаление папки',
+                  message: `Удалить папку "${folder.name}"? Заметки внутри не будут удалены.`,
+                  confirmText: 'Удалить',
+                  danger: true
+                });
+                if (ok) {
                   deleteFolder(folder.id);
                 }
               }}
@@ -250,9 +260,9 @@ export function Sidebar() {
       <div class="explorer-pane">
         <div class="sidebar-scope-banner">
           <div class={`scope-indicator-badge ${currentScope.value}`}>
-            <span class="scope-dot" />
+            <Icon name={currentScope.value === 'solo' ? 'lock' : 'globe-mesh'} size={13} class="scope-badge-icon" />
             <span class="scope-badge-title">
-              {currentScope.value === 'solo' ? '🔒 Личное (Соло)' : '🌐 Общее (Команда)'}
+              {currentScope.value === 'solo' ? 'Личное (Соло)' : 'Общее (Команда)'}
             </span>
           </div>
         </div>
@@ -337,6 +347,7 @@ export function Sidebar() {
               ) : (
                 activeBoards.map((b) => {
                   const isSelected = selectedBoardId.value === b.id;
+                  const isEditing = editingBoardId === b.id;
                   return (
                     <div
                       key={b.id}
@@ -344,17 +355,72 @@ export function Sidebar() {
                       onClick={() => openTab('board', b.id, b.title)}
                     >
                       <Icon name="layout" size={15} class="tree-board-icon" />
-                      <span class="tree-board-title">{b.title}</span>
-                      <button
-                        class="tree-action-btn danger"
-                        title={t('sidebar.delete_board')}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          deleteBoard(b.id);
-                        }}
-                      >
-                        <Icon name="trash" size={12} />
-                      </button>
+                      {isEditing ? (
+                        <input
+                          type="text"
+                          class="tree-inline-input"
+                          value={editingBoardTitle}
+                          onInput={(e) => setEditingBoardTitle((e.target as HTMLInputElement).value)}
+                          onBlur={() => {
+                            if (editingBoardTitle.trim()) {
+                              renameBoard(b.id, editingBoardTitle.trim());
+                            }
+                            setEditingBoardId(null);
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              if (editingBoardTitle.trim()) {
+                                renameBoard(b.id, editingBoardTitle.trim());
+                              }
+                              setEditingBoardId(null);
+                            }
+                            if (e.key === 'Escape') setEditingBoardId(null);
+                          }}
+                          autoFocus
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                      ) : (
+                        <span
+                          class="tree-board-title"
+                          onDblClick={(e) => {
+                            e.stopPropagation();
+                            setEditingBoardId(b.id);
+                            setEditingBoardTitle(b.title);
+                          }}
+                          title="Двойной клик для переименования"
+                        >
+                          {b.title}
+                        </span>
+                      )}
+                      <div class="tree-board-actions" onClick={(e) => e.stopPropagation()}>
+                        <button
+                          class="tree-action-btn"
+                          title="Переименовать доску (F2)"
+                          onClick={() => {
+                            setEditingBoardId(b.id);
+                            setEditingBoardTitle(b.title);
+                          }}
+                        >
+                          <Icon name="edit" size={12} />
+                        </button>
+                        <button
+                          class="tree-action-btn danger"
+                          title={t('sidebar.delete_board')}
+                          onClick={async () => {
+                            const ok = await showConfirm({
+                              title: 'Удаление доски',
+                              message: `Переместить доску "${b.title}" в корзину?`,
+                              confirmText: 'Удалить',
+                              danger: true
+                            });
+                            if (ok) {
+                              deleteBoard(b.id);
+                            }
+                          }}
+                        >
+                          <Icon name="trash" size={12} />
+                        </button>
+                      </div>
                     </div>
                   );
                 })

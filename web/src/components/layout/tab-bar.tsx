@@ -11,7 +11,9 @@ import {
   createNote,
   isImportWizardOpen,
   currentScope,
-  setScope
+  setScope,
+  workspaceMode,
+  setWorkspaceMode
 } from '../../state/app-state.js';
 import { Icon } from '../../ui/icons.js';
 import { FileMenu } from './file-menu.js';
@@ -30,7 +32,7 @@ export function TabBar() {
           onClick={() => setScope('solo')}
           title="Личное пространство (только на этом ПК, Alt+1)"
         >
-          <span class="scope-icon">🔒</span>
+          <Icon name="lock" size={13} class="scope-icon-svg" />
           <span class="scope-label">Соло</span>
         </button>
         <button
@@ -38,7 +40,7 @@ export function TabBar() {
           onClick={() => setScope('team')}
           title="Командное пространство (P2P меш-синхронизация, Alt+2)"
         >
-          <span class="scope-icon">🌐</span>
+          <Icon name="globe-mesh" size={13} class="scope-icon-svg" />
           <span class="scope-label">Команда</span>
         </button>
       </div>
@@ -104,13 +106,36 @@ export function TabBar() {
       </div>
 
       <div class="tabs-actions">
-        <button
-          class={`tab-action-btn ${isSplitView.value ? 'active' : ''}`}
-          onClick={() => toggleSplitView()}
-          title="Разделение экрана (Split View)"
-        >
-          <Icon name="columns" size={16} />
-        </button>
+        {/* Three Seamless Workspace Modes */}
+        <div class="workspace-mode-segmented-pill" role="tablist" aria-label="Режим рабочей области">
+          <button
+            class={`mode-pill-btn workspace-mode-btn ${workspaceMode.value === 'canvas' ? 'active' : ''}`}
+            data-mode="canvas"
+            onClick={() => setWorkspaceMode('canvas')}
+            title="Холст (Бесконечная доска)"
+          >
+            <Icon name="layout-canvas" size={14} />
+            <span class="mode-label">Холст</span>
+          </button>
+          <button
+            class={`mode-pill-btn workspace-mode-btn ${workspaceMode.value === 'split' ? 'active' : ''}`}
+            data-mode="split"
+            onClick={() => setWorkspaceMode('split')}
+            title="Сплит (Холст + Заметка рядом, Ctrl+\)"
+          >
+            <Icon name="layout-split" size={14} />
+            <span class="mode-label">Сплит</span>
+          </button>
+          <button
+            class={`mode-pill-btn workspace-mode-btn ${workspaceMode.value === 'vault' ? 'active' : ''}`}
+            data-mode="vault"
+            onClick={() => setWorkspaceMode('vault')}
+            title="Заметки (Редактор базы знаний)"
+          >
+            <Icon name="layout-doc" size={14} />
+            <span class="mode-label">Заметки</span>
+          </button>
+        </div>
       </div>
     </div>
   );

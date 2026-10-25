@@ -1,6 +1,6 @@
 {
   "name": "@doks/shared",
-  "version": "0.3.0",
+  "version": "1.0.0",
   "description": "Shared schemas, types, and protocol utilities for Doks",
   "license": "Apache-2.0",
   "type": "module",

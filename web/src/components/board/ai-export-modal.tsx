@@ -148,8 +148,9 @@ export function AiExportModal({ boardId, selectedNodeIds = [], onClose }: AiExpo
               </span>
             </div>
             {result && result.estimatedTokens > 100000 && (
-              <div class="text-amber-500 font-medium">
-                ⚠️ Внимание: объём превышает 100 000 токенов. Рекомендуется включить сжатие или сузить область.
+              <div class="text-amber-500 font-medium flex items-center gap-1">
+                <Icon name="alert-triangle" size={14} />
+                <span>Внимание: объём превышает 100 000 токенов. Рекомендуется включить сжатие или сузить область.</span>
               </div>
             )}
           </div>

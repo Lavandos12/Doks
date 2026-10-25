@@ -9,6 +9,9 @@ import {
 } from '../../state/app-state.js';
 import { Icon } from '../../ui/icons.js';
 
+import { showConfirm } from '../../ui/dialogs.js';
+import { showToast } from '../../ui/toast.js';
+
 export function HistoryScreen() {
   const [tab, setTab] = useState<'snapshots' | 'trash'>('snapshots');
   const [snapshots, setSnapshots] = useState<SnapshotMeta[]>([]);
@@ -49,9 +52,13 @@ export function HistoryScreen() {
   };
 
   const handleRestoreSnapshot = async (id: string) => {
-    if (!confirm('Вы уверены, что хотите восстановить состояние из этого снимка?')) {
-      return;
-    }
+    const ok = await showConfirm({
+      title: 'Восстановление снимка',
+      message: 'Вы уверены, что хотите восстановить состояние из этого снимка? Текущие несохраненные правки будут перезаписаны.',
+      confirmText: 'Восстановить',
+      danger: true
+    });
+    if (!ok) return;
     setLoading(true);
     try {
       const res = await fetch('/api/snapshots/restore', {
