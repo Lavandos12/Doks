@@ -2,6 +2,7 @@ import { h } from 'preact';
 import { useState, useRef, useEffect } from 'preact/hooks';
 import { Icon } from '../../ui/icons.js';
 import { activeTabId, openTabs } from '../../state/app-state.js';
+import { t } from '../../i18n/index.js';
 
 interface FileMenuProps {
   onOpenImportWizard: () => void;
@@ -51,16 +52,16 @@ export function FileMenu({ onOpenImportWizard }: FileMenuProps) {
 
   const handleCreateBackup = async () => {
     try {
-      setBackupNotice('Создание снимка...');
+      setBackupNotice(t('menu.snapshot_creating'));
       const res = await fetch('/api/snapshots', { method: 'POST' });
       const data = await res.json();
       if (data.success) {
-        setBackupNotice('Резервная копия создана!');
+        setBackupNotice(t('menu.snapshot_done'));
       } else {
-        setBackupNotice('Ошибка создания копии');
+        setBackupNotice(t('menu.snapshot_error'));
       }
     } catch {
-      setBackupNotice('Ошибка соединения');
+      setBackupNotice(t('menu.snapshot_error'));
     }
     setTimeout(() => {
       setBackupNotice(null);
@@ -73,10 +74,10 @@ export function FileMenu({ onOpenImportWizard }: FileMenuProps) {
       <button
         class={`file-menu-btn ${isOpen ? 'active' : ''}`}
         onClick={() => setIsOpen(!isOpen)}
-        title="Меню файла и экспорта"
+        title={t('menu.file')}
       >
         <Icon name="menu" size={14} />
-        <span>Файл</span>
+        <span>{t('menu.file')}</span>
       </button>
 
       {isOpen && (
@@ -89,7 +90,7 @@ export function FileMenu({ onOpenImportWizard }: FileMenuProps) {
             }}
           >
             <Icon name="upload" size={14} />
-            <span>Импорт файлов...</span>
+            <span>{t('menu.import')}</span>
           </div>
 
           <div class="file-menu-separator" />
@@ -97,31 +98,31 @@ export function FileMenu({ onOpenImportWizard }: FileMenuProps) {
           <div
             class={`file-menu-item ${!isNoteActive ? 'disabled' : ''}`}
             onClick={isNoteActive ? handleExportNote : undefined}
-            title={isNoteActive ? 'Экспортировать текущую заметку в .md' : 'Откройте заметку для экспорта'}
+            title={isNoteActive ? t('menu.export_note') : ''}
           >
             <Icon name="file-text" size={14} />
-            <span>Экспорт заметки (.md)</span>
+            <span>{t('menu.export_note')}</span>
           </div>
 
           <div
             class={`file-menu-item ${!isBoardActive ? 'disabled' : ''}`}
             onClick={isBoardActive ? handleExportBoard : undefined}
-            title={isBoardActive ? 'Экспортировать текущую доску в .canvas' : 'Откройте доску для экспорта'}
+            title={isBoardActive ? t('menu.export_board') : ''}
           >
             <Icon name="layout" size={14} />
-            <span>Экспорт доски (.canvas)</span>
+            <span>{t('menu.export_board')}</span>
           </div>
 
           <div class="file-menu-item" onClick={handleExportVault}>
             <Icon name="download" size={14} />
-            <span>Экспорт хранилища (.zip)</span>
+            <span>{t('menu.export_vault')}</span>
           </div>
 
           <div class="file-menu-separator" />
 
           <div class="file-menu-item" onClick={handleCreateBackup}>
             <Icon name="history" size={14} />
-            <span>{backupNotice || 'Создать резервную копию'}</span>
+            <span>{backupNotice || t('menu.create_snapshot')}</span>
           </div>
         </div>
       )}

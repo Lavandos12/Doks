@@ -20,6 +20,7 @@ import {
   searchQuery,
   isCommandPaletteOpen
 } from '../../state/app-state.js';
+import { t } from '../../i18n/index.js';
 import { Icon } from '../../ui/icons.js';
 
 export function Sidebar() {
@@ -194,7 +195,7 @@ export function Sidebar() {
           <button
             class={`activity-btn ${currentView.value === 'notes' ? 'active' : ''}`}
             onClick={() => (currentView.value = 'notes')}
-            title="Заметки"
+            title={t('sidebar.notes')}
           >
             <Icon name="file-text" size={19} />
           </button>
@@ -202,7 +203,7 @@ export function Sidebar() {
           <button
             class={`activity-btn ${currentView.value === 'board' ? 'active' : ''}`}
             onClick={() => (currentView.value = 'board')}
-            title="Доски (Canvas)"
+            title={t('sidebar.boards')}
           >
             <Icon name="layout" size={19} />
           </button>
@@ -210,7 +211,7 @@ export function Sidebar() {
           <button
             class={`activity-btn ${currentView.value === 'search' ? 'active' : ''}`}
             onClick={() => (currentView.value = currentView.value === 'search' ? 'notes' : 'search')}
-            title="Глобальный поиск (Ctrl+Shift+F)"
+            title={t('search.title')}
           >
             <Icon name="search" size={19} />
           </button>
@@ -218,7 +219,7 @@ export function Sidebar() {
           <button
             class={`activity-btn ${currentView.value === 'network' ? 'active' : ''}`}
             onClick={() => (currentView.value = 'network')}
-            title="Сеть и Участники"
+            title={t('sidebar.network')}
           >
             <Icon name="wifi" size={19} />
           </button>
@@ -226,7 +227,7 @@ export function Sidebar() {
           <button
             class={`activity-btn ${currentView.value === 'history' ? 'active' : ''}`}
             onClick={() => (currentView.value = 'history')}
-            title="История и Снимки"
+            title={t('sidebar.history')}
           >
             <Icon name="history" size={19} />
           </button>
@@ -236,7 +237,7 @@ export function Sidebar() {
           <button
             class="activity-btn"
             onClick={() => setTheme(theme.value === 'dark' ? 'light' : 'dark')}
-            title={`Переключить на ${theme.value === 'dark' ? 'светлую' : 'тёмную'} тему`}
+            title={`Theme: ${theme.value === 'dark' ? 'Light' : 'Dark'}`}
           >
             <Icon name={theme.value === 'dark' ? 'sun' : 'moon'} size={19} />
           </button>
@@ -248,11 +249,11 @@ export function Sidebar() {
         {currentView.value === 'notes' && (
           <div class="explorer-section">
             <div class="explorer-header">
-              <span class="explorer-title">Заметки</span>
+              <span class="explorer-title">{t('sidebar.notes')}</span>
               <div class="explorer-header-actions">
                 <button
                   class="header-icon-btn"
-                  title="Новая папка"
+                  title={t('sidebar.new_folder')}
                   onClick={() => {
                     setTargetParentFolderId(null);
                     setShowFolderModal(true);
@@ -262,7 +263,7 @@ export function Sidebar() {
                 </button>
                 <button
                   class="header-icon-btn"
-                  title="Создать заметку"
+                  title={t('sidebar.new_note')}
                   onClick={() => createNote()}
                 >
                   <Icon name="plus" size={16} />
@@ -275,7 +276,7 @@ export function Sidebar() {
               <input
                 type="text"
                 class="explorer-search-input"
-                placeholder="Фильтр по названию..."
+                placeholder={t('sidebar.search_placeholder')}
                 value={searchQuery.value}
                 onInput={(e) => (searchQuery.value = (e.target as HTMLInputElement).value)}
               />
@@ -292,9 +293,9 @@ export function Sidebar() {
 
               {displayedNotes.length === 0 && activeFolders.length === 0 && (
                 <div class="explorer-empty">
-                  <p>Нет заметок</p>
+                  <p>{t('sidebar.no_notes')}</p>
                   <button class="btn-secondary-sm" onClick={() => createNote()}>
-                    Создать первую
+                    {t('sidebar.create_note')}
                   </button>
                 </div>
               )}
@@ -305,10 +306,10 @@ export function Sidebar() {
         {currentView.value === 'board' && (
           <div class="explorer-section">
             <div class="explorer-header">
-              <span class="explorer-title">Доски</span>
+              <span class="explorer-title">{t('sidebar.boards')}</span>
               <button
                 class="header-icon-btn"
-                title="Новая доска"
+                title={t('sidebar.new_board')}
                 onClick={() => createBoard()}
               >
                 <Icon name="plus" size={16} />
@@ -318,9 +319,9 @@ export function Sidebar() {
             <div class="explorer-tree-content">
               {activeBoards.length === 0 ? (
                 <div class="explorer-empty">
-                  <p>Нет досок</p>
+                  <p>{t('sidebar.no_boards')}</p>
                   <button class="btn-secondary-sm" onClick={() => createBoard()}>
-                    Создать доску
+                    {t('sidebar.create_board')}
                   </button>
                 </div>
               ) : (
@@ -336,7 +337,7 @@ export function Sidebar() {
                       <span class="tree-board-title">{b.title}</span>
                       <button
                         class="tree-action-btn danger"
-                        title="Удалить доску"
+                        title={t('sidebar.delete_board')}
                         onClick={(e) => {
                           e.stopPropagation();
                           deleteBoard(b.id);
@@ -356,13 +357,13 @@ export function Sidebar() {
           <div class="explorer-section compact">
             <div class="explorer-header">
               <span class="explorer-title">
-                {currentView.value === 'network' ? 'Сеть' : 'История'}
+                {currentView.value === 'network' ? t('sidebar.network') : t('sidebar.history')}
               </span>
             </div>
             <div class="explorer-hint">
               {currentView.value === 'network'
-                ? 'Настройка подключения и участники команды'
-                : 'Снимки состояний и восстановление'}
+                ? t('network.title')
+                : t('history.title')}
             </div>
           </div>
         )}
@@ -372,7 +373,7 @@ export function Sidebar() {
         <div class="modal-backdrop" onClick={() => setShowFolderModal(false)}>
           <div class="modal-card" onClick={(e) => e.stopPropagation()}>
             <div class="modal-header">
-              <h3>Создать папку</h3>
+              <h3>{t('sidebar.modal_folder_title')}</h3>
               <button class="modal-close-btn" onClick={() => setShowFolderModal(false)}>
                 <Icon name="x" size={16} />
               </button>
@@ -380,7 +381,7 @@ export function Sidebar() {
             <input
               type="text"
               class="modal-input"
-              placeholder="Название папки"
+              placeholder={t('sidebar.modal_folder_placeholder')}
               value={newFolderName}
               onInput={(e) => setNewFolderName((e.target as HTMLInputElement).value)}
               onKeyDown={(e) => e.key === 'Enter' && handleCreateFolder()}
@@ -388,10 +389,10 @@ export function Sidebar() {
             />
             <div class="modal-buttons">
               <button class="btn-cancel" onClick={() => setShowFolderModal(false)}>
-                Отмена
+                {t('sidebar.cancel')}
               </button>
               <button class="btn-primary" onClick={handleCreateFolder}>
-                Создать
+                {t('sidebar.create')}
               </button>
             </div>
           </div>

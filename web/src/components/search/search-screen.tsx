@@ -3,6 +3,7 @@ import { useState, useEffect, useRef } from 'preact/hooks';
 import { searchQuery, openTab, searchIndex } from '../../state/app-state.js';
 import type { SearchResult } from '../../search/indexer.js';
 import { Icon } from '../../ui/icons.js';
+import { t } from '../../i18n/index.js';
 
 export function SearchScreen() {
   const [query, setQuery] = useState(searchQuery.value);
@@ -34,7 +35,7 @@ export function SearchScreen() {
             ref={inputRef}
             type="text"
             class="search-main-input"
-            placeholder="Поиск по заметкам, доскам и стикерам (Ctrl+Shift+F)..."
+            placeholder={t('search.placeholder')}
             value={query}
             onInput={(e) => {
               const val = (e.target as HTMLInputElement).value;
@@ -60,24 +61,24 @@ export function SearchScreen() {
         {query.trim() === '' ? (
           <div class="search-empty-state">
             <Icon name="search" size={40} class="empty-icon" />
-            <h3>Поиск по всему хранилищу</h3>
+            <h3>{t('search.title')}</h3>
             <p>
-              Введите запрос для поиска по названиям, содержимому заметок, стикерам досок и тегам.
+              {t('search.placeholder')}
             </p>
             <div class="search-tips">
-              <span>Поддерживается русская нормализация (ё = е), префиксный и нечёткий поиск.</span>
+              <span>{t('search.placeholder')}</span>
             </div>
           </div>
         ) : results.length === 0 ? (
           <div class="search-empty-state">
             <Icon name="file" size={40} class="empty-icon" />
-            <h3>Ничего не найдено</h3>
-            <p>По запросу «{query}» совпадений нет.</p>
+            <h3>{t('search.no_results')}</h3>
+            <p>«{query}»</p>
           </div>
         ) : (
           <div class="search-results-list">
             <div class="search-results-count">
-              Найдено результатов: {results.length}
+              {t('search.found_count', { count: results.length })}
             </div>
 
             {results.map((res) => (
@@ -91,7 +92,7 @@ export function SearchScreen() {
                     <Icon name={res.type === 'board' ? 'layout' : 'file-text'} size={16} />
                     <span class="search-result-title">{res.title}</span>
                   </div>
-                  <span class="search-result-badge">{res.type === 'board' ? 'Доска' : 'Заметка'}</span>
+                  <span class="search-result-badge">{res.type === 'board' ? 'Board' : 'Note'}</span>
                 </div>
 
                 {res.snippet && (

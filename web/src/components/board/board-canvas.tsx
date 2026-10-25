@@ -25,6 +25,7 @@ import { Icon, type IconName } from '../../ui/icons.js';
 import { AiExportModal } from './ai-export-modal.js';
 import { NotePickerModal } from './note-picker-modal.js';
 import { BoardMinimap } from './board-minimap.js';
+import { t } from '../../i18n/index.js';
 
 export const CANVAS_COLORS: Record<string, string> = {
   '1': '#e06c75', // Red
@@ -877,14 +878,14 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
           <button
             class={`tb-btn ${activeTool === 'select' ? 'active' : ''}`}
             onClick={() => setActiveTool('select')}
-            title="Выбор (V)"
+            title={t('board.select')}
           >
             <Icon name="move" size={17} />
           </button>
           <button
             class={`tb-btn ${activeTool === 'hand' ? 'active' : ''}`}
             onClick={() => setActiveTool('hand')}
-            title="Рука (H / Пробел)"
+            title={t('board.hand')}
           >
             <Icon name="hand" size={17} />
           </button>
@@ -896,14 +897,14 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
           <button
             class={`tb-btn ${activeTool === 'sticky' ? 'active' : ''}`}
             onClick={() => setActiveTool('sticky')}
-            title="Стикер (S)"
+            title={t('board.sticky')}
           >
             <Icon name="sticky-note" size={17} />
           </button>
           <button
             class={`tb-btn ${activeTool === 'text' ? 'active' : ''}`}
             onClick={() => setActiveTool('text')}
-            title="Текст (T)"
+            title={t('board.text')}
           >
             <Icon name="type" size={17} />
           </button>
@@ -915,35 +916,35 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
               setPickerPos({ x: centerX - 150, y: centerY - 120 });
               setIsNotePickerOpen(true);
             }}
-            title="Карточка заметки (N)"
+            title={t('board.note_card')}
           >
             <Icon name="file-text" size={17} />
           </button>
           <button
             class={`tb-btn ${activeTool === 'frame' ? 'active' : ''}`}
             onClick={() => setActiveTool('frame')}
-            title="Рамка / Группа (F)"
+            title={t('board.frame')}
           >
             <Icon name="frame" size={17} />
           </button>
           <button
             class={`tb-btn ${activeTool === 'arrow' ? 'active' : ''}`}
             onClick={() => setActiveTool('arrow')}
-            title="Связь со стрелкой (C)"
+            title={t('board.connector')}
           >
             <Icon name="arrow-right" size={17} />
           </button>
           <button
             class={`tb-btn ${activeTool === 'shape' ? 'active' : ''}`}
             onClick={() => setActiveTool('shape')}
-            title="Фигура (R)"
+            title={t('board.shape')}
           >
             <Icon name="square" size={17} />
           </button>
           <button
             class="tb-btn"
             onClick={() => fileAttachmentInputRef.current?.click()}
-            title="Прикрепить файл или изображение"
+            title={t('board.attach')}
           >
             <Icon name="paperclip" size={17} />
           </button>
@@ -996,7 +997,7 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
         <button
           class="tb-btn text-[var(--accent)]"
           onClick={() => setShowAiModal(true)}
-          title="Экспорт для ИИ (Ctrl+Shift+E)"
+          title={t('board.ai_export')}
           data-testid="ai-export-btn"
         >
           <Icon name="sparkles" size={17} />
@@ -1008,7 +1009,7 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
         <button
           class="zoom-btn"
           onClick={() => setViewport((v) => ({ ...v, zoom: Math.min(v.zoom * 1.2, 3) }))}
-          title="Приблизить"
+          title={t('board.zoom_in')}
         >
           <Icon name="zoom-in" size={15} />
         </button>
@@ -1016,14 +1017,14 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
         <button
           class="zoom-btn"
           onClick={() => setViewport((v) => ({ ...v, zoom: Math.max(v.zoom * 0.8, 0.15) }))}
-          title="Отдалить"
+          title={t('board.zoom_out')}
         >
           <Icon name="zoom-out" size={15} />
         </button>
         <button
           class="zoom-btn"
           onClick={() => setViewport({ x: 80, y: 80, zoom: 1 })}
-          title="Сброс масштаба 100%"
+          title={t('board.reset_zoom')}
         >
           1:1
         </button>

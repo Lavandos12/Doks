@@ -2,6 +2,7 @@ import { h, VNode } from 'preact';
 import { useState, useEffect } from 'preact/hooks';
 import { Icon } from '../../ui/icons.js';
 import type { AiExportResult } from '@doks/shared';
+import { t } from '../../i18n/index.js';
 
 interface AiExportModalProps {
   boardId: string;
@@ -73,11 +74,11 @@ export function AiExportModal({ boardId, selectedNodeIds = [], onClose }: AiExpo
         <div class="flex items-center justify-between px-6 py-4 border-b border-[var(--border-subtle)]">
           <div class="flex items-center gap-2">
             <Icon name="sparkles" size={20} class="text-[var(--accent)]" />
-            <h2 class="text-base font-semibold text-[var(--text-primary)]">Экспорт доски для ИИ (doks-ai/1)</h2>
+            <h2 class="text-base font-semibold text-[var(--text-primary)]">{t('ai.modal_title')}</h2>
           </div>
           <button
             onClick={onClose}
-            aria-label="Закрыть"
+            aria-label={t('ai.close')}
             data-testid="close-ai-modal"
             class="text-[var(--text-secondary)] hover:text-[var(--text-primary)] p-1 rounded-md"
           >
@@ -177,7 +178,7 @@ export function AiExportModal({ boardId, selectedNodeIds = [], onClose }: AiExpo
               class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[var(--border-subtle)] text-xs font-medium text-[var(--text-primary)] hover:bg-[var(--bg-primary)] disabled:opacity-50"
             >
               <Icon name={copied ? 'check' : 'share'} size={14} />
-              {copied ? 'Скопировано!' : 'Копировать'}
+              {copied ? t('ai.copied') : t('ai.copy')}
             </button>
             <button
               onClick={handleDownload}
