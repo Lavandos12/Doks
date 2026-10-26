@@ -1130,13 +1130,10 @@ export class AgentHttpServer {
   }
 
   public async start(): Promise<void> {
-    const hostToBind =
-      this.config.bindAddress && this.config.bindAddress !== 'auto'
-        ? this.config.bindAddress
-        : '127.0.0.1';
+    const hostToBind = this.config.bindAddress === '0.0.0.0' ? '0.0.0.0' : '127.0.0.1';
     const freePort = await findAvailablePort(
       this.config.webPort,
-      hostToBind === '0.0.0.0' ? '127.0.0.1' : hostToBind
+      '127.0.0.1'
     );
     if (freePort !== this.config.webPort) {
       console.warn(`[HttpServer] Port ${this.config.webPort} is busy, auto-switching to free port ${freePort}`);
