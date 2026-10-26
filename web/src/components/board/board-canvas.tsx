@@ -31,7 +31,8 @@ import {
   isSplitView,
   workspaceMode,
   setWorkspaceMode,
-  isCommandPaletteOpen
+  isCommandPaletteOpen,
+  theme
 } from '../../state/app-state.js';
 import { NoteEditor } from '../notes/editor.js';
 import { NetworkPopover } from '../layout/network-popover.js';
@@ -261,13 +262,15 @@ function renderShapeSvg(node: BoardNodeData, colorHex: string) {
   );
 }
 
-export function BoardCanvas({ boardId, gridType = 'dots', snapToGrid = false }: BoardCanvasProps) {
+export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }: BoardCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Viewport state
   const [viewport, setViewport] = useState({ x: 80, y: 80, zoom: 1 });
   const [activeTool, setActiveTool] = useState<CanvasTool>('select');
   const [isSpacePressed, setIsSpacePressed] = useState(false);
+
+  const isDarkTheme = theme.value !== 'light';
 
   // Data from Yjs
   const [nodesList, setNodesList] = useState<BoardNodeData[]>([]);
@@ -3480,6 +3483,85 @@ export function BoardCanvas({ boardId, gridType = 'dots', snapToGrid = false }: 
             <Icon name="trash" size={15} />
           </button>
         </div>
+      )}
+
+      {/* Dynamic Infinite Canvas Grid Layer (Pans & Zooms 1:1 with Viewport) */}
+      {gridType !== 'none' && (
+        <svg
+          class="canvas-grid-svg-layer"
+          style={{
+            position: 'absolute',
+            inset: 0,
+            width: '100%',
+            height: '100%',
+            pointerEvents: 'none',
+            zIndex: 0
+          }}
+          aria-hidden="true"
+        >
+          <defs>
+            {/* Minor Checkered Grid (32px cells) */}
+            <pattern
+              id={`grid-minor-${boardId}`}
+              width="32"
+              height="32"
+              patternUnits="userSpaceOnUse"
+              patternTransform={`translate(${viewport.x}, ${viewport.y}) scale(${viewport.zoom})`}
+            >
+              <path
+                d="M 32 0 L 0 0 0 32"
+                fill="none"
+                stroke={isDarkTheme ? 'rgba(255, 255, 255, 0.06)' : 'rgba(15, 23, 42, 0.06)'}
+                strokeWidth="1"
+              />
+            </pattern>
+
+            {/* Major Checkered Grid (128px = 4 cells) */}
+            <pattern
+              id={`grid-major-${boardId}`}
+              width="128"
+              height="128"
+              patternUnits="userSpaceOnUse"
+              patternTransform={`translate(${viewport.x}, ${viewport.y}) scale(${viewport.zoom})`}
+            >
+              <path
+                d="M 128 0 L 0 0 0 128"
+                fill="none"
+                stroke={isDarkTheme ? 'rgba(255, 255, 255, 0.12)' : 'rgba(15, 23, 42, 0.12)'}
+                strokeWidth="1.2"
+              />
+            </pattern>
+
+            {/* Dots Grid (32px) */}
+            <pattern
+              id={`grid-dots-${boardId}`}
+              width="32"
+              height="32"
+              patternUnits="userSpaceOnUse"
+              patternTransform={`translate(${viewport.x}, ${viewport.y}) scale(${viewport.zoom})`}
+            >
+              <circle
+                cx="1"
+                cy="1"
+                r="1.2"
+                fill={isDarkTheme ? 'rgba(255, 255, 255, 0.16)' : 'rgba(15, 23, 42, 0.22)'}
+              />
+            </pattern>
+          </defs>
+
+          {gridType === 'lines' && (
+            <>
+              {viewport.zoom >= 0.35 && (
+                <rect width="100%" height="100%" fill={`url(#grid-minor-${boardId})`} />
+              )}
+              <rect width="100%" height="100%" fill={`url(#grid-major-${boardId})`} />
+            </>
+          )}
+
+          {gridType === 'dots' && (
+            <rect width="100%" height="100%" fill={`url(#grid-dots-${boardId})`} />
+          )}
+        </svg>
       )}
 
       {/* Infinite Scaled Layer */}

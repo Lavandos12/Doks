@@ -1505,19 +1505,21 @@ input:focus, select:focus, textarea:focus {
   flex: 1;
   position: relative;
   overflow: hidden;
-  background-color: var(--bg-primary);
-  background-image: radial-gradient(var(--border-color) 1.2px, transparent 1.2px);
-  background-size: 24px 24px;
+  background-color: #090a0f !important;
   user-select: none;
 }
 
-.board-container.grid-lines {
-  background-image: linear-gradient(rgba(255, 255, 255, 0.06) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, 0.06) 1px, transparent 1px) !important;
-  background-size: 24px 24px !important;
+.theme-light .board-container {
+  background-color: #f8fafc !important;
 }
 
-.board-container.grid-none {
-  background-image: none !important;
+.canvas-grid-svg-layer {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 0;
 }
 
 .board-container.cursor-grab {
@@ -3144,9 +3146,11 @@ input:focus, select:focus, textarea:focus {
 }
 
 .board-container {
-  background-color: #090a0c !important;
-  background-image: radial-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px) !important;
-  background-size: 24px 24px !important;
+  background-color: #090a0f !important;
+}
+
+.theme-light .board-container {
+  background-color: #f8fafc !important;
 }
 
 /* 8-Point Resize Handles */

@@ -29,8 +29,18 @@ export function App() {
   const [isNetworkOpen, setIsNetworkOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isNotesOpen, setIsNotesOpen] = useState(false);
-  const [gridType, setGridType] = useState<'dots' | 'lines' | 'none'>('dots');
+  const [gridType, setGridType] = useState<'dots' | 'lines' | 'none'>(() => {
+    const saved = typeof localStorage !== 'undefined' ? localStorage.getItem('doks_grid_type') : null;
+    return (saved === 'dots' || saved === 'lines' || saved === 'none') ? (saved as any) : 'lines';
+  });
   const [snapToGrid, setSnapToGrid] = useState(false);
+
+  const handleSetGridType = (nextType: 'dots' | 'lines' | 'none') => {
+    setGridType(nextType);
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('doks_grid_type', nextType);
+    }
+  };
 
   const activeTab = openTabs.value.find((t) => t.id === activeTabId.value);
   const splitTab = isSplitView.value ? openTabs.value.find((t) => t.id === splitTabId.value) : null;
@@ -127,7 +137,7 @@ export function App() {
           isOpen={isSettingsOpen}
           onClose={() => setIsSettingsOpen(false)}
           gridType={gridType}
-          onSetGridType={setGridType}
+          onSetGridType={handleSetGridType}
           snapToGrid={snapToGrid}
           onSetSnapToGrid={setSnapToGrid}
           onExportJson={() => {
