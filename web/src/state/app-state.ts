@@ -17,7 +17,9 @@ import {
   getBoardMaps,
   DOC_INDEX
 } from '@doks/shared';
-import { yjsClient } from './yjs-client.js';
+export { getScopedNoteDocName } from '@doks/shared';
+import { yjsClient, agentStatus, connectionState } from './yjs-client.js';
+export { yjsClient, agentStatus, connectionState } from './yjs-client.js';
 import { NotesSearchIndex } from '../search/indexer.js';
 import { showToast } from '../ui/toast.js';
 
@@ -176,6 +178,14 @@ function syncIndexSignals() {
     boardList.push({ ...val, scope: currentScope.value });
   });
   boards.value = boardList;
+
+  // Auto-open first board if no tabs open and boards exist
+  if (openTabs.value.length === 0 && !activeTabId.value) {
+    const firstBoard = boardList.find((b) => !b.deleted);
+    if (firstBoard) {
+      openTab('board', firstBoard.id, firstBoard.title);
+    }
+  }
 
   const folderList: FolderMeta[] = [];
   activeMaps.folders.forEach((val) => {

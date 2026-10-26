@@ -45,7 +45,20 @@ export interface FolderMeta {
   scope?: WorkspaceScope;
 }
 
-export type BoardNodeType = 'sticky' | 'text' | 'note' | 'frame' | 'shape' | 'file' | 'image' | 'link' | 'drawing';
+export type BoardNodeType =
+  | 'sticky'
+  | 'text'
+  | 'note'
+  | 'frame'
+  | 'shape'
+  | 'file'
+  | 'image'
+  | 'link'
+  | 'drawing'
+  | 'checklist'
+  | 'table'
+  | 'kanban'
+  | 'code';
 
 export interface AttachmentMeta {
   hash: string;
@@ -79,12 +92,19 @@ export interface BoardNodeData {
   locked?: boolean;
   fontSize?: number;
   hasCheckbox?: boolean;
-  shapeVariant?: 'rectangle' | 'rounded' | 'diamond' | 'pill' | 'circle';
+  shapeVariant?: 'rectangle' | 'rounded' | 'diamond' | 'pill' | 'circle' | 'triangle' | 'parallelogram' | 'cylinder' | 'hexagon';
   svgPath?: string;
   strokeWidth?: number;
   opacity?: number;
   extractedText?: string;
   showPreview?: boolean;
+  codeLanguage?: string;
+  description?: string;
+  imageUrl?: string;
+  reactions?: {
+    thumbsUp?: number;
+    [key: string]: any;
+  };
   deleted: boolean;
   deletedAt?: number;
   scope?: WorkspaceScope;
@@ -102,7 +122,7 @@ export interface BoardEdgeData {
   label?: string;
   color?: string;
   direction?: 'forward' | 'both' | 'none';
-  style?: 'solid' | 'dashed' | 'dotted';
+  style?: 'solid' | 'dashed' | 'dotted' | 'animated';
   curveType?: 'bezier' | 'orthogonal' | 'straight';
   thickness?: number;
   deleted: boolean;

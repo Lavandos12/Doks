@@ -145,6 +145,45 @@ export function detectRadminIp(verifyActiveProcess = true): string | null {
   return radmin.address;
 }
 
+export interface NetworkOverview {
+  p2pEnabled: boolean;
+  detectedRadminIp: string | null;
+  lanIp: string | null;
+  effectiveIp: string;
+  port: number;
+  peerId: string;
+  inviteUri: string;
+  interfaces: NetworkInterfaceInfo[];
+}
+
+export function detectNetworkOverview(params: {
+  p2pEnabled: boolean;
+  teamKey: string;
+  port: number;
+  peerId: string;
+}): NetworkOverview {
+  const allIfaces = listOverlayInterfaces();
+  const radmin = allIfaces.find((i) => i.kind === 'radmin')?.address || null;
+  const lan = allIfaces.find((i) => i.kind === 'lan')?.address || null;
+  const tailscale = allIfaces.find((i) => i.kind === 'tailscale')?.address || null;
+
+  const candidateIp = radmin || lan || tailscale || '127.0.0.1';
+  const effectiveIp = params.p2pEnabled ? candidateIp : '127.0.0.1';
+  const inviteHost = candidateIp;
+  const inviteUri = `doks://${inviteHost}:${params.port}#${params.teamKey}`;
+
+  return {
+    p2pEnabled: params.p2pEnabled,
+    detectedRadminIp: radmin,
+    lanIp: lan,
+    effectiveIp,
+    port: params.port,
+    peerId: params.peerId,
+    inviteUri,
+    interfaces: allIfaces,
+  };
+}
+
 export function detectPreferredMeshIp(meshEnabled = true): { ip: string | null; kind: string; all: NetworkInterfaceInfo[] } {
   if (!meshEnabled) {
     return { ip: '127.0.0.1', kind: 'local-only', all: [] };

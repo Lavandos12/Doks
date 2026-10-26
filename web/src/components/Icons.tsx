@@ -98,7 +98,12 @@ export type IconName =
   | 'rotate-cw'
   | 'pen'
   | 'brush'
-  | 'eraser';
+  | 'eraser'
+  | 'thumbs-up'
+  | 'table'
+  | 'kanban'
+  | 'code'
+  | 'checklist';
 
 export function Icon({
   name,
@@ -667,6 +672,41 @@ export function Icon({
           <>
             <path d="M20 20H7L3 16C2 15 2 13 3 12L13 2C14 1 16 1 17 2L21 6C22 7 22 9 21 10L14 17" />
             <line x1="17" y1="17" x2="11" y2="11" />
+          </>
+        );
+      case 'thumbs-up':
+        return (
+          <path d="M7 10v12m0-12H4a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h3m0-12 5-7a2.5 2.5 0 0 1 3.5 1.5 2 2 0 0 1 .5 1.5v3h5a2 2 0 0 1 2 2v2a2 2 0 0 1-.5 1.5l-3 7A2 2 0 0 1 18 22H7" />
+        );
+      case 'table':
+        return (
+          <>
+            <rect width="18" height="18" x="3" y="3" rx="2" />
+            <path d="M3 9h18M3 15h18M9 3v18M15 3v18" />
+          </>
+        );
+      case 'kanban':
+        return (
+          <>
+            <rect width="5" height="14" x="3" y="5" rx="1" />
+            <rect width="5" height="10" x="10" y="5" rx="1" />
+            <rect width="5" height="15" x="17" y="5" rx="1" />
+          </>
+        );
+      case 'code':
+        return (
+          <>
+            <polyline points="16 18 22 12 16 6" />
+            <polyline points="8 6 2 12 8 18" />
+          </>
+        );
+      case 'checklist':
+        return (
+          <>
+            <path d="M11 6h9M11 12h9M11 18h9" />
+            <polyline points="4 6 5 7 8 4" />
+            <polyline points="4 12 5 13 8 10" />
+            <polyline points="4 18 5 19 8 16" />
           </>
         );
       default:

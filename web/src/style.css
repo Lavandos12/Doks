@@ -498,7 +498,7 @@ input:focus, select:focus, textarea:focus {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 4px;
+  padding: 0 340px 0 4px;
   flex-shrink: 0;
   user-select: none;
 }
@@ -1511,6 +1511,15 @@ input:focus, select:focus, textarea:focus {
   user-select: none;
 }
 
+.board-container.grid-lines {
+  background-image: linear-gradient(rgba(255, 255, 255, 0.06) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, 0.06) 1px, transparent 1px) !important;
+  background-size: 24px 24px !important;
+}
+
+.board-container.grid-none {
+  background-image: none !important;
+}
+
 .board-container.cursor-grab {
   cursor: grab;
 }
@@ -1738,6 +1747,47 @@ input:focus, select:focus, textarea:focus {
 
 .board-node-box.type-text.selected {
   border-color: var(--border-color) !important;
+}
+
+.board-node-box.type-drawing {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+}
+
+.board-node-box.type-shape {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+}
+
+.board-node-box.type-shape .shape-inline-textarea {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: calc(100% - 24px);
+  height: calc(100% - 24px);
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  text-align: center;
+  resize: none;
+  color: var(--text-normal);
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1.4;
+  outline: none;
+  z-index: 2;
+  overflow: auto;
+}
+
+.board-node-box.type-sticky {
+  border-radius: 6px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.28);
+  font-weight: 500;
 }
 
 /* 4 Magnetic Connection Ports */
@@ -3968,21 +4018,12 @@ input:focus, select:focus, textarea:focus {
   margin: 0 4px;
 }
 
-/* 6. Flowchart Shape Variants */
-.shape-variant-rounded {
-  border-radius: 16px !important;
-}
-
-.shape-variant-diamond {
-  clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%);
-}
-
-.shape-variant-pill {
-  border-radius: 9999px !important;
-}
-
+/* 6. Flowchart Shape Variants (driven by vector SVG) */
+.shape-variant-rounded,
+.shape-variant-diamond,
+.shape-variant-pill,
 .shape-variant-circle {
-  border-radius: 50% !important;
+  background: transparent !important;
 }
 
 /* 7. Obsidian [[Wikilinks]] Popover & Backlinks Panel */
@@ -4374,6 +4415,328 @@ button.doks-color-dot.active {
   margin-top: 18px !important;
   padding-top: 14px !important;
   border-top: 1px solid rgba(255, 255, 255, 0.08) !important;
+}
+
+/* ==========================================================================
+   GLOBAL MODAL FORM STYLING (Fix squished inputs & truncated labels)
+   ========================================================================== */
+.modal-card label,
+.modal-dialog label,
+.doks-modal-dialog label,
+.doks-form-group,
+.form-group {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: stretch !important;
+  gap: 6px !important;
+  width: 100% !important;
+  margin-bottom: 14px !important;
+}
+
+.modal-card input[type="text"],
+.modal-card input:not([type="checkbox"]):not([type="radio"]),
+.modal-card select,
+.modal-card textarea,
+.modal-dialog input[type="text"],
+.modal-dialog input:not([type="checkbox"]):not([type="radio"]),
+.modal-dialog select,
+.modal-dialog textarea,
+.doks-modal-dialog input[type="text"],
+.doks-modal-dialog input:not([type="checkbox"]):not([type="radio"]),
+.doks-modal-dialog select,
+.doks-modal-dialog textarea {
+  width: 100% !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+  padding: 10px 12px !important;
+  border-radius: 8px !important;
+  background: #0d0f16 !important;
+  border: 1px solid rgba(255, 255, 255, 0.14) !important;
+  color: #f3f4f6 !important;
+  font-size: 13px !important;
+}
+
+.modal-card input:focus,
+.modal-card select:focus,
+.modal-card textarea:focus,
+.doks-modal-dialog input:focus,
+.doks-modal-dialog select:focus,
+.doks-modal-dialog textarea:focus {
+  outline: none !important;
+  border-color: #6366f1 !important;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.25) !important;
+}
+
+/* ==========================================================================
+   SLIDE-OVER NOTES DRAWER
+   ========================================================================== */
+.notes-slide-drawer {
+  position: fixed;
+  top: 66px;
+  right: 16px;
+  bottom: 16px;
+  width: 460px;
+  max-width: calc(100vw - 32px);
+  z-index: 280;
+  display: flex;
+  flex-direction: column;
+  background: rgba(18, 20, 28, 0.94);
+  backdrop-filter: blur(28px);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 16px;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.75);
+  overflow: hidden;
+  animation: slideInRight 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes slideInRight {
+  from {
+    transform: translateX(30px);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.notes-drawer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  gap: 10px;
+}
+
+.notes-drawer-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  color: #f1f5f9;
+}
+
+.notes-drawer-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.notes-drawer-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  overflow: hidden;
+  padding: 14px 18px;
+  gap: 12px;
+}
+
+.notes-drawer-search-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  padding: 6px 10px;
+}
+
+.notes-drawer-search-input {
+  background: transparent !important;
+  border: none !important;
+  padding: 0 !important;
+  font-size: 13px !important;
+  color: #e2e8f0 !important;
+  width: 100% !important;
+}
+
+.notes-drawer-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 140px;
+  overflow-y: auto;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  padding-bottom: 8px;
+}
+
+.notes-drawer-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 13px;
+  color: #cbd5e1;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.notes-drawer-item:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: #ffffff;
+}
+
+.notes-drawer-item.active {
+  background: rgba(99, 102, 241, 0.2);
+  color: #818cf8;
+  font-weight: 500;
+}
+
+.notes-drawer-editor-area {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  overflow: hidden;
+  gap: 8px;
+}
+
+.notes-drawer-note-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #ffffff;
+  background: transparent !important;
+  border: none !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+  padding: 4px 0 !important;
+  border-radius: 0 !important;
+}
+
+.notes-drawer-editor-body {
+  flex: 1;
+  overflow-y: auto;
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 8px;
+  padding: 10px;
+  color: #e2e8f0;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.notes-drawer-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 18px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(0, 0, 0, 0.15);
+}
+
+.btn-drop-to-canvas {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: 8px;
+  background: #4f46e5;
+  color: #ffffff;
+  border: none;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.btn-drop-to-canvas:hover {
+  background: #4338ca;
+}
+
+/* ==========================================================================
+   SETTINGS MODAL
+   ========================================================================== */
+.settings-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 400;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.settings-modal-card {
+  width: 100%;
+  max-width: 520px;
+  max-height: 90vh;
+  overflow-y: auto;
+  background: rgba(18, 20, 28, 0.96);
+  backdrop-filter: blur(28px);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 16px;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.75);
+  display: flex;
+  flex-direction: column;
+}
+
+.settings-tabs-row {
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 0 16px;
+  gap: 4px;
+}
+
+.settings-tab-btn {
+  padding: 10px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #94a3b8;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.15s ease;
+}
+
+.settings-tab-btn:hover {
+  color: #f1f5f9;
+}
+
+.settings-tab-btn.active {
+  color: #818cf8;
+  border-bottom-color: #6366f1;
+}
+
+.settings-section-card {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+  padding: 14px;
+  margin-bottom: 12px;
+}
+
+.settings-color-palette {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+}
+
+.settings-color-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: transform 0.1s ease, border-color 0.15s ease;
+}
+
+.settings-color-btn:hover {
+  transform: scale(1.15);
+}
+
+.settings-color-btn.selected {
+  border-color: #ffffff;
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.6);
 }
 
 /* ==========================================================================
@@ -5319,7 +5682,7 @@ button.doks-color-dot.active {
   position: fixed;
   top: 14px;
   right: 16px;
-  z-index: 100;
+  z-index: 300;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -5464,6 +5827,457 @@ button.doks-color-dot.active {
   color: #94a3b8;
   gap: 12px;
 }
+
+/* ==========================================================================
+   MIRO 10-NODE EXPANSION & CANVAS ENGINE STYLES
+   ========================================================================== */
+
+/* Marquee Selection Box */
+.canvas-marquee-box {
+  position: absolute;
+  border: 1.5px solid #6366f1;
+  background: rgba(99, 102, 241, 0.12);
+  border-radius: 4px;
+  pointer-events: none;
+  z-index: 999;
+}
+
+/* Smart Alignment Guide Lines */
+.smart-alignment-guide {
+  stroke: #818cf8;
+  stroke-width: 1.5;
+  stroke-dasharray: 4 4;
+  pointer-events: none;
+}
+
+/* Drawing Click-through Fix */
+.board-node-box.type-drawing,
+.canvas-node.canvas-node-drawing {
+  pointer-events: none !important;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+.canvas-node-drawing svg {
+  pointer-events: none !important;
+}
+
+.canvas-node-drawing path {
+  pointer-events: stroke !important;
+  cursor: pointer;
+}
+
+/* Reaction Pill on Sticky Notes */
+.node-reaction-pill {
+  position: absolute;
+  bottom: 8px;
+  left: 8px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.25);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  user-select: none;
+  transition: transform 0.12s ease, background 0.15s ease;
+  z-index: 10;
+}
+
+.node-reaction-pill:hover {
+  transform: scale(1.1);
+  background: rgba(0, 0, 0, 0.45);
+}
+
+/* Interactive Checklist Card */
+.node-checklist-card {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  padding: 12px;
+  box-sizing: border-box;
+  gap: 8px;
+  overflow: hidden;
+}
+
+.checklist-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.checklist-title-input {
+  background: transparent !important;
+  border: none !important;
+  color: #ffffff !important;
+  font-size: 14px !important;
+  font-weight: 600 !important;
+  padding: 2px 0 !important;
+  width: 100% !important;
+}
+
+.checklist-progress-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.checklist-progress-bar {
+  flex: 1;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.checklist-progress-fill {
+  height: 100%;
+  background: #10b981;
+  border-radius: 4px;
+  transition: width 0.2s ease;
+}
+
+.checklist-progress-text {
+  font-size: 11px;
+  font-weight: 600;
+  color: #94a3b8;
+  white-space: nowrap;
+}
+
+.checklist-items-scroll {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-right: 2px;
+}
+
+.checklist-item-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.03);
+  transition: background 0.15s ease;
+}
+
+.checklist-item-row:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.checklist-item-row.done {
+  opacity: 0.65;
+}
+
+.checklist-checkbox-btn {
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  border: 1.5px solid #64748b;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  background: transparent;
+  padding: 0;
+  flex-shrink: 0;
+  transition: all 0.15s ease;
+}
+
+.checklist-checkbox-btn.checked {
+  background: #10b981;
+  border-color: #10b981;
+}
+
+.checklist-item-input {
+  flex: 1;
+  background: transparent !important;
+  border: none !important;
+  color: #f1f5f9 !important;
+  font-size: 12.5px !important;
+  padding: 0 !important;
+}
+
+.checklist-item-input.done {
+  text-decoration: line-through;
+  color: #94a3b8 !important;
+}
+
+.checklist-item-del-btn {
+  background: transparent;
+  border: none;
+  color: #64748b;
+  cursor: pointer;
+  padding: 0 4px;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  opacity: 0;
+  transition: opacity 0.15s ease, color 0.15s ease;
+}
+
+.checklist-item-row:hover .checklist-item-del-btn {
+  opacity: 1;
+}
+
+.checklist-item-del-btn:hover {
+  color: #ef4444;
+}
+
+.checklist-add-row-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px dashed rgba(255, 255, 255, 0.15);
+  color: #cbd5e1;
+  font-size: 12px;
+  cursor: pointer;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+
+.checklist-add-row-btn:hover {
+  background: rgba(99, 102, 241, 0.15);
+  border-color: #6366f1;
+  color: #ffffff;
+}
+
+/* Interactive Canvas Table */
+.node-table-wrapper {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  padding: 8px;
+  box-sizing: border-box;
+  overflow: hidden;
+  gap: 6px;
+}
+
+.node-table-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.table-tool-btn {
+  padding: 3px 8px;
+  font-size: 11px;
+  font-weight: 500;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #cbd5e1;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.table-tool-btn:hover {
+  background: rgba(99, 102, 241, 0.2);
+  color: #ffffff;
+}
+
+.node-table-grid {
+  display: grid;
+  flex: 1;
+  gap: 1px;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 6px;
+  overflow: auto;
+}
+
+.node-table-cell {
+  background: #161822;
+  padding: 6px 8px;
+  display: flex;
+  align-items: center;
+}
+
+.node-table-cell input {
+  width: 100% !important;
+  background: transparent !important;
+  border: none !important;
+  color: #f1f5f9 !important;
+  font-size: 12px !important;
+  padding: 0 !important;
+}
+
+/* Kanban Column Container */
+.node-kanban-column {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.kanban-header-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: rgba(255, 255, 255, 0.04);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.kanban-title-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.kanban-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.kanban-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #ffffff;
+}
+
+.kanban-count-badge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #94a3b8;
+}
+
+.kanban-cards-area {
+  flex: 1;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow-y: auto;
+}
+
+.kanban-add-card-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin: 10px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px dashed rgba(255, 255, 255, 0.16);
+  color: #cbd5e1;
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.kanban-add-card-btn:hover {
+  background: rgba(99, 102, 241, 0.18);
+  border-color: #6366f1;
+  color: #ffffff;
+}
+
+/* IDE Code Block Card */
+.node-code-block {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #0f111a;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.code-header-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: #141724;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.code-lang-selector {
+  background: transparent !important;
+  border: none !important;
+  color: #818cf8 !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  cursor: pointer;
+  padding: 2px 4px !important;
+}
+
+.code-copy-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #cbd5e1;
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.code-copy-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+}
+
+.code-textarea-editor {
+  flex: 1;
+  width: 100% !important;
+  background: #0d0f17 !important;
+  border: none !important;
+  padding: 12px !important;
+  color: #f1f5f9 !important;
+  font-family: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace !important;
+  font-size: 13px !important;
+  line-height: 1.5 !important;
+  resize: none !important;
+  outline: none !important;
+  tab-size: 2 !important;
+}
+
+/* Connector Animated Flow */
+@keyframes edgeFlow {
+  from {
+    stroke-dashoffset: 28;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.canvas-edge-path.animated {
+  stroke-dasharray: 8 6 !important;
+  animation: edgeFlow 0.8s linear infinite !important;
+}
+
 
 
 

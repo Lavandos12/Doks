@@ -12,8 +12,8 @@ export interface JSONCanvasNode {
   file?: string;
   url?: string;
   label?: string;
-  shapeVariant?: 'rectangle' | 'rounded' | 'diamond' | 'pill' | 'circle';
-  shapeType?: 'rectangle' | 'rounded' | 'diamond' | 'pill' | 'circle';
+  shapeVariant?: 'rectangle' | 'rounded' | 'diamond' | 'pill' | 'circle' | 'triangle' | 'parallelogram' | 'cylinder' | 'hexagon' | string;
+  shapeType?: 'rectangle' | 'rounded' | 'diamond' | 'pill' | 'circle' | 'triangle' | 'parallelogram' | 'cylinder' | 'hexagon' | string;
   locked?: boolean;
   fontSize?: number;
   hasCheckbox?: boolean;
@@ -35,7 +35,7 @@ export interface JSONCanvasNode {
     locked?: boolean;
     fontSize?: number;
     hasCheckbox?: boolean;
-    shapeVariant?: 'rectangle' | 'rounded' | 'diamond' | 'pill' | 'circle';
+    shapeVariant?: 'rectangle' | 'rounded' | 'diamond' | 'pill' | 'circle' | 'triangle' | 'parallelogram' | 'cylinder' | 'hexagon' | string;
     deleted?: boolean;
     deletedAt?: number;
     scope?: string;
@@ -54,12 +54,12 @@ export interface JSONCanvasEdge {
   label?: string;
   color?: string;
   curveType?: 'bezier' | 'orthogonal' | 'straight';
-  style?: 'solid' | 'dashed' | 'dotted';
+  style?: 'solid' | 'dashed' | 'dotted' | 'animated';
   thickness?: number;
   direction?: 'forward' | 'both' | 'none';
   doks_custom?: {
     curveType?: 'bezier' | 'orthogonal' | 'straight';
-    style?: 'solid' | 'dashed' | 'dotted';
+    style?: 'solid' | 'dashed' | 'dotted' | 'animated';
     thickness?: number;
     direction?: 'forward' | 'both' | 'none';
     label?: string;
@@ -208,7 +208,7 @@ export function jsonCanvasToBoard(data: JSONCanvasData): {
       else type = 'sticky';
     }
 
-    const shapeVariant = n.shapeVariant || n.shapeType || custom.shapeVariant;
+    const shapeVariant = (n.shapeVariant || n.shapeType || custom.shapeVariant) as any;
     const locked = n.locked ?? custom.locked ?? false;
     const fontSize = n.fontSize ?? custom.fontSize;
     const hasCheckbox = n.hasCheckbox ?? custom.hasCheckbox;

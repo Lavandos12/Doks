@@ -5,16 +5,19 @@ import os from 'node:os';
 import { Agent } from '@doks/agent';
 
 async function openBoard(page: Page) {
-  const welcomeBtn = page.locator('button:has-text("Создать доску")');
+  if (await page.locator('.board-container').isVisible({ timeout: 1000 }).catch(() => false)) {
+    return;
+  }
+  const welcomeBtn = page.locator('.empty-view-placeholder button:has-text("Новая доска"), .empty-view-placeholder button:has-text("Создать доску")').first();
   if (await welcomeBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
     await welcomeBtn.click();
   } else {
     await page.click('button[title*="Доски"]');
-    const newBoardBtn = page.locator('button[title="Новая доска"]');
+    const newBoardBtn = page.locator('.miro-popover-header button[title="Новая доска"]');
     if (await newBoardBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
       await newBoardBtn.click();
     } else {
-      await page.click('.tree-item-row');
+      await page.click('.tree-board-item, .tree-item-row');
     }
   }
   await page.waitForSelector('.board-container', { timeout: 10000 });
@@ -398,6 +401,8 @@ test.describe('F12: Playwright E2E Scenarios for Doks', () => {
   });
 
   test('Scenario 10: Workspace Modes switcher (Canvas, Split, Vault)', async ({ page }) => {
+    page.on('console', msg => console.log('[Scenario10 Console]', msg.type(), msg.text()));
+    page.on('pageerror', err => console.error('[Scenario10 PageError]', err));
     await page.goto(`http://127.0.0.1:${port1}`);
     await openBoard(page);
 
@@ -426,6 +431,7 @@ test.describe('F12: Playwright E2E Scenarios for Doks', () => {
   });
 
   test('Scenario 11: Magnetic Port Connection creates persistent SVG edge and inspects label', async ({ page }) => {
+    page.on('console', msg => console.log('[Scenario11 Console]', msg.type(), msg.text()));
     await page.goto(`http://127.0.0.1:${port1}`);
     await openBoard(page);
 

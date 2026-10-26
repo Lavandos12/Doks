@@ -11,7 +11,7 @@ export interface CanvasEdgeModel {
   toSide?: PortSide;
   color?: string;
   curveType?: EdgeCurveType;
-  style?: 'solid' | 'dashed' | 'dotted';
+  style?: 'solid' | 'dashed' | 'dotted' | 'animated';
   thickness?: number;
   direction?: 'forward' | 'both' | 'none';
   label?: string;
@@ -49,6 +49,17 @@ export const CanvasEdgesLayer: FunctionComponent<Props> = ({
 }) => {
   const [editingLabelEdgeId, setEditingLabelEdgeId] = useState<string | null>(null);
 
+  // Strict Miro invariant: reject self-loops (fromNode === toNode) and missing endpoint nodes
+  const validEdges = edges.filter(
+    (edge) =>
+      edge &&
+      edge.fromNode &&
+      edge.toNode &&
+      edge.fromNode !== edge.toNode &&
+      nodesMap.has(edge.fromNode) &&
+      nodesMap.has(edge.toNode)
+  );
+
   return (
     <Fragment>
       <svg
@@ -64,7 +75,7 @@ export const CanvasEdgesLayer: FunctionComponent<Props> = ({
         }}
       >
         <defs>
-          {edges.map((edge) => {
+          {validEdges.map((edge) => {
             const strokeColor = edge.color || '#818cf8';
             return (
               <Fragment key={`markers-${edge.id}`}>
@@ -107,7 +118,7 @@ export const CanvasEdgesLayer: FunctionComponent<Props> = ({
           })}
         </defs>
 
-        {edges.map((edge) => {
+        {validEdges.map((edge) => {
           const fromNode = nodesMap.get(edge.fromNode);
           const toNode = nodesMap.get(edge.toNode);
           if (!fromNode || !toNode) return null;
@@ -186,7 +197,7 @@ export const CanvasEdgesLayer: FunctionComponent<Props> = ({
                 strokeDasharray={dashArray}
                 strokeLinecap="round"
                 strokeLinejoin="round"
-                className={`canvas-edge-path ${isSelected ? 'selected' : ''}`}
+                className={`canvas-edge-path ${isSelected ? 'selected' : ''} ${edge.style === 'animated' ? 'animated' : ''}`}
                 style={{ pointerEvents: 'none', transition: 'stroke 120ms ease' }}
               />
               {/* Solid SVG triangle polygon arrowheads (guaranteed to render in all browsers) */}
@@ -300,7 +311,7 @@ export const CanvasEdgesLayer: FunctionComponent<Props> = ({
 
       {/* Floating Inspector Bar for Selected Edge */}
       {selectedEdgeId && (() => {
-        const edge = edges.find((e) => e.id === selectedEdgeId);
+        const edge = validEdges.find((e) => e.id === selectedEdgeId);
         if (!edge) return null;
         const fromNode = nodesMap.get(edge.fromNode);
         const toNode = nodesMap.get(edge.toNode);
@@ -405,6 +416,16 @@ export const CanvasEdgesLayer: FunctionComponent<Props> = ({
               >
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" strokeDasharray="4 4">
                   <line x1="3" y1="12" x2="21" y2="12" />
+                </svg>
+              </button>
+              <button
+                type="button"
+                title="Анимированный поток"
+                className={`edge-pill-btn doks-icon-btn ${edge.style === 'animated' ? 'active is-active' : ''}`}
+                onClick={() => onUpdateEdge(edge.id, { style: 'animated' })}
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M5 12h14M15 7l5 5-5 5" />
                 </svg>
               </button>
             </div>

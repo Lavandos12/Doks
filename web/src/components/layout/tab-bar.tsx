@@ -104,39 +104,6 @@ export function TabBar() {
           <Icon name="plus" size={14} />
         </button>
       </div>
-
-      <div class="tabs-actions">
-        {/* Three Seamless Workspace Modes */}
-        <div class="workspace-mode-segmented-pill" role="tablist" aria-label="Режим рабочей области">
-          <button
-            class={`mode-pill-btn workspace-mode-btn ${workspaceMode.value === 'canvas' ? 'active' : ''}`}
-            data-mode="canvas"
-            onClick={() => setWorkspaceMode('canvas')}
-            title="Холст (Бесконечная доска)"
-          >
-            <Icon name="layout-canvas" size={14} />
-            <span class="mode-label">Холст</span>
-          </button>
-          <button
-            class={`mode-pill-btn workspace-mode-btn ${workspaceMode.value === 'split' ? 'active' : ''}`}
-            data-mode="split"
-            onClick={() => setWorkspaceMode('split')}
-            title="Сплит (Холст + Заметка рядом, Ctrl+\)"
-          >
-            <Icon name="layout-split" size={14} />
-            <span class="mode-label">Сплит</span>
-          </button>
-          <button
-            class={`mode-pill-btn workspace-mode-btn ${workspaceMode.value === 'vault' ? 'active' : ''}`}
-            data-mode="vault"
-            onClick={() => setWorkspaceMode('vault')}
-            title="Заметки (Редактор базы знаний)"
-          >
-            <Icon name="layout-doc" size={14} />
-            <span class="mode-label">Заметки</span>
-          </button>
-        </div>
-      </div>
     </div>
   );
 }

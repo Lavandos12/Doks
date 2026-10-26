@@ -70,8 +70,8 @@ export class FileWatcher {
       const content = fs.readFileSync(filePath, 'utf8');
       const hash = crypto.createHash('sha256').update(content).digest('hex');
 
-      // If content hash matches the last written hash from FileMirror, skip!
-      if (this.fileMirror?.getLastWrittenHash(filePath) === hash) {
+      // If content was recently written by FileMirror (< 300ms) or hash matches, skip echo!
+      if (this.fileMirror?.isRecentlyWritten(filePath, 300) || this.fileMirror?.getLastWrittenHash(filePath) === hash) {
         return;
       }
 

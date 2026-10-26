@@ -74,11 +74,13 @@ export const CANVAS_COLORS: Record<string, string> = {
   default: '#d97706'
 };
 
-export type CanvasTool = 'select' | 'hand' | 'sticky' | 'text' | 'note' | 'frame' | 'arrow' | 'shape' | 'draw' | 'eraser';
+export type CanvasTool = 'select' | 'hand' | 'sticky' | 'text' | 'note' | 'frame' | 'arrow' | 'shape' | 'draw' | 'eraser' | 'checklist' | 'table' | 'kanban' | 'code' | 'image' | 'widgets';
 type ResizeHandle = 'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w';
 
 interface BoardCanvasProps {
   boardId: string;
+  gridType?: 'dots' | 'lines' | 'none';
+  snapToGrid?: boolean;
 }
 
 interface RemoteCursor {
@@ -111,7 +113,155 @@ interface QuickConnectState {
   fromSide: 'top' | 'right' | 'bottom' | 'left';
 }
 
-export function BoardCanvas({ boardId }: BoardCanvasProps) {
+function renderShapeSvg(node: BoardNodeData, colorHex: string) {
+  const w = node.w;
+  const h = node.h;
+  const variant = ((node as any).shapeVariant || 'rectangle') as string;
+  const strokeColor = (node as any).borderColor || colorHex || '#818cf8';
+  const fillColor = (node as any).fillColor || (colorHex ? `${colorHex}22` : 'rgba(30, 41, 59, 0.45)');
+  const strokeWidth = node.strokeWidth || 2;
+
+  let pathElement = null;
+  switch (variant) {
+    case 'circle':
+      pathElement = (
+        <ellipse
+          cx={w / 2}
+          cy={h / 2}
+          rx={Math.max(2, w / 2 - strokeWidth)}
+          ry={Math.max(2, h / 2 - strokeWidth)}
+          fill={fillColor}
+          stroke={strokeColor}
+          strokeWidth={strokeWidth}
+        />
+      );
+      break;
+    case 'diamond': {
+      const pad = strokeWidth;
+      const pts = `${w / 2},${pad} ${w - pad},${h / 2} ${w / 2},${h - pad} ${pad},${h / 2}`;
+      pathElement = (
+        <polygon
+          points={pts}
+          fill={fillColor}
+          stroke={strokeColor}
+          strokeWidth={strokeWidth}
+          strokeLinejoin="round"
+        />
+      );
+      break;
+    }
+    case 'triangle': {
+      const pad = strokeWidth;
+      const pts = `${w / 2},${pad} ${w - pad},${h - pad} ${pad},${h - pad}`;
+      pathElement = (
+        <polygon
+          points={pts}
+          fill={fillColor}
+          stroke={strokeColor}
+          strokeWidth={strokeWidth}
+          strokeLinejoin="round"
+        />
+      );
+      break;
+    }
+    case 'parallelogram': {
+      const pad = strokeWidth;
+      const skew = Math.min(28, w * 0.2);
+      const pts = `${skew + pad},${pad} ${w - pad},${pad} ${w - skew - pad},${h - pad} ${pad},${h - pad}`;
+      pathElement = (
+        <polygon
+          points={pts}
+          fill={fillColor}
+          stroke={strokeColor}
+          strokeWidth={strokeWidth}
+          strokeLinejoin="round"
+        />
+      );
+      break;
+    }
+    case 'cylinder': {
+      const pad = strokeWidth;
+      const ch = Math.min(20, h * 0.2);
+      const d = `M ${pad} ${ch + pad} A ${w / 2 - pad} ${ch} 0 0 1 ${w - pad} ${ch + pad} V ${h - ch - pad} A ${w / 2 - pad} ${ch} 0 0 1 ${pad} ${h - ch - pad} Z`;
+      pathElement = (
+        <g>
+          <path d={d} fill={fillColor} stroke={strokeColor} strokeWidth={strokeWidth} />
+          <ellipse
+            cx={w / 2}
+            cy={ch + pad}
+            rx={Math.max(2, w / 2 - pad)}
+            ry={ch}
+            fill={fillColor}
+            stroke={strokeColor}
+            strokeWidth={strokeWidth}
+          />
+        </g>
+      );
+      break;
+    }
+    case 'hexagon': {
+      const pad = strokeWidth;
+      pathElement = (
+        <polygon
+          points={`${w * 0.25},${pad} ${w * 0.75},${pad} ${w - pad},${h * 0.5} ${w * 0.75},${h - pad} ${w * 0.25},${h - pad} ${pad},${h * 0.5}`}
+          fill={fillColor}
+          stroke={strokeColor}
+          strokeWidth={strokeWidth}
+        />
+      );
+      break;
+    }
+    case 'rounded':
+      pathElement = (
+        <rect
+          x={strokeWidth / 2}
+          y={strokeWidth / 2}
+          width={Math.max(4, w - strokeWidth)}
+          height={Math.max(4, h - strokeWidth)}
+          rx="24"
+          ry="24"
+          fill={fillColor}
+          stroke={strokeColor}
+          strokeWidth={strokeWidth}
+        />
+      );
+      break;
+    case 'rectangle':
+    default:
+      pathElement = (
+        <rect
+          x={strokeWidth / 2}
+          y={strokeWidth / 2}
+          width={Math.max(4, w - strokeWidth)}
+          height={Math.max(4, h - strokeWidth)}
+          rx="4"
+          ry="4"
+          fill={fillColor}
+          stroke={strokeColor}
+          strokeWidth={strokeWidth}
+        />
+      );
+      break;
+  }
+
+  return (
+    <svg
+      class="shape-vector-svg"
+      style={{
+        position: 'absolute',
+        inset: 0,
+        width: '100%',
+        height: '100%',
+        pointerEvents: 'none',
+        overflow: 'visible'
+      }}
+    >
+      {pathElement}
+    </svg>
+  );
+}
+
+export function BoardCanvas({ boardId, gridType = 'dots', snapToGrid = false }: BoardCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Viewport state
@@ -142,13 +292,13 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
   const [previewDocIds, setPreviewDocIds] = useState<Set<string>>(new Set());
 
   // Miro Floating Dock & Islands state
-  const [activeFlyout, setActiveFlyout] = useState<'none' | 'sticky' | 'shape' | 'arrow' | 'draw'>('none');
+  const [activeFlyout, setActiveFlyout] = useState<'none' | 'sticky' | 'shape' | 'arrow' | 'draw' | 'widgets'>('none');
   const [isBoardsPopoverOpen, setIsBoardsPopoverOpen] = useState(false);
   const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
   const [isNotesDrawerOpen, setIsNotesDrawerOpen] = useState(false);
   const [selectedDrawerNoteId, setSelectedDrawerNoteId] = useState<string | null>(null);
   const [isNetworkPopoverOpen, setIsNetworkPopoverOpen] = useState(false);
-  const [selectedShapeVariant, setSelectedShapeVariant] = useState<'rectangle' | 'rounded' | 'circle' | 'diamond' | 'parallelogram' | 'cylinder'>('rectangle');
+  const [selectedShapeVariant, setSelectedShapeVariant] = useState<'rectangle' | 'rounded' | 'circle' | 'diamond' | 'parallelogram' | 'cylinder' | 'hexagon'>('rectangle');
   const [defaultLineStyle, setDefaultLineStyle] = useState<{ curveType: 'bezier' | 'orthogonal' | 'straight'; style: 'solid' | 'dashed'; color: string }>({
     curveType: 'bezier',
     style: 'solid',
@@ -161,6 +311,9 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
     startY: number;
     initialPositions: Map<string, { x: number; y: number }>;
   } | null>(null);
+  const [dragDelta, setDragDelta] = useState<{ dx: number; dy: number } | null>(null);
+  const dragDeltaRef = useRef<{ dx: number; dy: number } | null>(null);
+  const [isErasing, setIsErasing] = useState(false);
 
   // 8-Point Resizing state
   const [resizeState, setResizeState] = useState<{
@@ -267,14 +420,19 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
   const awareness = yjsClient.getOrCreateAwareness(docName);
   const { nodes: yNodes, edges: yEdges } = getBoardMaps(boardDoc);
 
-  // Map of nodes for quick coordinate lookup
+  // Map of nodes for quick coordinate lookup (with real-time drag positions)
   const nodeLookup = useMemo(() => {
     const map = new Map<string, BoardNodeData>();
     for (const n of nodesList) {
-      map.set(n.id, n);
+      if (dragState && dragDelta && dragState.initialPositions.has(n.id)) {
+        const init = dragState.initialPositions.get(n.id)!;
+        map.set(n.id, { ...n, x: Math.round(init.x + dragDelta.dx), y: Math.round(init.y + dragDelta.dy) });
+      } else {
+        map.set(n.id, n);
+      }
     }
     return map;
-  }, [nodesList]);
+  }, [nodesList, dragState, dragDelta]);
 
   // Container dimensions
   const [containerSize, setContainerSize] = useState({ width: window.innerWidth, height: window.innerHeight });
@@ -509,8 +667,18 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
     onUploadAndCreateMediaCard
   });
 
-  // Zoom to mouse cursor
+  // Zoom to mouse cursor (allowing natural scrolling inside docx/notes/textareas)
   const handleWheel = (e: WheelEvent) => {
+    const target = e.target as HTMLElement | null;
+    if (
+      target &&
+      !e.ctrlKey &&
+      !e.metaKey &&
+      target.closest('.scrollable-card-content, .node-file-reader-body, .node-inline-textarea, .node-card-content-view')
+    ) {
+      return;
+    }
+
     e.preventDefault();
     if (!containerRef.current) return;
     const rect = containerRef.current.getBoundingClientRect();
@@ -694,6 +862,29 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
 
     setSelectedNodeIds(new Set());
     setSelectedEdgeId(null);
+  };
+
+  // Delete a single node by id along with its incident edges
+  const deleteSingleNode = (id: string) => {
+    boardDoc.transact(() => {
+      const nodeMap = yNodes.get(id);
+      if (nodeMap && !nodeMap.get('locked')) {
+        nodeMap.set('deleted', true);
+        nodeMap.set('deletedAt', Date.now());
+      }
+      yEdges.forEach((edge, edgeId) => {
+        if (edge && !edge.deleted && (edge.from === id || edge.to === id || (edge as any).fromNode === id || (edge as any).toNode === id)) {
+          yEdges.set(edgeId, { ...edge, deleted: true, deletedAt: Date.now() });
+        }
+      });
+    }, CANVAS_UNDO_ORIGIN);
+
+    setSelectedNodeIds((prev) => {
+      if (!prev.has(id)) return prev;
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
   };
 
   // Toggle lock state on selected nodes
@@ -929,18 +1120,44 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
   };
 
   // Create node and AUTO-RETURN to select tool
-  const createNodeAt = (type: BoardNodeType, x: number, y: number, color = activeColor, initialText = '') => {
+  const createNodeAt = (
+    type: BoardNodeType,
+    x: number,
+    y: number,
+    color = activeColor,
+    initialText = '',
+    fileHash?: string
+  ) => {
     const id = crypto.randomUUID();
     const nodeMap = new Y.Map();
     const isFrame = type === 'frame';
     const isNote = type === 'note';
+    const isChecklist = type === 'checklist';
+    const isTable = type === 'table';
+    const isKanban = type === 'kanban';
+    const isCode = type === 'code';
+    const isImage = type === 'image';
 
     let defaultText = initialText;
     if (!defaultText) {
       if (isFrame) defaultText = 'Фрейм';
       else if (isNote) defaultText = 'Карточка заметки';
+      else if (isChecklist) defaultText = '- [ ] Задача 1\n- [ ] Задача 2\n- [ ] Задача 3';
+      else if (isTable) defaultText = JSON.stringify([['Заголовок 1', 'Заголовок 2', 'Заголовок 3'], ['', '', ''], ['', '', '']]);
+      else if (isKanban) defaultText = 'К выполнению';
+      else if (isCode) defaultText = '// Напишите код здесь...\nfunction main() {\n  return 42;\n}';
       else defaultText = type === 'text' ? 'Текст' : '';
     }
+
+    let defaultW = 200;
+    let defaultH = 130;
+    if (isFrame) { defaultW = 420; defaultH = 320; }
+    else if (type === 'text') { defaultW = 220; defaultH = 80; }
+    else if (isChecklist) { defaultW = 280; defaultH = 220; }
+    else if (isTable) { defaultW = 340; defaultH = 180; }
+    else if (isKanban) { defaultW = 280; defaultH = 420; }
+    else if (isCode) { defaultW = 360; defaultH = 220; }
+    else if (isImage) { defaultW = 320; defaultH = 240; }
 
     boardDoc.transact(() => {
       yNodes.set(id, nodeMap);
@@ -949,15 +1166,18 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
         type,
         x: Math.round(x),
         y: Math.round(y),
-        w: isFrame ? 420 : type === 'text' ? 220 : 200,
-        h: isFrame ? 320 : type === 'text' ? 80 : 130,
+        w: defaultW,
+        h: defaultH,
         text: defaultText,
-        color: type === 'sticky' ? color : 'default',
+        color: (type === 'sticky' || isKanban) ? color : 'default',
         author: agentStatus.value?.memberName || 'Вы',
         done: false,
         z: isFrame ? 0 : 1,
         deleted: false,
-        locked: false
+        locked: false,
+        fileHash: fileHash || undefined,
+        codeLanguage: isCode ? 'typescript' : undefined,
+        shapeVariant: type === 'shape' ? selectedShapeVariant : undefined
       });
     }, 'user');
 
@@ -997,6 +1217,139 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
 
     setSelectedNodeIds(new Set([id]));
     setActiveTool('select');
+  };
+
+  // Checklist helpers
+  const parseChecklistItems = (text: string) => {
+    return text.split('\n').filter(l => l.trim().length > 0).map((line, idx) => ({
+      id: `item-${idx}`,
+      text: line.replace(/^-\s*\[[ xX]\]\s*/, '').trim(),
+      done: line.trim().startsWith('- [x]') || line.trim().startsWith('- [X]')
+    }));
+  };
+
+  const serializeChecklistItems = (items: { text: string; done: boolean }[]) => {
+    return items.map(it => `- [${it.done ? 'x' : ' '}] ${it.text}`).join('\n');
+  };
+
+  const handleToggleChecklistItem = (node: BoardNodeData, idx: number) => {
+    const items = parseChecklistItems(node.text);
+    if (items[idx]) {
+      items[idx].done = !items[idx].done;
+      const newText = serializeChecklistItems(items);
+      const map = yNodes.get(node.id);
+      if (map) setNodeProperties(map, { text: newText });
+    }
+  };
+
+  const handleUpdateChecklistText = (node: BoardNodeData, idx: number, val: string) => {
+    const items = parseChecklistItems(node.text);
+    if (items[idx]) {
+      items[idx].text = val;
+      const newText = serializeChecklistItems(items);
+      const map = yNodes.get(node.id);
+      if (map) setNodeProperties(map, { text: newText });
+    }
+  };
+
+  const handleDeleteChecklistItem = (node: BoardNodeData, idx: number) => {
+    const items = parseChecklistItems(node.text);
+    items.splice(idx, 1);
+    const newText = serializeChecklistItems(items);
+    const map = yNodes.get(node.id);
+    if (map) setNodeProperties(map, { text: newText });
+  };
+
+  const handleAddChecklistItem = (node: BoardNodeData) => {
+    const items = parseChecklistItems(node.text);
+    items.push({ id: `item-${items.length}`, text: 'Новая задача', done: false });
+    const newText = serializeChecklistItems(items);
+    const map = yNodes.get(node.id);
+    if (map) setNodeProperties(map, { text: newText });
+  };
+
+  // Table helpers
+  const parseTableData = (text: string): string[][] => {
+    try {
+      const parsed = JSON.parse(text);
+      if (Array.isArray(parsed) && parsed.length > 0 && Array.isArray(parsed[0])) {
+        return parsed;
+      }
+    } catch {}
+    return [['Заголовок 1', 'Заголовок 2', 'Заголовок 3'], ['', '', ''], ['', '', '']];
+  };
+
+  const handleUpdateTableCell = (node: BoardNodeData, rIdx: number, cIdx: number, val: string) => {
+    const table = parseTableData(node.text);
+    if (table[rIdx] && table[rIdx][cIdx] !== undefined) {
+      table[rIdx][cIdx] = val;
+      const map = yNodes.get(node.id);
+      if (map) setNodeProperties(map, { text: JSON.stringify(table) });
+    }
+  };
+
+  const handleAddTableRow = (node: BoardNodeData) => {
+    const table = parseTableData(node.text);
+    const cols = table[0]?.length || 3;
+    table.push(Array(cols).fill(''));
+    const map = yNodes.get(node.id);
+    if (map) setNodeProperties(map, { text: JSON.stringify(table) });
+  };
+
+  const handleAddTableCol = (node: BoardNodeData) => {
+    const table = parseTableData(node.text);
+    for (const row of table) row.push('');
+    const map = yNodes.get(node.id);
+    if (map) setNodeProperties(map, { text: JSON.stringify(table) });
+  };
+
+  const handleDelTableRow = (node: BoardNodeData) => {
+    const table = parseTableData(node.text);
+    if (table.length > 1) {
+      table.pop();
+      const map = yNodes.get(node.id);
+      if (map) setNodeProperties(map, { text: JSON.stringify(table) });
+    }
+  };
+
+  const handleDelTableCol = (node: BoardNodeData) => {
+    const table = parseTableData(node.text);
+    if (table[0]?.length > 1) {
+      for (const row of table) row.pop();
+      const map = yNodes.get(node.id);
+      if (map) setNodeProperties(map, { text: JSON.stringify(table) });
+    }
+  };
+
+  // Kanban helpers
+  const parseKanbanCards = (text: string): string[] => {
+    if (!text) return ['Новая задача', 'В процессе'];
+    return text.split('\n').map((l) => l.trim()).filter((l) => l.length > 0);
+  };
+
+  const handleAddKanbanCard = (node: BoardNodeData) => {
+    const cards = parseKanbanCards(node.description || '');
+    cards.push('Новая карточка');
+    const map = yNodes.get(node.id);
+    if (map) {
+      setNodeProperties(map, { description: cards.join('\n') });
+    }
+  };
+
+  const handleUpdateKanbanCard = (node: BoardNodeData, idx: number, val: string) => {
+    const cards = parseKanbanCards(node.description || '');
+    if (cards[idx] !== undefined) {
+      cards[idx] = val;
+      const map = yNodes.get(node.id);
+      if (map) setNodeProperties(map, { description: cards.join('\n') });
+    }
+  };
+
+  const handleDeleteKanbanCard = (node: BoardNodeData, idx: number) => {
+    const cards = parseKanbanCards(node.description || '');
+    cards.splice(idx, 1);
+    const map = yNodes.get(node.id);
+    if (map) setNodeProperties(map, { description: cards.join('\n') });
   };
 
   // Upload attachment file and place block or image on board
@@ -1047,6 +1400,52 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
       console.error('Failed to upload file to board:', err);
     }
   };
+
+  // Listen for dropping note from Notes Drawer or pasting image files from clipboard
+  useEffect(() => {
+    const handleDropNoteEvent = (e: any) => {
+      const detail = e.detail;
+      if (!detail || !detail.noteId) return;
+      const pos = screenToCanvas(window.innerWidth / 2, window.innerHeight / 2);
+      createNoteCardAt(detail.noteId, pos.x - 120, pos.y - 80);
+      showToast(`Заметка "${detail.title || 'Заметка'}" добавлена на доску`);
+    };
+
+    const handleWindowPaste = (e: ClipboardEvent) => {
+      const activeEl = document.activeElement;
+      if (
+        activeEl &&
+        (activeEl.tagName === 'INPUT' ||
+          activeEl.tagName === 'TEXTAREA' ||
+          activeEl.getAttribute('contenteditable') === 'true')
+      ) {
+        return;
+      }
+      const items = e.clipboardData?.items;
+      if (!items) return;
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        if (item.type.startsWith('image/')) {
+          const file = item.getAsFile();
+          if (file) {
+            e.preventDefault();
+            const targetPos = (lastMouseCanvasPosRef.current && lastMouseCanvasPosRef.current.x !== 0)
+              ? lastMouseCanvasPosRef.current
+              : screenToCanvas(window.innerWidth / 2, window.innerHeight / 2);
+            handleUploadFileToBoard(file, targetPos.x - 140, targetPos.y - 100);
+            return;
+          }
+        }
+      }
+    };
+
+    window.addEventListener('doks:drop-note', handleDropNoteEvent);
+    window.addEventListener('paste', handleWindowPaste);
+    return () => {
+      window.removeEventListener('doks:drop-note', handleDropNoteEvent);
+      window.removeEventListener('paste', handleWindowPaste);
+    };
+  }, [boardDoc, yNodes, viewport]);
 
   // Sticky Chaining: create next sticky on Tab or Shift+Enter
   const chainNextSticky = (sourceNode: BoardNodeData, direction: 'right' | 'down') => {
@@ -1213,18 +1612,19 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
       }
 
       // Eraser dragging over drawing nodes
-      if (activeTool === 'eraser' && (e.buttons === 1 || e.buttons === 2)) {
+      if (activeTool === 'eraser' && (e.buttons === 1 || e.buttons === 2 || isErasing)) {
+        const ERASE_PAD = 18 / viewport.zoom;
         const hitDrawing = nodesList.find(
-          (n) => !n.deleted && n.type === 'drawing' && pos.x >= n.x && pos.x <= n.x + n.w && pos.y >= n.y && pos.y <= n.y + n.h
+          (n) =>
+            !n.deleted &&
+            n.type === 'drawing' &&
+            pos.x >= n.x - ERASE_PAD &&
+            pos.x <= n.x + n.w + ERASE_PAD &&
+            pos.y >= n.y - ERASE_PAD &&
+            pos.y <= n.y + n.h + ERASE_PAD
         );
         if (hitDrawing) {
-          const map = yNodes.get(hitDrawing.id);
-          if (map) {
-            boardDoc.transact(() => {
-              map.set('deleted', true);
-              map.set('deletedAt', Date.now());
-            }, CANVAS_UNDO_ORIGIN);
-          }
+          deleteSingleNode(hitDrawing.id);
         }
       }
 
@@ -1306,26 +1706,15 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
         }
         setAlignmentGuides(guides);
 
-        boardDoc.transact(() => {
-          dragState.initialPositions.forEach((initialPos, id) => {
-            const nodeMap = yNodes.get(id);
-            if (nodeMap && !nodeMap.get('locked')) {
-              let targetX = initialPos.x + dx;
-              let targetY = initialPos.y + dy;
-
-              if (guides.length === 0 && !e.altKey) {
-                targetX = Math.round(targetX / GRID_SIZE) * GRID_SIZE;
-                targetY = Math.round(targetY / GRID_SIZE) * GRID_SIZE;
-              } else {
-                targetX = Math.round(targetX);
-                targetY = Math.round(targetY);
-              }
-
-              nodeMap.set('x', targetX);
-              nodeMap.set('y', targetY);
-            }
-          });
-        }, 'drag-motion');
+        if (guides.length === 0 && !e.altKey) {
+          dx = Math.round(dx / GRID_SIZE) * GRID_SIZE;
+          dy = Math.round(dy / GRID_SIZE) * GRID_SIZE;
+        } else {
+          dx = Math.round(dx);
+          dy = Math.round(dy);
+        }
+        dragDeltaRef.current = { dx, dy };
+        setDragDelta({ dx, dy });
       }
 
       // 8-Point Resizing
@@ -1409,44 +1798,27 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
     const handleGlobalPointerUp = (e: PointerEvent) => {
       setPanState(null);
 
+      if (isErasing) {
+        setIsErasing(false);
+      }
+
       // Reconcile dragging for single-step undo
       if (dragState) {
-        const finalPositions = new Map<string, { x: number; y: number }>();
-        let moved = false;
-        dragState.initialPositions.forEach((initPos, id) => {
-          const nodeMap = yNodes.get(id);
-          if (nodeMap) {
-            const currX = nodeMap.get('x');
-            const currY = nodeMap.get('y');
-            if (currX !== initPos.x || currY !== initPos.y) {
-              moved = true;
-            }
-            finalPositions.set(id, { x: currX, y: currY });
-          }
-        });
-
-        if (moved) {
+        const delta = dragDeltaRef.current || dragDelta;
+        if (delta && (delta.dx !== 0 || delta.dy !== 0)) {
           boardDoc.transact(() => {
             dragState.initialPositions.forEach((initPos, id) => {
               const nodeMap = yNodes.get(id);
-              if (nodeMap) {
-                nodeMap.set('x', initPos.x);
-                nodeMap.set('y', initPos.y);
-              }
-            });
-          }, 'drag-cleanup');
-
-          boardDoc.transact(() => {
-            finalPositions.forEach((finalPos, id) => {
-              const nodeMap = yNodes.get(id);
-              if (nodeMap) {
-                nodeMap.set('x', finalPos.x);
-                nodeMap.set('y', finalPos.y);
+              if (nodeMap && !nodeMap.get('locked')) {
+                nodeMap.set('x', Math.round(initPos.x + delta.dx));
+                nodeMap.set('y', Math.round(initPos.y + delta.dy));
               }
             });
           }, CANVAS_UNDO_ORIGIN);
         }
+        dragDeltaRef.current = null;
         setDragState(null);
+        setDragDelta(null);
       }
 
       // Reconcile resizing for single-step undo
@@ -1491,8 +1863,14 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
         currentStrokeRef.current = null;
         setCurrentStroke(null);
         if (stroke.length >= 2) {
-          const pathD = pointsToSmoothSvgPath(stroke);
           const bbox = computeBoundingBox(stroke, 8);
+          const minX = bbox.x;
+          const minY = bbox.y;
+          const localPoints: Point[] = stroke.map((p) => ({
+            x: p.x - minX,
+            y: p.y - minY
+          }));
+          const pathD = pointsToSmoothSvgPath(localPoints);
           const newId = crypto.randomUUID();
           const nodeMap = new Y.Map();
           boardDoc.transact(() => {
@@ -1500,15 +1878,15 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
             setNodeProperties(nodeMap, {
               id: newId,
               type: 'drawing',
-              x: bbox.x,
-              y: bbox.y,
-              w: bbox.width,
-              h: bbox.height,
+              x: minX,
+              y: minY,
+              w: Math.max(bbox.width, 20),
+              h: Math.max(bbox.height, 20),
               svgPath: pathD,
               color: drawColor,
               strokeWidth: drawWidth,
               opacity: drawMode === 'highlighter' ? 0.35 : 1,
-              z: 2,
+              z: 25,
               deleted: false,
               locked: false
             });
@@ -1558,6 +1936,74 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
         setConnectingState(null);
 
         const pos = screenToCanvas(e.clientX, e.clientY);
+        const dragDist = Math.hypot(pos.x - state.startX, pos.y - state.startY);
+        const fromNode = nodeLookup.get(state.fromNodeId);
+
+        // 1. Quick-Create on Port Click (dragDist < 15px)
+        if (dragDist < 15 && fromNode) {
+          const newId = crypto.randomUUID();
+          const nodeMap = new Y.Map();
+          let newX = fromNode.x + fromNode.w + 120;
+          let newY = fromNode.y;
+          let targetSide: PortSide = 'left';
+
+          if (state.fromSide === 'right') {
+            newX = fromNode.x + fromNode.w + 120;
+            newY = fromNode.y;
+            targetSide = 'left';
+          } else if (state.fromSide === 'bottom') {
+            newX = fromNode.x;
+            newY = fromNode.y + fromNode.h + 100;
+            targetSide = 'top';
+          } else if (state.fromSide === 'left') {
+            newX = fromNode.x - 220;
+            newY = fromNode.y;
+            targetSide = 'right';
+          } else if (state.fromSide === 'top') {
+            newX = fromNode.x;
+            newY = fromNode.y - 180;
+            targetSide = 'bottom';
+          }
+
+          boardDoc.transact(() => {
+            yNodes.set(newId, nodeMap);
+            setNodeProperties(nodeMap, {
+              id: newId,
+              type: 'sticky',
+              x: Math.round(newX),
+              y: Math.round(newY),
+              w: 200,
+              h: 130,
+              text: '',
+              color: activeColor,
+              z: 10,
+              deleted: false,
+              locked: false
+            });
+
+            const edgeId = crypto.randomUUID();
+            yEdges.set(edgeId, {
+              id: edgeId,
+              from: state.fromNodeId,
+              to: newId,
+              fromSide: state.fromSide,
+              toSide: targetSide,
+              direction: 'forward',
+              style: defaultLineStyle.style,
+              curveType: defaultLineStyle.curveType,
+              color: defaultLineStyle.color,
+              deleted: false
+            });
+          }, 'user');
+
+          setSelectedNodeIds(new Set([newId]));
+          setActiveTool('select');
+          setTimeout(() => {
+            document.getElementById(`node-textarea-${newId}`)?.focus();
+          }, 50);
+          return;
+        }
+
         const boxNodes: BoxNode[] = visibleNodes.map((n) => ({
           id: n.id,
           x: n.x,
@@ -1567,23 +2013,28 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
         }));
         const target = state.snappedTarget || findMagneticTargetPort(boxNodes, state.fromNodeId, pos.x, pos.y, 28);
 
-        if (target && target.nodeId !== state.fromNodeId) {
-          const edgeId = crypto.randomUUID();
-          boardDoc.transact(() => {
-            yEdges.set(edgeId, {
-              id: edgeId,
-              from: state.fromNodeId,
-              to: target.nodeId,
-              fromSide: state.fromSide,
-              toSide: target.side,
-              direction: 'forward',
-              style: 'solid',
-              deleted: false
-            });
-          }, 'user');
-          setActiveTool('select');
-        } else {
-          // If dropped on empty canvas, open quick connect drop menu
+        // Strict rejection: NEVER allow self-loops (fromNodeId === target.nodeId)
+        if (target) {
+          if (target.nodeId !== state.fromNodeId) {
+            const edgeId = crypto.randomUUID();
+            boardDoc.transact(() => {
+              yEdges.set(edgeId, {
+                id: edgeId,
+                from: state.fromNodeId,
+                to: target.nodeId,
+                fromSide: state.fromSide,
+                toSide: target.side,
+                direction: 'forward',
+                style: defaultLineStyle.style,
+                curveType: defaultLineStyle.curveType,
+                color: defaultLineStyle.color,
+                deleted: false
+              });
+            }, 'user');
+            setActiveTool('select');
+          }
+        } else if (dragDist >= 30) {
+          // If dropped on empty canvas after a real drag, open quick connect drop menu
           setQuickConnect({
             x: e.clientX,
             y: e.clientY,
@@ -1612,6 +2063,9 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
   const handleBackgroundPointerDown = (e: MouseEvent) => {
     setContextMenu(null);
     setQuickConnect(null);
+    setIsBoardsPopoverOpen(false);
+    setIsExportMenuOpen(false);
+    setActiveFlyout('none');
 
     // Pan via Space + Left click, Middle click, Right click, or Hand tool
     if (isSpacePressed || e.button === 1 || e.button === 2 || activeTool === 'hand') {
@@ -1638,18 +2092,20 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
       }
       if (activeTool === 'eraser') {
         const p = screenToCanvas(e.clientX, e.clientY);
+        const ERASE_PAD = 18 / viewport.zoom;
         const hitDrawing = nodesList.find(
-          (n) => !n.deleted && n.type === 'drawing' && p.x >= n.x && p.x <= n.x + n.w && p.y >= n.y && p.y <= n.y + n.h
+          (n) =>
+            !n.deleted &&
+            n.type === 'drawing' &&
+            p.x >= n.x - ERASE_PAD &&
+            p.x <= n.x + n.w + ERASE_PAD &&
+            p.y >= n.y - ERASE_PAD &&
+            p.y <= n.y + n.h + ERASE_PAD
         );
         if (hitDrawing) {
-          const map = yNodes.get(hitDrawing.id);
-          if (map) {
-            boardDoc.transact(() => {
-              map.set('deleted', true);
-              map.set('deletedAt', Date.now());
-            }, CANVAS_UNDO_ORIGIN);
-          }
+          deleteSingleNode(hitDrawing.id);
         }
+        setIsErasing(true);
         return;
       }
       if (activeTool === 'sticky') {
@@ -1666,6 +2122,22 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
       }
       if (activeTool === 'frame') {
         createNodeAt('frame', pos.x - 210, pos.y - 160);
+        return;
+      }
+      if (activeTool === 'checklist') {
+        createNodeAt('checklist', pos.x - 140, pos.y - 110);
+        return;
+      }
+      if (activeTool === 'table') {
+        createNodeAt('table', pos.x - 170, pos.y - 90);
+        return;
+      }
+      if (activeTool === 'kanban') {
+        createNodeAt('kanban', pos.x - 140, pos.y - 210);
+        return;
+      }
+      if (activeTool === 'code') {
+        createNodeAt('code', pos.x - 180, pos.y - 110);
         return;
       }
 
@@ -1687,9 +2159,46 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
   const handleNodePointerDown = (node: BoardNodeData, e: MouseEvent | PointerEvent) => {
     if (e.button !== 0) return;
     if (dragState) return;
+
+    // If drawing with pen/brush/highlighter, do NOT intercept click - let it draw right over frames/shapes!
+    if (activeTool === 'draw') {
+      return;
+    }
+
     e.stopPropagation();
     setContextMenu(null);
     setQuickConnect(null);
+
+    if (activeTool === 'eraser') {
+      setIsErasing(true);
+      if (!node.locked) {
+        deleteSingleNode(node.id);
+      }
+      return;
+    }
+
+    // If any creation tool is active, spawn that node directly over the clicked container (e.g. Frame, Shape)
+    if (
+      activeTool === 'sticky' ||
+      activeTool === 'shape' ||
+      activeTool === 'text' ||
+      activeTool === 'checklist' ||
+      activeTool === 'table' ||
+      activeTool === 'kanban' ||
+      activeTool === 'code' ||
+      activeTool === 'frame'
+    ) {
+      const pos = screenToCanvas(e.clientX, e.clientY);
+      if (activeTool === 'sticky') createNodeAt('sticky', pos.x - 100, pos.y - 65, activeColor);
+      else if (activeTool === 'shape') createNodeAt('shape', pos.x - 90, pos.y - 90);
+      else if (activeTool === 'text') createNodeAt('text', pos.x - 110, pos.y - 40);
+      else if (activeTool === 'checklist') createNodeAt('checklist', pos.x - 140, pos.y - 100);
+      else if (activeTool === 'table') createNodeAt('table', pos.x - 170, pos.y - 90);
+      else if (activeTool === 'kanban') createNodeAt('kanban', pos.x - 140, pos.y - 200);
+      else if (activeTool === 'code') createNodeAt('code', pos.x - 180, pos.y - 110);
+      else if (activeTool === 'frame') createNodeAt('frame', pos.x - 210, pos.y - 160);
+      return;
+    }
 
     if (activeTool === 'arrow') {
       const pos = screenToCanvas(e.clientX, e.clientY);
@@ -1715,15 +2224,6 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
         currentY: pos.y,
         snappedTarget: null
       });
-      return;
-    }
-
-    // Placing node inside a frame container
-    if (node.type === 'frame' && (activeTool === 'sticky' || activeTool === 'text' || activeTool === 'shape')) {
-      const pos = screenToCanvas(e.clientX, e.clientY);
-      if (activeTool === 'sticky') createNodeAt('sticky', pos.x - 100, pos.y - 65, activeColor);
-      else if (activeTool === 'text') createNodeAt('text', pos.x - 110, pos.y - 40);
-      else if (activeTool === 'shape') createNodeAt('shape', pos.x - 90, pos.y - 90);
       return;
     }
 
@@ -1773,6 +2273,8 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
       startY: e.clientY,
       initialPositions
     });
+    dragDeltaRef.current = { dx: 0, dy: 0 };
+    setDragDelta({ dx: 0, dy: 0 });
   };
 
   // Magnetic port pointer handlers
@@ -1890,7 +2392,7 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
 
   return (
     <div
-      class={`board-container ${activeTool === 'hand' || isSpacePressed ? 'cursor-grab' : ''}`}
+      class={`board-container ${activeTool === 'hand' || isSpacePressed ? 'cursor-grab' : ''} ${gridType === 'lines' ? 'grid-lines' : gridType === 'none' ? 'grid-none' : ''}`}
       ref={containerRef}
       onWheel={(e) => handleWheel(e as any)}
       onMouseDown={handleBackgroundPointerDown}
@@ -1980,7 +2482,7 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
             setIsBoardsPopoverOpen(!isBoardsPopoverOpen);
             setIsExportMenuOpen(false);
           }}
-          title="Список досок и шаблоны"
+          title="Доски (Список и шаблоны)"
         >
           <Icon name="layout" size={16} />
           <span class="miro-board-title">{currentBoardMeta?.title || 'Новая доска'}</span>
@@ -2008,42 +2510,6 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
             <span>Команда</span>
           </button>
         </div>
-
-        {!isSplitView.value && (
-          <>
-            <div class="miro-divider" />
-            {/* Workspace Mode Switcher: [ Холст | Сплит | Заметки ] */}
-            <div class="workspace-mode-segmented-pill" role="tablist" aria-label="Режим рабочей области">
-              <button
-                class={`mode-pill-btn workspace-mode-btn ${workspaceMode.value === 'canvas' ? 'active' : ''}`}
-                data-mode="canvas"
-                onClick={() => setWorkspaceMode('canvas')}
-                title="Холст (Бесконечная доска)"
-              >
-                <Icon name="layout-canvas" size={13} />
-                <span class="mode-label">Холст</span>
-              </button>
-              <button
-                class={`mode-pill-btn workspace-mode-btn ${workspaceMode.value === 'split' ? 'active' : ''}`}
-                data-mode="split"
-                onClick={() => setWorkspaceMode('split')}
-                title="Сплит (Холст + Заметка рядом, Ctrl+\)"
-              >
-                <Icon name="layout-split" size={13} />
-                <span class="mode-label">Сплит</span>
-              </button>
-              <button
-                class={`mode-pill-btn workspace-mode-btn ${workspaceMode.value === 'vault' ? 'active' : ''}`}
-                data-mode="vault"
-                onClick={() => setWorkspaceMode('vault')}
-                title="Заметки (Редактор базы знаний)"
-              >
-                <Icon name="layout-doc" size={13} />
-                <span class="mode-label">Заметки</span>
-              </button>
-            </div>
-          </>
-        )}
 
         <div class="miro-divider" />
 
@@ -2078,6 +2544,7 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
               <span class="miro-popover-title">Доски</span>
               <button
                 class="btn-primary-xs"
+                title="Новая доска"
                 onClick={() => {
                   const newId = createBoard('Новая доска');
                   openTab('board', newId, 'Новая доска');
@@ -2092,7 +2559,7 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
               {boards.value.filter((b) => !b.deleted).map((b) => (
                 <div
                   key={b.id}
-                  class={`miro-board-item ${b.id === boardId ? 'active' : ''}`}
+                  class={`miro-board-item tree-board-item ${b.id === boardId ? 'active' : ''}`}
                   onClick={() => {
                     openTab('board', b.id, b.title);
                     setIsBoardsPopoverOpen(false);
@@ -2191,14 +2658,19 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
 
           <div class="miro-dock-divider" />
 
+
           {/* 3. Sticky Note (S) + Flyout */}
           <div class="miro-dock-tool-wrapper">
             <button
               class={`miro-dock-btn ${activeTool === 'sticky' ? 'active' : ''}`}
               data-tool="sticky"
               onClick={() => {
-                setActiveTool('sticky');
-                setActiveFlyout(activeFlyout === 'sticky' ? 'none' : 'sticky');
+                if (activeTool === 'sticky') {
+                  setActiveFlyout(activeFlyout === 'sticky' ? 'none' : 'sticky');
+                } else {
+                  setActiveTool('sticky');
+                  setActiveFlyout('none');
+                }
               }}
               title="Стикеры Miro (S)"
             >
@@ -2232,8 +2704,12 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
               class={`miro-dock-btn ${activeTool === 'shape' ? 'active' : ''}`}
               data-tool="shape"
               onClick={() => {
-                setActiveTool('shape');
-                setActiveFlyout(activeFlyout === 'shape' ? 'none' : 'shape');
+                if (activeTool === 'shape') {
+                  setActiveFlyout(activeFlyout === 'shape' ? 'none' : 'shape');
+                } else {
+                  setActiveTool('shape');
+                  setActiveFlyout('none');
+                }
               }}
               title="Геометрические фигуры (R)"
             >
@@ -2290,6 +2766,14 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
                   >
                     <div class="shape-preview cylinder-preview" />
                     <span>База данных</span>
+                  </button>
+                  <button
+                    class={`miro-shape-pick-btn ${selectedShapeVariant === 'hexagon' ? 'active' : ''}`}
+                    onClick={() => { setSelectedShapeVariant('hexagon'); setActiveTool('shape'); setActiveFlyout('none'); }}
+                    title="Шестиугольник"
+                  >
+                    <div class="shape-preview hexagon-preview" />
+                    <span>Шестиугольник</span>
                   </button>
                 </div>
               </div>
@@ -2435,7 +2919,84 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
 
           <div class="miro-dock-divider" />
 
-          {/* 9. Mindmap & Auto-Diagrams (M) */}
+          {/* 9. Widgets (+) Menu */}
+          <div class="miro-dock-tool-wrapper">
+            <button
+              class={`miro-dock-btn ${activeFlyout === 'widgets' || activeTool === 'checklist' || activeTool === 'table' || activeTool === 'kanban' || activeTool === 'code' ? 'active' : ''}`}
+              data-tool="widgets"
+              onClick={() => {
+                setActiveFlyout(activeFlyout === 'widgets' ? 'none' : 'widgets');
+              }}
+              title="Виджеты: Чек-лист, Таблица, Канбан, Код (+)"
+            >
+              <Icon name="plus" size={20} />
+            </button>
+
+            {activeFlyout === 'widgets' && (
+              <div class="miro-flyout-panel miro-widgets-flyout liquid-glass-surface" style={{ display: 'flex', flexDirection: 'column', gap: '4px', minWidth: '160px', padding: '6px' }}>
+                <button
+                  type="button"
+                  class="miro-flyout-item-btn"
+                  style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 10px', background: 'transparent', border: 'none', color: '#f1f5f9', fontSize: '13px', cursor: 'pointer', borderRadius: '6px', textAlign: 'left' }}
+                  onClick={() => {
+                    const cx = (window.innerWidth / 2 - viewport.x) / viewport.zoom;
+                    const cy = (window.innerHeight / 2 - viewport.y) / viewport.zoom;
+                    createNodeAt('checklist', cx - 140, cy - 110);
+                    setActiveFlyout('none');
+                  }}
+                >
+                  <Icon name="checklist" size={16} />
+                  <span>Чек-лист</span>
+                </button>
+                <button
+                  type="button"
+                  class="miro-flyout-item-btn"
+                  style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 10px', background: 'transparent', border: 'none', color: '#f1f5f9', fontSize: '13px', cursor: 'pointer', borderRadius: '6px', textAlign: 'left' }}
+                  onClick={() => {
+                    const cx = (window.innerWidth / 2 - viewport.x) / viewport.zoom;
+                    const cy = (window.innerHeight / 2 - viewport.y) / viewport.zoom;
+                    createNodeAt('table', cx - 170, cy - 90);
+                    setActiveFlyout('none');
+                  }}
+                >
+                  <Icon name="table" size={16} />
+                  <span>Таблица</span>
+                </button>
+                <button
+                  type="button"
+                  class="miro-flyout-item-btn"
+                  style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 10px', background: 'transparent', border: 'none', color: '#f1f5f9', fontSize: '13px', cursor: 'pointer', borderRadius: '6px', textAlign: 'left' }}
+                  onClick={() => {
+                    const cx = (window.innerWidth / 2 - viewport.x) / viewport.zoom;
+                    const cy = (window.innerHeight / 2 - viewport.y) / viewport.zoom;
+                    createNodeAt('kanban', cx - 140, cy - 210);
+                    setActiveFlyout('none');
+                  }}
+                >
+                  <Icon name="kanban" size={16} />
+                  <span>Канбан-колонка</span>
+                </button>
+                <button
+                  type="button"
+                  class="miro-flyout-item-btn"
+                  style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 10px', background: 'transparent', border: 'none', color: '#f1f5f9', fontSize: '13px', cursor: 'pointer', borderRadius: '6px', textAlign: 'left' }}
+                  onClick={() => {
+                    const cx = (window.innerWidth / 2 - viewport.x) / viewport.zoom;
+                    const cy = (window.innerHeight / 2 - viewport.y) / viewport.zoom;
+                    createNodeAt('code', cx - 180, cy - 110);
+                    setActiveFlyout('none');
+                  }}
+                >
+                  <Icon name="code" size={16} />
+                  <span>Блок кода</span>
+                </button>
+              </div>
+            )}
+          </div>
+
+          <div class="miro-dock-divider" />
+
+          {/* 10. Mindmap & Auto-Diagrams (M) */}
           <button
             class="miro-dock-btn"
             onClick={() => setIsAutoDiagramModalOpen(true)}
@@ -2486,48 +3047,6 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
           </button>
         </div>
       </div>
-
-      {/* =========================================================================
-          ISLAND 3: TOP-RIGHT FLOATING NOTES & COLLABORATION BAR
-          ========================================================================= */}
-      {!isSplitView.value && (
-        <div
-          class="miro-actions-bar liquid-glass-surface"
-          onMouseDown={(e) => e.stopPropagation()}
-          onClick={(e) => e.stopPropagation()}
-        >
-          {/* [ Заметки ] Drawer Toggle */}
-          <button
-            class={`miro-action-pill ${isNotesDrawerOpen ? 'active' : ''}`}
-            onClick={() => setIsNotesDrawerOpen(!isNotesDrawerOpen)}
-            title="Открыть базу знаний заметок (Markdown)"
-          >
-            <Icon name="file-text" size={15} />
-            <span>Заметки</span>
-          </button>
-
-          {/* [ ИИ-Контекст ] Button */}
-          <button
-            class="miro-action-pill"
-            data-testid="ai-export-btn"
-            onClick={() => setShowAiModal(true)}
-            title="Экспорт контекста доски для ИИ"
-          >
-            <Icon name="sparkles" size={15} />
-            <span>ИИ-Контекст</span>
-          </button>
-
-          {/* Network Status Pill */}
-          <div
-            class="miro-network-pill"
-            onClick={() => setIsNetworkPopoverOpen(true)}
-            title="Сетевые подключения и P2P"
-          >
-            <span class="status-dot green" />
-            <span>Локально</span>
-          </div>
-        </div>
-      )}
 
       {/* =========================================================================
           RIGHT SLIDE-OVER NOTES DRAWER
@@ -2706,7 +3225,7 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
           class="floating-inspector-bar liquid-glass-surface"
           style={{
             left: `${selectionBounds.x + selectionBounds.width / 2}px`,
-            top: `${selectionBounds.y - 12}px`,
+            top: `${selectionBounds.y - 24}px`,
             transform: 'translate(-50%, -100%)'
           }}
           onMouseDown={(e) => e.stopPropagation()}
@@ -2734,16 +3253,19 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
 
           <div class="inspector-divider" />
 
-          {/* Font size buttons S / M / L */}
+          {/* Size controls S | M | L | XL */}
           <div class="inspector-font-sizes">
             <button
               class="inspector-size-btn"
-              title="Размер текста: Маленький (13px)"
+              title="Размер S (Текст: 14px / Линия: 2px)"
               onClick={() => {
                 boardDoc.transact(() => {
                   for (const id of selectedNodeIds) {
                     const map = yNodes.get(id);
-                    if (map) map.set('fontSize', 13);
+                    if (map) {
+                      map.set('fontSize', 14);
+                      map.set('strokeWidth', 2);
+                    }
                   }
                 }, 'user');
               }}
@@ -2752,12 +3274,15 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
             </button>
             <button
               class="inspector-size-btn"
-              title="Размер текста: Средний (15px)"
+              title="Размер M (Текст: 18px / Линия: 4px)"
               onClick={() => {
                 boardDoc.transact(() => {
                   for (const id of selectedNodeIds) {
                     const map = yNodes.get(id);
-                    if (map) map.set('fontSize', 15);
+                    if (map) {
+                      map.set('fontSize', 18);
+                      map.set('strokeWidth', 4);
+                    }
                   }
                 }, 'user');
               }}
@@ -2766,17 +3291,37 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
             </button>
             <button
               class="inspector-size-btn"
-              title="Размер текста: Большой (18px)"
+              title="Размер L (Текст: 24px / Линия: 8px)"
               onClick={() => {
                 boardDoc.transact(() => {
                   for (const id of selectedNodeIds) {
                     const map = yNodes.get(id);
-                    if (map) map.set('fontSize', 18);
+                    if (map) {
+                      map.set('fontSize', 24);
+                      map.set('strokeWidth', 8);
+                    }
                   }
                 }, 'user');
               }}
             >
               L
+            </button>
+            <button
+              class="inspector-size-btn"
+              title="Размер XL (Текст: 32px / Линия: 14px)"
+              onClick={() => {
+                boardDoc.transact(() => {
+                  for (const id of selectedNodeIds) {
+                    const map = yNodes.get(id);
+                    if (map) {
+                      map.set('fontSize', 32);
+                      map.set('strokeWidth', 14);
+                    }
+                  }
+                }, 'user');
+              }}
+            >
+              XL
             </button>
           </div>
 
@@ -3142,10 +3687,12 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
         )}
 
         {/* Nodes Layer */}
-        {visibleNodes.map((node) => {
+        {visibleNodes.map((rawNode) => {
+          const node = nodeLookup.get(rawNode.id) || rawNode;
           const isSelected = selectedNodeIds.has(node.id);
           const nodeColorHex = CANVAS_COLORS[node.color || ''] || CANVAS_COLORS.default;
           const isFrame = node.type === 'frame';
+          const isDrawing = node.type === 'drawing';
           const isNote = node.type === 'note';
           const shapeClass = node.type === 'shape' && node.shapeVariant ? `shape-variant-${node.shapeVariant}` : '';
 
@@ -3159,28 +3706,32 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
                 top: `${node.y}px`,
                 width: `${node.w}px`,
                 height: `${node.h}px`,
-                borderColor: isFrame ? 'rgba(255, 255, 255, 0.15)' : nodeColorHex,
-                zIndex: node.z ?? (isFrame ? 0 : 2)
+                borderColor: isFrame ? 'rgba(255, 255, 255, 0.15)' : isDrawing ? 'transparent' : nodeColorHex,
+                zIndex: node.z ?? (isFrame ? 1 : isDrawing ? 25 : 10)
               }}
               onMouseDown={(e) => handleNodePointerDown(node, e as any)}
             >
-              {/* 4 Magnetic Connector Ports */}
-              <div
-                class="magnetic-port port-top"
-                onMouseDown={(e) => handlePortPointerDown(node.id, 'top', e as any)}
-              />
-              <div
-                class="magnetic-port port-right"
-                onMouseDown={(e) => handlePortPointerDown(node.id, 'right', e as any)}
-              />
-              <div
-                class="magnetic-port port-bottom"
-                onMouseDown={(e) => handlePortPointerDown(node.id, 'bottom', e as any)}
-              />
-              <div
-                class="magnetic-port port-left"
-                onMouseDown={(e) => handlePortPointerDown(node.id, 'left', e as any)}
-              />
+              {/* 4 Magnetic Connector Ports (never on drawing nodes) */}
+              {!isDrawing && (
+                <>
+                  <div
+                    class="magnetic-port port-top"
+                    onMouseDown={(e) => handlePortPointerDown(node.id, 'top', e as any)}
+                  />
+                  <div
+                    class="magnetic-port port-right"
+                    onMouseDown={(e) => handlePortPointerDown(node.id, 'right', e as any)}
+                  />
+                  <div
+                    class="magnetic-port port-bottom"
+                    onMouseDown={(e) => handlePortPointerDown(node.id, 'bottom', e as any)}
+                  />
+                  <div
+                    class="magnetic-port port-left"
+                    onMouseDown={(e) => handlePortPointerDown(node.id, 'left', e as any)}
+                  />
+                </>
+              )}
 
               {/* Top drag bar for sticky notes */}
               {node.type === 'sticky' && (
@@ -3446,6 +3997,273 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
                 <div class="frame-label-area">
                   <span class="frame-label-text">{node.text}</span>
                 </div>
+              ) : node.type === 'shape' ? (
+                <div style={{ position: 'relative', width: '100%', height: '100%', pointerEvents: 'none' }}>
+                  {renderShapeSvg(node, nodeColorHex)}
+                  <textarea
+                    id={`node-textarea-${node.id}`}
+                    class="node-inline-textarea shape-inline-textarea"
+                    style={{
+                      fontSize: node.fontSize ? `${node.fontSize}px` : undefined,
+                      pointerEvents: 'auto'
+                    }}
+                    value={node.text}
+                    placeholder="Введите текст..."
+                    onWheel={(e) => e.stopPropagation()}
+                    onMouseDown={(e) => {
+                      e.stopPropagation();
+                      setSelectedNodeIds(new Set([node.id]));
+                    }}
+                    onFocus={() => setSelectedNodeIds(new Set([node.id]))}
+                    onInput={(e) => {
+                      const map = yNodes.get(node.id);
+                      if (map) {
+                        setNodeProperties(map, { text: (e.target as HTMLTextAreaElement).value });
+                      }
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Tab' && !e.shiftKey) {
+                        e.preventDefault();
+                        chainNextSticky(node, 'right');
+                      }
+                      if (e.key === 'Enter' && (e.shiftKey || e.ctrlKey)) {
+                        e.preventDefault();
+                        chainNextSticky(node, 'down');
+                      }
+                    }}
+                  />
+                </div>
+              ) : node.type === 'checklist' ? (
+                (() => {
+                  const items = parseChecklistItems(node.text);
+                  const doneCount = items.filter((it) => it.done).length;
+                  const progressPct = items.length > 0 ? Math.round((doneCount / items.length) * 100) : 0;
+                  return (
+                    <div
+                      class="node-checklist-card"
+                      onMouseDown={(e) => e.stopPropagation()}
+                      onWheel={(e) => e.stopPropagation()}
+                    >
+                      <div class="checklist-title-row">
+                        <input
+                          type="text"
+                          class="checklist-title-input"
+                          value={node.fileName || 'Чек-лист'}
+                          placeholder="Заголовок чек-листа..."
+                          onInput={(e) => {
+                            const map = yNodes.get(node.id);
+                            if (map) setNodeProperties(map, { fileName: (e.target as HTMLInputElement).value });
+                          }}
+                        />
+                        <span class="checklist-progress-text">{doneCount}/{items.length} — {progressPct}%</span>
+                      </div>
+                      <div class="checklist-progress-container">
+                        <div class="checklist-progress-bar">
+                          <div class="checklist-progress-fill" style={{ width: `${progressPct}%` }} />
+                        </div>
+                      </div>
+                      <div class="checklist-items-scroll scrollable-card-content">
+                        {items.map((item, idx) => (
+                          <div key={item.id} class={`checklist-item-row ${item.done ? 'done' : ''}`}>
+                            <button
+                              type="button"
+                              class={`checklist-checkbox-btn ${item.done ? 'checked' : ''}`}
+                              onClick={() => handleToggleChecklistItem(node, idx)}
+                            >
+                              {item.done && <Icon name="check" size={11} color="#ffffff" />}
+                            </button>
+                            <input
+                              type="text"
+                              class={`checklist-item-input ${item.done ? 'done' : ''}`}
+                              value={item.text}
+                              onInput={(e) => handleUpdateChecklistText(node, idx, (e.target as HTMLInputElement).value)}
+                            />
+                            <button
+                              type="button"
+                              class="checklist-item-del-btn"
+                              onClick={() => handleDeleteChecklistItem(node, idx)}
+                              title="Удалить пункт"
+                            >
+                              <Icon name="x" size={12} />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                      <button
+                        type="button"
+                        class="checklist-add-row-btn"
+                        onClick={() => handleAddChecklistItem(node)}
+                      >
+                        <Icon name="plus" size={13} />
+                        <span>Добавить пункт</span>
+                      </button>
+                    </div>
+                  );
+                })()
+              ) : node.type === 'table' ? (
+                (() => {
+                  const table = parseTableData(node.text);
+                  return (
+                    <div
+                      class="node-table-wrapper"
+                      onMouseDown={(e) => e.stopPropagation()}
+                      onWheel={(e) => e.stopPropagation()}
+                    >
+                      <div class="node-table-toolbar">
+                        <button type="button" class="table-tool-btn" onClick={() => handleAddTableRow(node)}>+ Строка</button>
+                        <button type="button" class="table-tool-btn" onClick={() => handleDelTableRow(node)}>- Строка</button>
+                        <button type="button" class="table-tool-btn" onClick={() => handleAddTableCol(node)}>+ Столбец</button>
+                        <button type="button" class="table-tool-btn" onClick={() => handleDelTableCol(node)}>- Столбец</button>
+                      </div>
+                      <div class="node-table-grid scrollable-card-content" style={{ gridTemplateColumns: `repeat(${table[0]?.length || 3}, minmax(80px, 1fr))` }}>
+                        {table.map((row, rIdx) =>
+                          row.map((cell, cIdx) => (
+                            <div key={`${rIdx}-${cIdx}`} class="node-table-cell">
+                              <input
+                                type="text"
+                                value={cell}
+                                placeholder={rIdx === 0 ? `Колонка ${cIdx + 1}` : ''}
+                                onInput={(e) => handleUpdateTableCell(node, rIdx, cIdx, (e.target as HTMLInputElement).value)}
+                              />
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()
+              ) : node.type === 'kanban' ? (
+                (() => {
+                  const cards = parseKanbanCards(node.description || '');
+                  return (
+                    <div
+                      class="node-kanban-column"
+                      onMouseDown={(e) => e.stopPropagation()}
+                      onWheel={(e) => e.stopPropagation()}
+                    >
+                      <div class="kanban-header-bar">
+                        <div class="kanban-title-group">
+                          <span class="kanban-dot" style={{ backgroundColor: nodeColorHex }} />
+                          <input
+                            type="text"
+                            class="kanban-title"
+                            style={{ background: 'transparent', border: 'none', outline: 'none' }}
+                            value={node.text || 'К выполнению'}
+                            onInput={(e) => {
+                              const map = yNodes.get(node.id);
+                              if (map) setNodeProperties(map, { text: (e.target as HTMLInputElement).value });
+                            }}
+                          />
+                        </div>
+                        <span class="kanban-count-badge">{cards.length}</span>
+                      </div>
+                      <div class="kanban-cards-area scrollable-card-content">
+                        {cards.map((card, idx) => (
+                          <div key={idx} class="checklist-item-row" style={{ background: 'rgba(255,255,255,0.06)', borderRadius: '6px' }}>
+                            <input
+                              type="text"
+                              class="checklist-item-input"
+                              value={card}
+                              onInput={(e) => handleUpdateKanbanCard(node, idx, (e.target as HTMLInputElement).value)}
+                            />
+                            <button
+                              type="button"
+                              class="checklist-item-del-btn"
+                              onClick={() => handleDeleteKanbanCard(node, idx)}
+                              title="Удалить карточку"
+                            >
+                              <Icon name="x" size={12} />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                      <button
+                        type="button"
+                        class="kanban-add-card-btn"
+                        onClick={() => handleAddKanbanCard(node)}
+                      >
+                        <Icon name="plus" size={13} />
+                        <span>Карточка</span>
+                      </button>
+                    </div>
+                  );
+                })()
+              ) : node.type === 'code' ? (
+                (() => {
+                  const lang = node.codeLanguage || 'typescript';
+                  return (
+                    <div
+                      class="node-code-block"
+                      onMouseDown={(e) => e.stopPropagation()}
+                      onWheel={(e) => e.stopPropagation()}
+                    >
+                      <div class="code-header-bar">
+                        <select
+                          class="code-lang-selector"
+                          value={lang}
+                          onChange={(e) => {
+                            const map = yNodes.get(node.id);
+                            if (map) map.set('codeLanguage', (e.target as HTMLSelectElement).value);
+                          }}
+                        >
+                          <option value="typescript">TypeScript</option>
+                          <option value="javascript">JavaScript</option>
+                          <option value="python">Python</option>
+                          <option value="sql">SQL</option>
+                          <option value="json">JSON</option>
+                          <option value="html">HTML</option>
+                          <option value="css">CSS</option>
+                          <option value="bash">Bash</option>
+                        </select>
+                        <button
+                          type="button"
+                          class="code-copy-btn"
+                          onClick={() => {
+                            navigator.clipboard.writeText(node.text || '');
+                            showToast('Код скопирован в буфер');
+                          }}
+                          title="Скопировать код"
+                        >
+                          <Icon name="copy" size={12} />
+                          <span>Копировать</span>
+                        </button>
+                      </div>
+                      <textarea
+                        class="code-textarea-editor"
+                        value={node.text}
+                        placeholder="// Напишите код здесь..."
+                        spellcheck={false}
+                        onInput={(e) => {
+                          const map = yNodes.get(node.id);
+                          if (map) setNodeProperties(map, { text: (e.target as HTMLTextAreaElement).value });
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Tab') {
+                            e.preventDefault();
+                            const ta = e.currentTarget;
+                            const start = ta.selectionStart;
+                            const end = ta.selectionEnd;
+                            const val = ta.value;
+                            const updated = val.substring(0, start) + '  ' + val.substring(end);
+                            ta.value = updated;
+                            ta.selectionStart = ta.selectionEnd = start + 2;
+                            const map = yNodes.get(node.id);
+                            if (map) setNodeProperties(map, { text: updated });
+                          }
+                        }}
+                      />
+                    </div>
+                  );
+                })()
+              ) : node.type === 'image' ? (
+                <div class="node-image-container" onMouseDown={(e) => e.stopPropagation()}>
+                  <img
+                    src={node.imageUrl || (node.fileHash ? `/api/attachments/${node.fileHash}` : '')}
+                    alt={node.fileName || node.text || 'Изображение'}
+                    class="node-rendered-img"
+                    style={{ width: '100%', height: '100%', objectFit: 'contain', pointerEvents: 'none' }}
+                  />
+                </div>
               ) : (
                 <textarea
                   id={`node-textarea-${node.id}`}
@@ -3476,6 +4294,27 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
                     }
                   }}
                 />
+              )}
+
+              {/* Sticky Reaction Pill */}
+              {node.type === 'sticky' && (
+                <div
+                  class="node-reaction-pill"
+                  title="Поставить реакцию"
+                  onMouseDown={(e) => e.stopPropagation()}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const map = yNodes.get(node.id);
+                    if (map) {
+                      const reactions = (map.get('reactions') as any) || {};
+                      const count = (reactions.thumbsUp || 0) + 1;
+                      map.set('reactions', { ...reactions, thumbsUp: count });
+                    }
+                  }}
+                >
+                  <Icon name="thumbs-up" size={12} />
+                  <span class="reaction-count">{node.reactions?.thumbsUp || 0}</span>
+                </div>
               )}
 
               {/* Author micro-badge in Team Scope (never show debug 'Tester') */}
@@ -3750,27 +4589,7 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
         onClose={() => setIsNetworkPopoverOpen(false)}
       />
 
-      {/* Empty State Seed Card */}
-      {visibleNodes.length === 0 && (
-        <div
-          class="canvas-empty-state liquid-glass-surface"
-          onMouseDown={(e) => {
-            if (activeTool === 'select' || activeTool === 'hand') {
-              e.stopPropagation();
-            }
-          }}
-        >
-          <div class="empty-state-title">Доска пуста</div>
-          <div class="empty-state-desc">Создайте стикер (S) или заполните шаблоном задач</div>
-          <button
-            class="btn-primary-sm empty-state-btn"
-            onClick={() => seedDefaultBoard(boardDoc, agentStatus.value?.memberName || 'Вы')}
-          >
-            <Icon name="plus" size={14} />
-            <span>Заполнить шаблоном</span>
-          </button>
-        </div>
-      )}
+
 
       {/* Sleek Bottom-Right Canvas HUD (Zoom, Fit, Minimap) */}
       <div

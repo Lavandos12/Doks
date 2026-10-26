@@ -49,6 +49,7 @@ export class FileMirror {
   private debounceMs: number;
   private pendingTimeouts = new Map<string, NodeJS.Timeout>();
   private lastWrittenHashes = new Map<string, string>(); // normalizedFilePath -> sha256
+  private lastWrittenTimes = new Map<string, number>(); // normalizedFilePath -> timestamp (ms)
   private registry: MirrorRegistry = { notes: {}, boards: {} };
 
   constructor(vaultPath: string, docManager: DocManager, debounceMs = 3000) {
@@ -99,6 +100,12 @@ export class FileMirror {
 
   public getLastWrittenHash(filePath: string): string | undefined {
     return this.lastWrittenHashes.get(path.normalize(filePath));
+  }
+
+  public isRecentlyWritten(filePath: string, windowMs = 2000): boolean {
+    const t = this.lastWrittenTimes.get(path.normalize(filePath));
+    if (!t) return false;
+    return Date.now() - t < windowMs;
   }
 
   public scheduleWrite(docName: string): void {
@@ -156,6 +163,7 @@ export class FileMirror {
     const hash = crypto.createHash('sha256').update(content).digest('hex');
     const normalized = path.normalize(targetPath);
     this.lastWrittenHashes.set(normalized, hash);
+    this.lastWrittenTimes.set(normalized, Date.now());
 
     const tempPath = `${targetPath}.tmp.${Date.now()}.${Math.random().toString(36).slice(2, 6)}`;
     try {

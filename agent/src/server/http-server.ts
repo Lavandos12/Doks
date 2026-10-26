@@ -46,7 +46,8 @@ import {
   findRadminIp,
   detectRadminIp,
   detectPreferredMeshIp,
-  listOverlayInterfaces
+  listOverlayInterfaces,
+  detectNetworkOverview
 } from '../network.js';
 import { saveConfig } from '../config.js';
 
@@ -83,6 +84,7 @@ export class AgentHttpServer {
   private attachmentManager?: AttachmentManager;
   private sessionToken: string;
   private webDistPath: string;
+  private p2pMeshEnabled = true;
 
   constructor(options: HttpServerOptions) {
     this.config = options.config;
@@ -257,6 +259,13 @@ export class AgentHttpServer {
       const isLoopback = req.ip === '127.0.0.1' || req.ip === '::1' || req.hostname === 'localhost' || req.hostname === '127.0.0.1';
       const isAuthorized = hasAuth || isLoopback;
 
+      const networkOverview = detectNetworkOverview({
+        p2pEnabled: this.p2pMeshEnabled,
+        teamKey: this.config.teamKey,
+        port: this.config.peerPort,
+        peerId: this.config.agentId
+      });
+
       return {
         agentId: this.config.agentId,
         memberName: this.config.memberName,
@@ -264,12 +273,14 @@ export class AgentHttpServer {
         peerPort: this.config.peerPort,
         webPort: this.config.webPort,
         bindAddress: this.config.bindAddress,
-        effectiveIp: radminIp || preferred.ip || '127.0.0.1',
-        radminFound: Boolean(radminIp),
-        radminIp: radminIp || null,
+        effectiveIp: networkOverview.effectiveIp,
+        radminFound: Boolean(networkOverview.detectedRadminIp),
+        radminIp: networkOverview.detectedRadminIp,
+        lanIp: networkOverview.lanIp,
+        p2pEnabled: this.p2pMeshEnabled,
         preferredMeshIp: preferred.ip,
         meshInterfaceKind: preferred.kind,
-        interfaces: listOverlayInterfaces(),
+        interfaces: networkOverview.interfaces,
         peers: this.peerService.getPeersStatus(),
         connectedCount: this.peerService.getConnectedCount(),
         token: isAuthorized ? this.sessionToken : undefined,
@@ -284,7 +295,37 @@ export class AgentHttpServer {
                 .slice(0, 8)
                 .replace(/^(.{4})(.{4})$/, '$1-$2')
             : undefined,
-        inviteLink: isAuthorized ? `doks://${radminIp || preferred.ip || '127.0.0.1'}:${this.config.peerPort}#${this.config.teamKey}` : undefined
+        inviteLink: networkOverview.inviteUri,
+        inviteUri: networkOverview.inviteUri
+      };
+    });
+
+    // GET /api/network: Guaranteed non-null inviteUri and P2P overview
+    this.fastify.get('/api/network', async (req) => {
+      const overview = detectNetworkOverview({
+        p2pEnabled: this.p2pMeshEnabled,
+        teamKey: this.config.teamKey,
+        port: this.config.peerPort,
+        peerId: this.config.agentId
+      });
+      return {
+        ...overview,
+        peers: this.peerService.getPeersStatus(),
+        connectedCount: this.peerService.getConnectedCount()
+      };
+    });
+
+    // POST /api/network/toggle: Master switch for P2P synchronization
+    this.fastify.post('/api/network/toggle', async (req) => {
+      const body = req.body as { enabled?: boolean } | undefined;
+      if (typeof body?.enabled === 'boolean') {
+        this.p2pMeshEnabled = body.enabled;
+      } else {
+        this.p2pMeshEnabled = !this.p2pMeshEnabled;
+      }
+      return {
+        success: true,
+        p2pEnabled: this.p2pMeshEnabled
       };
     });
 

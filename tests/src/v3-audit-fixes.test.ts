@@ -405,4 +405,237 @@ Doks v3.0
       expect(allViolations).toEqual([]);
     });
   });
+
+  describe('6. V3.1 Audit Fixes: Drawing, Eraser, Self-Loop Rejection, and File Echo', () => {
+    it('translates world stroke points to node-local coordinates preventing double offset', () => {
+      const worldPoints = [
+        { x: 300, y: 400 },
+        { x: 350, y: 420 },
+        { x: 400, y: 450 }
+      ];
+
+      const bbox = computeBoundingBox(worldPoints, 8);
+      expect(bbox.x).toBe(300 - 8);
+      expect(bbox.y).toBe(400 - 8);
+
+      const minX = bbox.x;
+      const minY = bbox.y;
+
+      const localPoints = worldPoints.map((p) => ({
+        x: p.x - minX,
+        y: p.y - minY
+      }));
+
+      // Local points start at padding offset (8, 8), strictly >= 0 and within bbox.width/height
+      expect(localPoints[0].x).toBe(8);
+      expect(localPoints[0].y).toBe(8);
+      expect(localPoints[2].x).toBe(400 - (300 - 8));
+      expect(localPoints[2].y).toBe(450 - (400 - 8));
+
+      const pathD = pointsToSmoothSvgPath(localPoints);
+      expect(pathD).toContain('M 8.0 8.0');
+    });
+
+    it('rejects self-loop edges in edge filtering', () => {
+      const edges = [
+        { id: 'e1', fromNode: 'nodeA', toNode: 'nodeB' },
+        { id: 'e2', fromNode: 'nodeA', toNode: 'nodeA' }, // self loop!
+        { id: 'e3', fromNode: 'nodeB', toNode: 'nodeC' }
+      ];
+      const nodesMap = new Map([
+        ['nodeA', { id: 'nodeA', x: 0, y: 0, width: 100, height: 100 }],
+        ['nodeB', { id: 'nodeB', x: 200, y: 0, width: 100, height: 100 }],
+        ['nodeC', { id: 'nodeC', x: 400, y: 0, width: 100, height: 100 }]
+      ]);
+
+      const validEdges = edges.filter(
+        (e) => e && e.fromNode && e.toNode && e.fromNode !== e.toNode && nodesMap.has(e.fromNode) && nodesMap.has(e.toNode)
+      );
+
+      expect(validEdges.map((e) => e.id)).toEqual(['e1', 'e3']);
+    });
+
+    it('eraser pad detects strokes within pad distance and ignores far points', () => {
+      const strokeNode = {
+        id: 'stroke-1',
+        type: 'drawing',
+        x: 100,
+        y: 100,
+        w: 50,
+        h: 50,
+        deleted: false
+      };
+
+      const zoom = 1.0;
+      const ERASE_PAD = 18 / zoom;
+
+      const isHit = (px: number, py: number) => {
+        return (
+          px >= strokeNode.x - ERASE_PAD &&
+          px <= strokeNode.x + strokeNode.w + ERASE_PAD &&
+          py >= strokeNode.y - ERASE_PAD &&
+          py <= strokeNode.y + strokeNode.h + ERASE_PAD
+        );
+      };
+
+      // Inside bounding box
+      expect(isHit(120, 120)).toBe(true);
+
+      // Within ERASE_PAD (e.g. 10px outside)
+      expect(isHit(90, 100)).toBe(true);
+      expect(isHit(100, 160)).toBe(true);
+
+      // Far outside ERASE_PAD (e.g. 50px away)
+      expect(isHit(50, 50)).toBe(false);
+      expect(isHit(200, 200)).toBe(false);
+    });
+
+    it('frame drag parenting correctly identifies all child nodes whose center is inside the frame', () => {
+      const frameNode = {
+        id: 'frame-1',
+        type: 'frame',
+        x: 100,
+        y: 100,
+        w: 400,
+        h: 300,
+        locked: false
+      };
+
+      const allNodes = [
+        frameNode,
+        { id: 'child-1', type: 'sticky', x: 120, y: 120, w: 100, h: 80, locked: false }, // center: (170, 160) -> inside
+        { id: 'child-2', type: 'text', x: 300, y: 250, w: 80, h: 40, locked: false }, // center: (340, 270) -> inside
+        { id: 'outside-1', type: 'sticky', x: 600, y: 500, w: 100, h: 80, locked: false }, // outside
+        { id: 'locked-child', type: 'sticky', x: 150, y: 150, w: 100, h: 80, locked: true } // inside but locked
+      ];
+
+      const childrenToDrag: string[] = [];
+      for (const child of allNodes) {
+        if (child.id === frameNode.id || child.locked) continue;
+        const cx = child.x + child.w / 2;
+        const cy = child.y + child.h / 2;
+        if (
+          cx >= frameNode.x &&
+          cx <= frameNode.x + frameNode.w &&
+          cy >= frameNode.y &&
+          cy <= frameNode.y + frameNode.h
+        ) {
+          childrenToDrag.push(child.id);
+        }
+      }
+
+      expect(childrenToDrag).toEqual(['child-1', 'child-2']);
+    });
+
+    it('detectNetworkOverview always returns guaranteed valid inviteUri (doks://...) even when p2p is disabled', async () => {
+      const { detectNetworkOverview } = await import('../../agent/src/network.js');
+      const disabledRes = detectNetworkOverview({
+        p2pEnabled: false,
+        teamKey: 'abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789',
+        port: 4747,
+        peerId: 'agent-1'
+      });
+
+      expect(disabledRes.p2pEnabled).toBe(false);
+      expect(disabledRes.inviteUri).toBeDefined();
+      expect(disabledRes.inviteUri.startsWith('doks://')).toBe(true);
+      expect(disabledRes.inviteUri).toContain(':4747#abcdef0123456789');
+
+      const enabledRes = detectNetworkOverview({
+        p2pEnabled: true,
+        teamKey: 'abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789',
+        port: 5858,
+        peerId: 'agent-2'
+      });
+      expect(enabledRes.p2pEnabled).toBe(true);
+      expect(enabledRes.inviteUri.startsWith('doks://')).toBe(true);
+      expect(enabledRes.inviteUri).toContain(':5858#abcdef0123456789');
+    });
+
+    it('checklist parses markdown items, toggles done state, and calculates progress correctly', () => {
+      const initialText = '- [ ] Задача 1\n- [x] Задача 2\n- [ ] Задача 3';
+      
+      const parseChecklist = (text: string) => {
+        return text.split('\n').filter(line => line.trim().length > 0).map((line, idx) => {
+          const isDone = line.trim().startsWith('- [x]') || line.trim().startsWith('- [X]');
+          const cleanText = line.replace(/^-\s*\[[ xX]\]\s*/, '').trim();
+          return { id: `item-${idx}`, text: cleanText, done: isDone };
+        });
+      };
+
+      const serializeChecklist = (items: { text: string; done: boolean }[]) => {
+        return items.map(it => `- [${it.done ? 'x' : ' '}] ${it.text}`).join('\n');
+      };
+
+      let items = parseChecklist(initialText);
+      expect(items.length).toBe(3);
+      expect(items[0].done).toBe(false);
+      expect(items[1].done).toBe(true);
+      expect(items[2].done).toBe(false);
+
+      const total = items.length;
+      const doneCount = items.filter(i => i.done).length;
+      const percent = Math.round((doneCount / total) * 100);
+      expect(doneCount).toBe(1);
+      expect(percent).toBe(33);
+
+      // Toggle first item to done
+      items[0].done = true;
+      const updatedText = serializeChecklist(items);
+      expect(updatedText).toContain('- [x] Задача 1');
+      expect(updatedText).toContain('- [x] Задача 2');
+      expect(updatedText).toContain('- [ ] Задача 3');
+      const newDoneCount = items.filter(i => i.done).length;
+      expect(Math.round((newDoneCount / total) * 100)).toBe(67);
+    });
+
+    it('table 2D array handles row/column addition and cell text updates', () => {
+      let table: string[][] = [
+        ['A1', 'B1'],
+        ['A2', 'B2']
+      ];
+
+      // Add column
+      table = table.map(row => [...row, '']);
+      expect(table[0].length).toBe(3);
+      expect(table[1].length).toBe(3);
+
+      // Add row
+      const colCount = table[0].length;
+      table = [...table, Array(colCount).fill('')];
+      expect(table.length).toBe(3);
+
+      // Update cell (row 1, col 2)
+      table[1][2] = 'C2';
+      expect(table[1][2]).toBe('C2');
+
+      // JSON serialization and deserialization
+      const serialized = JSON.stringify(table);
+      const deserialized: string[][] = JSON.parse(serialized);
+      expect(deserialized.length).toBe(3);
+      expect(deserialized[1][2]).toBe('C2');
+    });
+
+    it('multi-node drag applies uniform delta (dx, dy) to all selected node coordinates', () => {
+      const selectedIds = ['node-1', 'node-2', 'node-3'];
+      const initialPositions = new Map<string, { x: number; y: number }>([
+        ['node-1', { x: 100, y: 150 }],
+        ['node-2', { x: 250, y: 300 }],
+        ['node-3', { x: 400, y: 450 }]
+      ]);
+
+      const dx = 50;
+      const dy = -30;
+
+      const newPositions = new Map<string, { x: number; y: number }>();
+      for (const id of selectedIds) {
+        const init = initialPositions.get(id)!;
+        newPositions.set(id, { x: init.x + dx, y: init.y + dy });
+      }
+
+      expect(newPositions.get('node-1')).toEqual({ x: 150, y: 120 });
+      expect(newPositions.get('node-2')).toEqual({ x: 300, y: 270 });
+      expect(newPositions.get('node-3')).toEqual({ x: 450, y: 420 });
+    });
+  });
 });

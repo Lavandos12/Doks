@@ -1,14 +1,14 @@
 import { h } from 'preact';
-import { useState, useEffect } from 'preact/hooks';
-import type { WorkspaceScope, BoardSummary } from '@doks/shared';
+import { useState } from 'preact/hooks';
+import type { WorkspaceScope } from '@doks/shared';
 import {
   transferNodesAcrossScopes,
   createBoard,
   currentScope,
-  setScope,
-  openTab
+  setScope
 } from '../../state/app-state.js';
 import { Icon } from '../../ui/icons.js';
+import { showToast } from '../../ui/toast.js';
 
 interface TransferModalProps {
   isOpen: boolean;
@@ -30,51 +30,24 @@ export function TransferModal({
   const targetScope: WorkspaceScope = fromScope === 'solo' ? 'team' : 'solo';
   const isPromote = fromScope === 'solo';
 
-  const [targetBoards, setTargetBoards] = useState<BoardSummary[]>([]);
-  const [selectedTargetBoardId, setSelectedTargetBoardId] = useState<string>('new');
   const [newBoardTitle, setNewBoardTitle] = useState<string>(
     isPromote ? 'Командная доска (из Соло)' : 'Личная доска (из Команды)'
   );
-  const [includeLinkedNotes, setIncludeLinkedNotes] = useState<boolean>(true);
-  const [transferMode, setTransferMode] = useState<'copy' | 'move'>('copy');
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-
-  useEffect(() => {
-    // Fetch boards in target scope
-    const loadBoards = async () => {
-      try {
-        const res = await fetch(`/api/boards?scope=${targetScope}`);
-        if (res.ok) {
-          const data: BoardSummary[] = await res.json();
-          setTargetBoards(data);
-          if (data.length > 0) {
-            setSelectedTargetBoardId(data[0].id);
-          } else {
-            setSelectedTargetBoardId('new');
-          }
-        }
-      } catch (err) {
-        console.error('[TransferModal] Failed to load target boards:', err);
-      }
-    };
-    loadBoards();
-  }, [targetScope]);
 
   const handleSubmit = async () => {
     setIsSubmitting(true);
     setErrorMsg(null);
 
     try {
-      let finalTargetBoardId = selectedTargetBoardId;
-
-      if (finalTargetBoardId === 'new') {
-        // Temporarily switch scope to create target board
-        const savedScope = currentScope.value;
-        setScope(targetScope);
-        finalTargetBoardId = createBoard(newBoardTitle.trim() || (isPromote ? 'Командная доска' : 'Личная доска'));
-        setScope(savedScope);
-      }
+      // Create new board in target scope
+      const savedScope = currentScope.value;
+      setScope(targetScope);
+      const finalTargetBoardId = createBoard(
+        newBoardTitle.trim() || (isPromote ? 'Командная доска' : 'Личная доска')
+      );
+      setScope(savedScope);
 
       if (nodeIds.length > 0) {
         const res = await transferNodesAcrossScopes({
@@ -83,17 +56,18 @@ export function TransferModal({
           boardId,
           targetBoardId: finalTargetBoardId,
           nodeIds,
-          includeLinkedNotes,
-          mode: transferMode
+          includeLinkedNotes: true,
+          mode: 'copy'
         });
 
         if (res.success) {
+          showToast(`Доска скопирована в ${targetScope === 'team' ? 'Команду' : 'Соло'}`);
           onClose();
         } else {
           setErrorMsg(res.error || 'Ошибка переноса элементов');
         }
       } else {
-        // Empty board cloned successfully
+        showToast(`Доска скопирована в ${targetScope === 'team' ? 'Команду' : 'Соло'}`);
         onClose();
       }
     } catch (err: any) {
@@ -105,20 +79,24 @@ export function TransferModal({
 
   return (
     <div class="modal-overlay doks-modal-backdrop transfer-modal-backdrop" onClick={onClose}>
-      <div class="modal-card doks-modal-dialog transfer-modal liquid-glass-surface" onClick={(e) => e.stopPropagation()}>
+      <div
+        class="modal-card doks-modal-dialog transfer-modal liquid-glass-surface"
+        style={{ maxWidth: '440px', width: '100%' }}
+        onClick={(e) => e.stopPropagation()}
+      >
         <div class="modal-header">
           <div class="modal-header-icon-title" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <span class="scope-icon-large text-accent">
               <Icon name={isPromote ? 'globe-mesh' : 'lock'} size={24} />
             </span>
             <div>
-              <h3 class="modal-title" style={{ margin: 0, fontSize: '18px', fontWeight: 600 }}>
+              <h3 class="modal-title" style={{ margin: 0, fontSize: '17px', fontWeight: 600 }}>
                 {isPromote ? 'Опубликовать в Команду' : 'Форкнуть в Соло'}
               </h3>
-              <p class="modal-subtitle" style={{ margin: '4px 0 0', fontSize: '12px', color: 'var(--text-secondary)' }}>
+              <p class="modal-subtitle" style={{ margin: '4px 0 0', fontSize: '12px', color: '#94a3b8' }}>
                 {isPromote
-                  ? 'Выбранные элементы будут сгруппированы во фрейм и отправлены в P2P меш'
-                  : 'Создает полностью изолированную приватную копию на вашем ПК'}
+                  ? 'Копирует текущую доску со всеми объектами в P2P меш'
+                  : 'Создает изолированную приватную копию на вашем ПК'}
               </p>
             </div>
           </div>
@@ -127,77 +105,27 @@ export function TransferModal({
           </button>
         </div>
 
-        <div class="modal-body">
+        <div class="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
           {errorMsg && <div class="modal-alert-error">{errorMsg}</div>}
 
-          <div class="form-group">
-            <label class="form-label">Область переноса</label>
-            <div class="transfer-count-chip">
-              <span>{nodeIds.length > 0 ? `Вся текущая доска (${nodeIds.length} объектов)` : 'Создание копии доски'}</span>
-            </div>
-          </div>
-
-          <div class="form-group">
-            <label class="form-label">Целевая доска ({targetScope === 'team' ? 'Команда' : 'Соло'})</label>
-            <select
-              class="form-select"
-              value={selectedTargetBoardId}
-              onChange={(e) => setSelectedTargetBoardId((e.target as HTMLSelectElement).value)}
-            >
-              {targetBoards.map((b) => (
-                <option key={b.id} value={b.id}>
-                  {b.title} ({b.nodeCount} эл.)
-                </option>
-              ))}
-              <option value="new">+ Создать новую доску в {targetScope === 'team' ? 'Команде' : 'Соло'}</option>
-            </select>
-          </div>
-
-          {selectedTargetBoardId === 'new' && (
-            <div class="form-group">
-              <label class="form-label">Название новой доски</label>
-              <input
-                type="text"
-                class="form-input"
-                value={newBoardTitle}
-                onInput={(e) => setNewBoardTitle((e.target as HTMLInputElement).value)}
-                placeholder="Введите название..."
-              />
-            </div>
-          )}
-
-          <div class="form-group-checkbox">
-            <label class="checkbox-label">
-              <input
-                type="checkbox"
-                checked={includeLinkedNotes}
-                onChange={(e) => setIncludeLinkedNotes((e.target as HTMLInputElement).checked)}
-              />
-              <span>Клонировать связанные markdown-заметки</span>
+          <div class="form-group" style={{ margin: 0 }}>
+            <label style={{ fontSize: '13px', fontWeight: 500, color: '#f1f5f9', marginBottom: '6px' }}>
+              Название новой доски ({targetScope === 'team' ? 'Команда' : 'Соло'})
             </label>
+            <input
+              type="text"
+              class="form-input"
+              value={newBoardTitle}
+              onInput={(e) => setNewBoardTitle((e.target as HTMLInputElement).value)}
+              placeholder="Введите название..."
+              style={{ width: '100%' }}
+              autoFocus
+            />
           </div>
 
-          {isPromote && (
-            <div class="form-group">
-              <label class="form-label">Режим переноса</label>
-              <div class="segmented-control">
-                <button
-                  type="button"
-                  class={`seg-btn ${transferMode === 'copy' ? 'active' : ''}`}
-                  onClick={() => setTransferMode('copy')}
-                >
-                  Копировать (сохранить в Соло)
-                </button>
-                <button
-                  type="button"
-                  class={`seg-btn ${transferMode === 'move' ? 'active' : ''}`}
-                  onClick={() => setTransferMode('move')}
-                >
-                  Переместить
-                </button>
-              </div>
-            </div>
-          )}
+          <div style={{ fontSize: '12px', color: '#94a3b8', background: 'rgba(255,255,255,0.03)', padding: '10px 12px', borderRadius: '8px' }}>
+            Включает {nodeIds.length} объектов доски и связанные markdown-заметки. Оригинальная доска в {fromScope === 'solo' ? 'Соло' : 'Команде'} останется без изменений.
+          </div>
         </div>
 
         <div class="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '18px' }}>
@@ -208,12 +136,9 @@ export function TransferModal({
             class="btn btn-primary"
             onClick={handleSubmit}
             disabled={isSubmitting}
+            style={{ minWidth: '160px' }}
           >
-            {isSubmitting
-              ? 'Перенос...'
-              : isPromote
-              ? 'Опубликовать в Команду'
-              : 'Форкнуть в Соло'}
+            {isSubmitting ? 'Копирование...' : isPromote ? 'Скопировать в Команду' : 'Скопировать в Соло'}
           </button>
         </div>
       </div>
