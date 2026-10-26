@@ -68,8 +68,8 @@ export function AiExportModal({ boardId, selectedNodeIds = [], onClose }: AiExpo
   };
 
   return (
-    <div class="doks-modal-backdrop ai-export-modal" onClick={onClose} role="dialog" aria-modal="true">
-      <div class="doks-modal-dialog ai-export-dialog" onClick={(e) => e.stopPropagation()}>
+    <div class="modal-overlay doks-modal-backdrop ai-export-modal-overlay" onClick={onClose} role="dialog" aria-modal="true">
+      <div class="modal-card doks-modal-dialog ai-export-dialog ai-export-modal" onClick={(e) => e.stopPropagation()}>
         {/* Header */}
         <div class="modal-header">
           <div class="modal-title-group">
@@ -139,7 +139,7 @@ export function AiExportModal({ boardId, selectedNodeIds = [], onClose }: AiExpo
 
           {/* Stats & Tokens */}
           <div class="ai-export-stats-card">
-            <div class="ai-export-stat-line">
+            <div class="ai-export-stat-line" style={{ display: 'flex', gap: '16px', alignItems: 'center', justifyContent: 'space-between' }}>
               <span>Символов: {result?.charCount || 0}</span>
               <span class="ai-export-token-pill">
                 Оценка токенов: ~{result?.estimatedTokens || 0}

@@ -19,6 +19,7 @@ import {
 } from '@doks/shared';
 import { yjsClient } from './yjs-client.js';
 import { NotesSearchIndex } from '../search/indexer.js';
+import { showToast } from '../ui/toast.js';
 
 export const searchIndex = new NotesSearchIndex();
 
@@ -540,79 +541,103 @@ export async function transferNodesAcrossScopes(req: BridgeTransferRequest): Pro
   return data;
 }
 
-// Global hotkey listeners for desktop feel
+// Global hotkey listeners for desktop feel with capture phase
 if (typeof window !== 'undefined') {
-  window.addEventListener('keydown', (e: KeyboardEvent) => {
-    // Alt+1: Solo Scope
-    if (e.altKey && e.key === '1') {
-      e.preventDefault();
-      setScope('solo');
-    }
-
-    // Alt+2: Team Scope
-    if (e.altKey && e.key === '2') {
-      e.preventDefault();
-      setScope('team');
-    }
-
-    // Ctrl+W: Close active tab
-    if (e.ctrlKey && e.key.toLowerCase() === 'w') {
-      e.preventDefault();
-      if (activeTabId.value) {
-        closeTab(activeTabId.value);
+  window.addEventListener(
+    'keydown',
+    (e: KeyboardEvent) => {
+      // Alt+1: Solo Scope
+      if (e.altKey && (e.code === 'Digit1' || e.key === '1')) {
+        e.preventDefault();
+        setScope('solo');
+        return;
       }
-    }
 
-    // Ctrl+Tab: Cycle through open tabs
-    if (e.ctrlKey && e.key === 'Tab') {
-      e.preventDefault();
-      const tabs = openTabs.value;
-      if (tabs.length > 1 && activeTabId.value) {
-        const idx = tabs.findIndex((t) => t.id === activeTabId.value);
-        const nextIdx = (idx + 1) % tabs.length;
-        const nextTab = tabs[nextIdx];
-        openTab(nextTab.type, nextTab.id, nextTab.title);
+      // Alt+2: Team Scope
+      if (e.altKey && (e.code === 'Digit2' || e.key === '2')) {
+        e.preventDefault();
+        setScope('team');
+        return;
       }
-    }
 
-    // Ctrl+P or Ctrl+K: Command palette
-    if ((e.ctrlKey || e.metaKey) && !e.shiftKey && (e.key.toLowerCase() === 'p' || e.key.toLowerCase() === 'k')) {
-      e.preventDefault();
-      isCommandPaletteOpen.value = !isCommandPaletteOpen.value;
-      isQuickSwitcherOpen.value = false;
-    }
+      // Ctrl+S: Prevent browser "Save page as" and show save toast
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && (e.code === 'KeyS' || e.key.toLowerCase() === 's' || e.key === 'ы')) {
+        e.preventDefault();
+        showToast(currentScope.value === 'solo' ? 'Все изменения сохранены локально' : 'Синхронизировано в P2P-сети', 'success');
+        return;
+      }
 
-    // Ctrl+B: Toggle Sidebar
-    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'b') {
-      e.preventDefault();
-      toggleSidebar();
-    }
+      // Ctrl+W: Close active tab
+      if (e.ctrlKey && (e.code === 'KeyW' || e.key.toLowerCase() === 'w' || e.key === 'ц')) {
+        e.preventDefault();
+        if (activeTabId.value) {
+          closeTab(activeTabId.value);
+        }
+        return;
+      }
 
-    // Ctrl+\: Toggle Split View
-    if ((e.ctrlKey || e.metaKey) && e.key === '\\') {
-      e.preventDefault();
-      setWorkspaceMode(workspaceMode.value === 'split' ? 'canvas' : 'split');
-    }
+      // Ctrl+Tab: Cycle through open tabs
+      if (e.ctrlKey && (e.code === 'Tab' || e.key === 'Tab')) {
+        e.preventDefault();
+        const tabs = openTabs.value;
+        if (tabs.length > 1 && activeTabId.value) {
+          const idx = tabs.findIndex((t) => t.id === activeTabId.value);
+          const nextIdx = (idx + 1) % tabs.length;
+          const nextTab = tabs[nextIdx];
+          openTab(nextTab.type, nextTab.id, nextTab.title);
+        }
+        return;
+      }
 
-    // Ctrl+O: Quick switcher
-    if (e.ctrlKey && !e.shiftKey && e.key.toLowerCase() === 'o') {
-      e.preventDefault();
-      isQuickSwitcherOpen.value = !isQuickSwitcherOpen.value;
-      isCommandPaletteOpen.value = false;
-    }
-
-    // Ctrl+Shift+F: Global Search (F6)
-    if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'f') {
-      e.preventDefault();
-      currentView.value = 'search';
-    }
-
-    // Escape closes modals
-    if (e.key === 'Escape') {
-      if (isCommandPaletteOpen.value || isQuickSwitcherOpen.value) {
-        isCommandPaletteOpen.value = false;
+      // Ctrl+P or Ctrl+K: Command palette (prevent browser Print dialog)
+      if (
+        (e.ctrlKey || e.metaKey) &&
+        !e.shiftKey &&
+        (e.code === 'KeyP' || e.code === 'KeyK' || e.key.toLowerCase() === 'p' || e.key.toLowerCase() === 'k' || e.key === 'з' || e.key === 'л')
+      ) {
+        e.preventDefault();
+        isCommandPaletteOpen.value = !isCommandPaletteOpen.value;
         isQuickSwitcherOpen.value = false;
+        return;
       }
-    }
-  });
+
+      // Ctrl+B: Toggle Sidebar
+      if ((e.ctrlKey || e.metaKey) && (e.code === 'KeyB' || e.key.toLowerCase() === 'b' || e.key === 'и')) {
+        e.preventDefault();
+        toggleSidebar();
+        return;
+      }
+
+      // Ctrl+\: Toggle Split View
+      if ((e.ctrlKey || e.metaKey) && (e.code === 'Backslash' || e.key === '\\')) {
+        e.preventDefault();
+        setWorkspaceMode(workspaceMode.value === 'split' ? 'canvas' : 'split');
+        return;
+      }
+
+      // Ctrl+O: Quick switcher
+      if (e.ctrlKey && !e.shiftKey && (e.code === 'KeyO' || e.key.toLowerCase() === 'o' || e.key === 'щ')) {
+        e.preventDefault();
+        isQuickSwitcherOpen.value = !isQuickSwitcherOpen.value;
+        isCommandPaletteOpen.value = false;
+        return;
+      }
+
+      // Ctrl+Shift+F: Global Search (F6)
+      if (e.ctrlKey && e.shiftKey && (e.code === 'KeyF' || e.key.toLowerCase() === 'f' || e.key === 'а')) {
+        e.preventDefault();
+        currentView.value = 'search';
+        return;
+      }
+
+      // Escape closes modals
+      if (e.code === 'Escape' || e.key === 'Escape') {
+        if (isCommandPaletteOpen.value || isQuickSwitcherOpen.value) {
+          isCommandPaletteOpen.value = false;
+          isQuickSwitcherOpen.value = false;
+        }
+      }
+    },
+    { capture: true }
+  );
 }

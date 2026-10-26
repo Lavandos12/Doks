@@ -12,12 +12,36 @@ export interface JSONCanvasNode {
   file?: string;
   url?: string;
   label?: string;
+  shapeVariant?: 'rectangle' | 'rounded' | 'diamond' | 'pill' | 'circle';
+  shapeType?: 'rectangle' | 'rounded' | 'diamond' | 'pill' | 'circle';
+  locked?: boolean;
+  fontSize?: number;
+  hasCheckbox?: boolean;
+  noteId?: string;
+  attachmentId?: string;
+  fileHash?: string;
+  fileName?: string;
+  originalName?: string;
+  mimeType?: string;
   doks_custom?: {
     doksType?: string;
     author?: string;
     done?: boolean;
     noteId?: string;
+    fileHash?: string;
+    fileName?: string;
+    url?: string;
     z?: number;
+    locked?: boolean;
+    fontSize?: number;
+    hasCheckbox?: boolean;
+    shapeVariant?: 'rectangle' | 'rounded' | 'diamond' | 'pill' | 'circle';
+    deleted?: boolean;
+    deletedAt?: number;
+    scope?: string;
+    originId?: string;
+    promotedAt?: number;
+    promotedBy?: string;
   };
 }
 
@@ -29,6 +53,21 @@ export interface JSONCanvasEdge {
   toSide?: 'top' | 'right' | 'bottom' | 'left';
   label?: string;
   color?: string;
+  curveType?: 'bezier' | 'orthogonal' | 'straight';
+  style?: 'solid' | 'dashed' | 'dotted';
+  thickness?: number;
+  direction?: 'forward' | 'both' | 'none';
+  doks_custom?: {
+    curveType?: 'bezier' | 'orthogonal' | 'straight';
+    style?: 'solid' | 'dashed' | 'dotted';
+    thickness?: number;
+    direction?: 'forward' | 'both' | 'none';
+    label?: string;
+    color?: string;
+    deleted?: boolean;
+    deletedAt?: number;
+    scope?: string;
+  };
 }
 
 export interface JSONCanvasData {
@@ -72,12 +111,35 @@ export function boardToJSONCanvas(
       width: n.w,
       height: n.h,
       color: n.color,
+      shapeVariant: n.shapeVariant,
+      shapeType: n.shapeVariant,
+      locked: n.locked,
+      fontSize: n.fontSize,
+      hasCheckbox: n.hasCheckbox,
+      noteId: n.noteId,
+      fileHash: n.fileHash,
+      fileName: n.fileName,
+      originalName: n.fileName,
+      attachmentId: n.fileHash,
       doks_custom: {
         doksType: n.type,
         author: n.author,
         done: n.done,
         noteId: n.noteId,
-        z: n.z
+        fileHash: n.fileHash,
+        fileName: n.fileName,
+        url: n.url,
+        z: n.z,
+        locked: n.locked,
+        fontSize: n.fontSize,
+        hasCheckbox: n.hasCheckbox,
+        shapeVariant: n.shapeVariant,
+        deleted: n.deleted,
+        deletedAt: n.deletedAt,
+        scope: n.scope,
+        originId: n.originId,
+        promotedAt: n.promotedAt,
+        promotedBy: n.promotedBy
       }
     };
 
@@ -102,7 +164,22 @@ export function boardToJSONCanvas(
       fromSide: e.fromSide,
       toSide: e.toSide,
       label: e.label,
-      color: e.color
+      color: e.color,
+      curveType: e.curveType,
+      style: e.style,
+      thickness: e.thickness,
+      direction: e.direction,
+      doks_custom: {
+        curveType: e.curveType,
+        style: e.style,
+        thickness: e.thickness,
+        direction: e.direction,
+        label: e.label,
+        color: e.color,
+        deleted: e.deleted,
+        deletedAt: e.deletedAt,
+        scope: e.scope
+      }
     });
   }
 
@@ -111,6 +188,8 @@ export function boardToJSONCanvas(
     edges: canvasEdges
   };
 }
+
+export const serializeCanvas = boardToJSONCanvas;
 
 /**
  * Converts Obsidian JSON Canvas format into internal board nodes and edges.
@@ -129,6 +208,14 @@ export function jsonCanvasToBoard(data: JSONCanvasData): {
       else type = 'sticky';
     }
 
+    const shapeVariant = n.shapeVariant || n.shapeType || custom.shapeVariant;
+    const locked = n.locked ?? custom.locked ?? false;
+    const fontSize = n.fontSize ?? custom.fontSize;
+    const hasCheckbox = n.hasCheckbox ?? custom.hasCheckbox;
+    const noteId = n.noteId || custom.noteId;
+    const fileHash = n.fileHash || n.attachmentId || custom.fileHash;
+    const fileName = n.fileName || n.originalName || custom.fileName;
+
     nodes.push({
       id: n.id,
       type,
@@ -140,25 +227,53 @@ export function jsonCanvasToBoard(data: JSONCanvasData): {
       color: n.color || '1',
       author: custom.author || '',
       done: custom.done || false,
-      noteId: custom.noteId,
+      noteId,
+      fileHash,
+      fileName,
+      url: n.url || custom.url,
       z: custom.z ?? 1,
-      deleted: false
+      locked,
+      fontSize,
+      hasCheckbox,
+      shapeVariant,
+      deleted: custom.deleted ?? false,
+      deletedAt: custom.deletedAt,
+      scope: custom.scope as any,
+      originId: custom.originId,
+      promotedAt: custom.promotedAt,
+      promotedBy: custom.promotedBy
     });
   }
 
   const edges: BoardEdgeData[] = [];
   for (const e of data.edges || []) {
+    const custom = e.doks_custom || {};
+    const color = e.color || custom.color;
+    const curveType = e.curveType || custom.curveType;
+    const style = e.style || custom.style;
+    const thickness = e.thickness || custom.thickness;
+    const direction = e.direction || custom.direction;
+    const label = e.label || custom.label;
+
     edges.push({
       id: e.id,
       from: e.fromNode,
       to: e.toNode,
       fromSide: e.fromSide as any,
       toSide: e.toSide as any,
-      label: e.label,
-      color: e.color,
-      deleted: false
+      label,
+      color,
+      curveType,
+      style,
+      thickness,
+      direction,
+      deleted: custom.deleted ?? false,
+      deletedAt: custom.deletedAt,
+      scope: custom.scope as any
     });
   }
 
   return { nodes, edges };
 }
+
+export const parseCanvas = jsonCanvasToBoard;

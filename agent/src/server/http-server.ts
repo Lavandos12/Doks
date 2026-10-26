@@ -602,7 +602,13 @@ export class AgentHttpServer {
       } else if (Buffer.isBuffer(req.body)) {
         buffer = req.body;
         const customName = req.headers['x-file-name'] as string;
-        if (customName) originalName = decodeURIComponent(customName);
+        if (customName) {
+          try {
+            originalName = decodeURIComponent(customName);
+          } catch {
+            originalName = customName;
+          }
+        }
       } else {
         return reply.code(400).send({ error: 'Unsupported payload or empty body' });
       }
@@ -731,7 +737,13 @@ export class AgentHttpServer {
       let asBoard = false;
 
       const customName = req.headers['x-file-name'] as string;
-      if (customName) fileName = decodeURIComponent(customName);
+      if (customName) {
+        try {
+          fileName = decodeURIComponent(customName);
+        } catch {
+          fileName = customName;
+        }
+      }
 
       if (Buffer.isBuffer(req.body)) {
         const ext = path.extname(fileName).toLowerCase();

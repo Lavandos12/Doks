@@ -180,8 +180,8 @@ describe('Doks v2.0 Miro + Obsidian Parity Suite', () => {
   describe('4. Scoped Y.UndoManager for Board Nodes & Edges', () => {
     it('undoes and redoes node position modifications made under canvas-edit origin', () => {
       const doc = new Y.Doc();
-      const yNodes = doc.getMap('nodes');
-      const yEdges = doc.getMap('edges');
+      const yNodes = doc.getMap<Y.Map<any>>('nodes');
+      const yEdges = doc.getMap<any>('edges');
 
       const controller = createBoardUndoManager(doc, yNodes, yEdges);
 
@@ -204,7 +204,7 @@ describe('Doks v2.0 Miro + Obsidian Parity Suite', () => {
         });
       }, CANVAS_UNDO_ORIGIN);
 
-      expect(yNodes.get('n1').get('x')).toBe(100);
+      expect(yNodes.get('n1')!.get('x')).toBe(100);
 
       // Stop capturing so next move is a separate undo transaction
       controller.undoManager.stopCapturing();
@@ -215,18 +215,18 @@ describe('Doks v2.0 Miro + Obsidian Parity Suite', () => {
         nodeMap.set('y', 500);
       }, CANVAS_UNDO_ORIGIN);
 
-      expect(yNodes.get('n1').get('x')).toBe(400);
-      expect(yNodes.get('n1').get('y')).toBe(500);
+      expect(yNodes.get('n1')!.get('x')).toBe(400);
+      expect(yNodes.get('n1')!.get('y')).toBe(500);
 
       // 3. Undo drag move
       controller.undo();
-      expect(yNodes.get('n1').get('x')).toBe(100);
-      expect(yNodes.get('n1').get('y')).toBe(100);
+      expect(yNodes.get('n1')!.get('x')).toBe(100);
+      expect(yNodes.get('n1')!.get('y')).toBe(100);
 
       // 4. Redo drag move
       controller.redo();
-      expect(yNodes.get('n1').get('x')).toBe(400);
-      expect(yNodes.get('n1').get('y')).toBe(500);
+      expect(yNodes.get('n1')!.get('x')).toBe(400);
+      expect(yNodes.get('n1')!.get('y')).toBe(500);
 
       controller.destroy();
     });
