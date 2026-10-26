@@ -3485,84 +3485,102 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
         </div>
       )}
 
-      {/* Dynamic Infinite Canvas Grid Layer (Pans & Zooms 1:1 with Viewport) */}
-      {gridType !== 'none' && (
-        <svg
-          class="canvas-grid-svg-layer"
-          style={{
-            position: 'absolute',
-            inset: 0,
-            width: '100%',
-            height: '100%',
-            pointerEvents: 'none',
-            zIndex: 0
-          }}
-          aria-hidden="true"
-        >
-          <defs>
-            {/* Minor Checkered Grid (32px cells) */}
-            <pattern
-              id={`grid-minor-${boardId}`}
-              width="32"
-              height="32"
-              patternUnits="userSpaceOnUse"
-              patternTransform={`translate(${viewport.x}, ${viewport.y}) scale(${viewport.zoom})`}
-            >
-              <path
-                d="M 32 0 L 0 0 0 32"
-                fill="none"
-                stroke={isDarkTheme ? 'rgba(255, 255, 255, 0.06)' : 'rgba(15, 23, 42, 0.06)'}
-                strokeWidth="1"
-              />
-            </pattern>
+      {/* Dynamic Infinite Adaptive LOD Canvas Grid Layer (Pans & Zooms 1:1, Visible at ANY distance) */}
+      {gridType !== 'none' && (() => {
+        const cleanBoardId = (boardId || 'default').replace(/[^a-zA-Z0-9_-]/g, '_');
+        const minScreenCell = 24;
+        const baseWorldCell = 32;
+        const octavePower = Math.ceil(Math.log2(minScreenCell / (baseWorldCell * Math.max(0.01, viewport.zoom))));
+        const worldStep = baseWorldCell * Math.pow(2, octavePower);
+        const screenStep = worldStep * viewport.zoom;
+        const majorScreenStep = screenStep * 4;
 
-            {/* Major Checkered Grid (128px = 4 cells) */}
-            <pattern
-              id={`grid-major-${boardId}`}
-              width="128"
-              height="128"
-              patternUnits="userSpaceOnUse"
-              patternTransform={`translate(${viewport.x}, ${viewport.y}) scale(${viewport.zoom})`}
-            >
-              <path
-                d="M 128 0 L 0 0 0 128"
-                fill="none"
-                stroke={isDarkTheme ? 'rgba(255, 255, 255, 0.12)' : 'rgba(15, 23, 42, 0.12)'}
-                strokeWidth="1.2"
-              />
-            </pattern>
+        const gridOffsetX = ((viewport.x % screenStep) + screenStep) % screenStep;
+        const gridOffsetY = ((viewport.y % screenStep) + screenStep) % screenStep;
+        const gridMajorOffsetX = ((viewport.x % majorScreenStep) + majorScreenStep) % majorScreenStep;
+        const gridMajorOffsetY = ((viewport.y % majorScreenStep) + majorScreenStep) % majorScreenStep;
 
-            {/* Dots Grid (32px) */}
-            <pattern
-              id={`grid-dots-${boardId}`}
-              width="32"
-              height="32"
-              patternUnits="userSpaceOnUse"
-              patternTransform={`translate(${viewport.x}, ${viewport.y}) scale(${viewport.zoom})`}
-            >
-              <circle
-                cx="1"
-                cy="1"
-                r="1.2"
-                fill={isDarkTheme ? 'rgba(255, 255, 255, 0.16)' : 'rgba(15, 23, 42, 0.22)'}
-              />
-            </pattern>
-          </defs>
+        return (
+          <svg
+            class="canvas-grid-svg-layer"
+            style={{
+              position: 'absolute',
+              inset: 0,
+              width: '100%',
+              height: '100%',
+              pointerEvents: 'none',
+              zIndex: 0
+            }}
+            aria-hidden="true"
+          >
+            <defs>
+              {/* Minor Checkered Grid (Screen-Space Constant 1px Stroke) */}
+              <pattern
+                id={`grid-minor-${cleanBoardId}`}
+                x={gridOffsetX}
+                y={gridOffsetY}
+                width={screenStep}
+                height={screenStep}
+                patternUnits="userSpaceOnUse"
+              >
+                <path
+                  d={`M ${screenStep} 0 H 0 V ${screenStep}`}
+                  fill="none"
+                  stroke={isDarkTheme ? 'rgba(255, 255, 255, 0.08)' : 'rgba(15, 23, 42, 0.08)'}
+                  strokeWidth="1"
+                  shapeRendering="crispEdges"
+                />
+              </pattern>
 
-          {gridType === 'lines' && (
-            <>
-              {viewport.zoom >= 0.35 && (
-                <rect width="100%" height="100%" fill={`url(#grid-minor-${boardId})`} />
-              )}
-              <rect width="100%" height="100%" fill={`url(#grid-major-${boardId})`} />
-            </>
-          )}
+              {/* Major Checkered Grid (Screen-Space Constant 1.2px Stroke, every 4 cells) */}
+              <pattern
+                id={`grid-major-${cleanBoardId}`}
+                x={gridMajorOffsetX}
+                y={gridMajorOffsetY}
+                width={majorScreenStep}
+                height={majorScreenStep}
+                patternUnits="userSpaceOnUse"
+              >
+                <path
+                  d={`M ${majorScreenStep} 0 H 0 V ${majorScreenStep}`}
+                  fill="none"
+                  stroke={isDarkTheme ? 'rgba(255, 255, 255, 0.18)' : 'rgba(15, 23, 42, 0.18)'}
+                  strokeWidth="1.2"
+                  shapeRendering="crispEdges"
+                />
+              </pattern>
 
-          {gridType === 'dots' && (
-            <rect width="100%" height="100%" fill={`url(#grid-dots-${boardId})`} />
-          )}
-        </svg>
-      )}
+              {/* Dots Grid (Screen-Space Constant Radius) */}
+              <pattern
+                id={`grid-dots-${cleanBoardId}`}
+                x={gridOffsetX}
+                y={gridOffsetY}
+                width={screenStep}
+                height={screenStep}
+                patternUnits="userSpaceOnUse"
+              >
+                <circle
+                  cx={screenStep}
+                  cy={screenStep}
+                  r="1.5"
+                  fill={isDarkTheme ? 'rgba(255, 255, 255, 0.22)' : 'rgba(15, 23, 42, 0.25)'}
+                />
+              </pattern>
+            </defs>
+
+            {gridType === 'lines' && (
+              <>
+                <rect width="100%" height="100%" fill={`url(#grid-minor-${cleanBoardId})`} />
+                <rect width="100%" height="100%" fill={`url(#grid-major-${cleanBoardId})`} />
+              </>
+            )}
+
+            {gridType === 'dots' && (
+              <rect width="100%" height="100%" fill={`url(#grid-dots-${cleanBoardId})`} />
+            )}
+          </svg>
+        );
+      })()}
 
       {/* Infinite Scaled Layer */}
       <div
