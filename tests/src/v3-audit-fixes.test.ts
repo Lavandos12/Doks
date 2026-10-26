@@ -19,6 +19,11 @@ import {
   DIAGRAM_PRESETS,
   computeAutoLayout
 } from '../../web/src/utils/diagramGenerator.js';
+import {
+  computeContinuousGrid,
+  computeContinuousWheelTarget,
+  stepDampedKinematics
+} from '../../web/src/utils/canvasGrid.js';
 
 function createSyntheticDocxBuffer(xmlContent: string, deflate = true): Buffer {
   const fileName = 'word/document.xml';
@@ -636,6 +641,88 @@ Doks v3.0
       expect(newPositions.get('node-1')).toEqual({ x: 150, y: 120 });
       expect(newPositions.get('node-2')).toEqual({ x: 300, y: 270 });
       expect(newPositions.get('node-3')).toEqual({ x: 450, y: 420 });
+    });
+  });
+
+  describe('Miro-Grade Smooth Grid & Viewport Kinematics', () => {
+    it('grid coarseStep is bounded between 32px and 64px across extreme zoom spectrum', () => {
+      const zoomLevels = [0.01, 0.05, 0.1, 0.15, 0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 3.5, 4.0, 8.0];
+      for (const z of zoomLevels) {
+        const grid = computeContinuousGrid(z, 100, 200);
+        expect(grid.coarseStep).toBeGreaterThanOrEqual(31.99);
+        expect(grid.coarseStep).toBeLessThanOrEqual(64.01);
+        expect(grid.fineStep).toBeCloseTo(grid.coarseStep / 2, 4);
+        expect(grid.majorStep).toBeCloseTo(grid.coarseStep * 4, 4);
+      }
+    });
+
+    it('grid never disappears at 15% zoom and has proper sub-grid parameters', () => {
+      const grid = computeContinuousGrid(0.15, 0, 0);
+      expect(grid.coarseStep).toBeCloseTo(38.4, 1);
+      expect(grid.fineStep).toBeCloseTo(19.2, 1);
+      expect(grid.majorStep).toBeCloseTo(153.6, 1);
+      expect(grid.alphaFine).toBeGreaterThan(0);
+      expect(grid.alphaFine).toBeLessThanOrEqual(1.0);
+    });
+
+    it('fine sub-grid smoothly crossfades without discrete popping across octave boundaries', () => {
+      // Approaching 1.0 from below (z = 0.99)
+      const below = computeContinuousGrid(0.99, 0, 0);
+      // Crossing 1.0 to above (z = 1.01)
+      const above = computeContinuousGrid(1.01, 0, 0);
+
+      // Fine step of below approaches 31.68px, and coarse step of above is 32.32px
+      expect(below.fineStep).toBeCloseTo(31.68, 1);
+      expect(above.coarseStep).toBeCloseTo(32.32, 1);
+
+      // Opacity of fine grid fades to 0 right at octave boundary
+      expect(above.alphaFine).toBeLessThan(0.05);
+      // Opacity of fine grid near top of octave approaches 1.0
+      expect(below.alphaFine).toBeGreaterThan(0.95);
+    });
+
+    it('wheel zoom strictly preserves canvas world coordinate invariant under mouse cursor', () => {
+      const current = { x: 250, y: 180, zoom: 1.0 };
+      const mouseX = 400;
+      const mouseY = 300;
+
+      // Canvas coordinate under mouse before zoom
+      const worldXBefore = (mouseX - current.x) / current.zoom;
+      const worldYBefore = (mouseY - current.y) / current.zoom;
+
+      // Zoom in (deltaY < 0)
+      const target = computeContinuousWheelTarget(current, -100, mouseX, mouseY);
+      expect(target.zoom).toBeGreaterThan(current.zoom);
+
+      // Canvas coordinate under mouse after zoom
+      const worldXAfter = (mouseX - target.x) / target.zoom;
+      const worldYAfter = (mouseY - target.y) / target.zoom;
+
+      expect(worldXAfter).toBeCloseTo(worldXBefore, 4);
+      expect(worldYAfter).toBeCloseTo(worldYBefore, 4);
+    });
+
+    it('stepDampedKinematics converges monotonically and halts within threshold', () => {
+      let current = { x: 0, y: 0, zoom: 1.0 };
+      const target = { x: 300, y: 200, zoom: 2.0 };
+
+      let steps = 0;
+      let arrived = false;
+      while (!arrived && steps < 100) {
+        const res = stepDampedKinematics(current, target);
+        expect(res.next.x).toBeGreaterThanOrEqual(current.x); // Monotonic x
+        expect(res.next.y).toBeGreaterThanOrEqual(current.y); // Monotonic y
+        expect(res.next.zoom).toBeGreaterThanOrEqual(current.zoom); // Monotonic zoom
+        current = res.next;
+        arrived = res.arrived;
+        steps++;
+      }
+
+      expect(arrived).toBe(true);
+      expect(steps).toBeLessThan(35); // Converges in ~25 frames
+      expect(current.x).toBe(target.x);
+      expect(current.y).toBe(target.y);
+      expect(current.zoom).toBe(target.zoom);
     });
   });
 });

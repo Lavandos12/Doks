@@ -47,6 +47,12 @@ import { TransferModal } from './transfer-modal.js';
 import { AutoDiagramModal } from './auto-diagram-modal.js';
 import { pointsToSmoothSvgPath, computeBoundingBox, type Point } from '../../utils/strokeSmoother.js';
 import { computeAutoLayout, type GeneratedDiagramNode, type GeneratedDiagramEdge } from '../../utils/diagramGenerator.js';
+import {
+  computeContinuousGrid,
+  computeContinuousWheelTarget,
+  stepDampedKinematics,
+  type ViewportCoord
+} from '../../utils/canvasGrid.js';
 import { t } from '../../i18n/index.js';
 import { showConfirm } from '../../ui/dialogs.js';
 import { showToast } from '../../ui/toast.js';
@@ -454,6 +460,90 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
     return () => window.removeEventListener('resize', updateSize);
   }, []);
 
+  // Kinematic smooth viewport animation state (Miro-Grade Critically Damped RAF)
+  const viewportRef = useRef(viewport);
+  viewportRef.current = viewport;
+  const targetViewportRef = useRef(viewport);
+  const rafIdRef = useRef<number | null>(null);
+
+  const animateToViewport = useCallback(
+    (target: Partial<ViewportCoord>, immediate = false) => {
+      const curTarget = targetViewportRef.current;
+      const nextTarget: ViewportCoord = {
+        x: target.x !== undefined ? target.x : curTarget.x,
+        y: target.y !== undefined ? target.y : curTarget.y,
+        zoom: target.zoom !== undefined ? Math.min(Math.max(target.zoom, 0.1), 4.0) : curTarget.zoom
+      };
+      targetViewportRef.current = nextTarget;
+
+      if (immediate) {
+        if (rafIdRef.current !== null) {
+          cancelAnimationFrame(rafIdRef.current);
+          rafIdRef.current = null;
+        }
+        viewportRef.current = nextTarget;
+        setViewport(nextTarget);
+        return;
+      }
+
+      if (rafIdRef.current !== null) {
+        return; // RAF loop is active and will converge on the newly updated targetViewportRef
+      }
+
+      const step = () => {
+        const cur = viewportRef.current;
+        const tgt = targetViewportRef.current;
+        const { next, arrived } = stepDampedKinematics(cur, tgt);
+
+        viewportRef.current = next;
+        setViewport(next);
+
+        if (arrived) {
+          rafIdRef.current = null;
+          return;
+        }
+
+        rafIdRef.current = requestAnimationFrame(step);
+      };
+
+      rafIdRef.current = requestAnimationFrame(step);
+    },
+    []
+  );
+
+  useEffect(() => {
+    return () => {
+      if (rafIdRef.current !== null) {
+        cancelAnimationFrame(rafIdRef.current);
+        rafIdRef.current = null;
+      }
+    };
+  }, []);
+
+  const handleZoomByFactor = useCallback((factor: number) => {
+    const availW = containerSize.width || window.innerWidth;
+    const availH = containerSize.height || window.innerHeight;
+    const centerX = availW / 2;
+    const centerY = availH / 2;
+    const curZoom = targetViewportRef.current.zoom;
+    const newZoom = Math.min(Math.max(curZoom * factor, 0.1), 4.0);
+    const newX = centerX - (centerX - targetViewportRef.current.x) * (newZoom / curZoom);
+    const newY = centerY - (centerY - targetViewportRef.current.y) * (newZoom / curZoom);
+    animateToViewport({ x: newX, y: newY, zoom: newZoom }, false);
+  }, [containerSize, animateToViewport]);
+
+  const handleResetZoom = useCallback(() => {
+    const availW = containerSize.width || window.innerWidth;
+    const availH = containerSize.height || window.innerHeight;
+    const centerX = availW / 2;
+    const centerY = availH / 2;
+    const curZoom = targetViewportRef.current.zoom;
+    const newZoom = 1.0;
+    const newX = centerX - (centerX - targetViewportRef.current.x) * (newZoom / curZoom);
+    const newY = centerY - (centerY - targetViewportRef.current.y) * (newZoom / curZoom);
+    animateToViewport({ x: newX, y: newY, zoom: newZoom }, false);
+  }, [containerSize, animateToViewport]);
+
   // Viewport virtualization
   const visibleNodes = useMemo(() => {
     if (nodesList.length < 40) return nodesList;
@@ -526,7 +616,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
         const targetZoom = 1.0;
         const newX = rect.width / 2 - (target.x + target.w / 2) * targetZoom;
         const newY = rect.height / 2 - (target.y + target.h / 2) * targetZoom;
-        setViewport({ x: newX, y: newY, zoom: targetZoom });
+        animateToViewport({ x: newX, y: newY, zoom: targetZoom }, false);
       }
     };
     window.addEventListener('doks-focus-node' as any, handleFocusNode);
@@ -687,22 +777,20 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
     const rect = containerRef.current.getBoundingClientRect();
 
     if (e.ctrlKey || e.metaKey) {
-      const zoomFactor = e.deltaY < 0 ? 1.12 : 0.89;
-      const newZoom = Math.min(Math.max(viewport.zoom * zoomFactor, 0.1), 4.0);
-
       const mouseX = e.clientX - rect.left;
       const mouseY = e.clientY - rect.top;
-
-      const newX = mouseX - (mouseX - viewport.x) * (newZoom / viewport.zoom);
-      const newY = mouseY - (mouseY - viewport.y) * (newZoom / viewport.zoom);
-
-      setViewport({ x: newX, y: newY, zoom: newZoom });
+      const wheelTarget = computeContinuousWheelTarget(
+        targetViewportRef.current,
+        e.deltaY,
+        mouseX,
+        mouseY
+      );
+      animateToViewport(wheelTarget, false);
     } else {
-      setViewport((prev) => ({
-        ...prev,
-        x: prev.x - e.deltaX,
-        y: prev.y - e.deltaY
-      }));
+      animateToViewport({
+        x: targetViewportRef.current.x - e.deltaX,
+        y: targetViewportRef.current.y - e.deltaY
+      }, false);
     }
   };
 
@@ -1576,11 +1664,11 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
     }, CANVAS_UNDO_ORIGIN);
 
     if (genNodes.length > 0) {
-      setViewport({
+      animateToViewport({
         x: Math.round(window.innerWidth / 2 - genNodes[0].x - 100),
         y: Math.round(window.innerHeight / 2 - genNodes[0].y - 50),
         zoom: 1
-      });
+      }, false);
       setSelectedNodeIds(new Set(genNodes.map((n) => n.id)));
     }
     showToast(`Создано: ${genNodes.length} узлов и ${genEdges.length} связей`);
@@ -1598,13 +1686,12 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
         color: agentStatus.value?.memberColor || '#7c8cff'
       });
 
-      // Panning
+      // Panning (immediate 1:1 direct pointer tracking)
       if (panState) {
-        setViewport((prev) => ({
-          ...prev,
+        animateToViewport({
           x: panState.originX + (e.clientX - panState.startX),
           y: panState.originY + (e.clientY - panState.startY)
-        }));
+        }, true);
       }
 
       // Freehand drawing in-progress
@@ -2362,7 +2449,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
 
   const fitToContent = () => {
     if (visibleNodes.length === 0) {
-      setViewport({ x: 80, y: 80, zoom: 1 });
+      animateToViewport({ x: 80, y: 80, zoom: 1 }, false);
       return;
     }
     let minX = Infinity;
@@ -2390,7 +2477,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
     const x = availW / 2 - centerX * zoom;
     const y = availH / 2 - centerY * zoom;
 
-    setViewport({ x, y, zoom });
+    animateToViewport({ x, y, zoom }, false);
   };
 
   return (
@@ -3485,20 +3572,11 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
         </div>
       )}
 
-      {/* Dynamic Infinite Adaptive LOD Canvas Grid Layer (Pans & Zooms 1:1, Visible at ANY distance) */}
+      {/* Dynamic Infinite Adaptive LOD Canvas Grid Layer (Miro-Grade Smooth Two-Octave Cross-Fade) */}
       {gridType !== 'none' && (() => {
         const cleanBoardId = (boardId || 'default').replace(/[^a-zA-Z0-9_-]/g, '_');
-        const minScreenCell = 24;
-        const baseWorldCell = 32;
-        const octavePower = Math.ceil(Math.log2(minScreenCell / (baseWorldCell * Math.max(0.01, viewport.zoom))));
-        const worldStep = baseWorldCell * Math.pow(2, octavePower);
-        const screenStep = worldStep * viewport.zoom;
-        const majorScreenStep = screenStep * 4;
-
-        const gridOffsetX = ((viewport.x % screenStep) + screenStep) % screenStep;
-        const gridOffsetY = ((viewport.y % screenStep) + screenStep) % screenStep;
-        const gridMajorOffsetX = ((viewport.x % majorScreenStep) + majorScreenStep) % majorScreenStep;
-        const gridMajorOffsetY = ((viewport.y % majorScreenStep) + majorScreenStep) % majorScreenStep;
+        const grid = computeContinuousGrid(viewport.zoom, viewport.x, viewport.y);
+        const baseStroke = isDarkTheme ? '255, 255, 255' : '15, 23, 42';
 
         return (
           <svg
@@ -3514,69 +3592,111 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
             aria-hidden="true"
           >
             <defs>
-              {/* Minor Checkered Grid (Screen-Space Constant 1px Stroke) */}
+              {/* Primary Coarse Grid (Screen-Space Constant 1px Stroke, Always Active) */}
               <pattern
-                id={`grid-minor-${cleanBoardId}`}
-                x={gridOffsetX}
-                y={gridOffsetY}
-                width={screenStep}
-                height={screenStep}
+                id={`grid-coarse-${cleanBoardId}`}
+                x={grid.coarseOffsetX}
+                y={grid.coarseOffsetY}
+                width={grid.coarseStep}
+                height={grid.coarseStep}
                 patternUnits="userSpaceOnUse"
               >
                 <path
-                  d={`M ${screenStep} 0 H 0 V ${screenStep}`}
+                  d={`M ${grid.coarseStep} 0 H 0 V ${grid.coarseStep}`}
                   fill="none"
-                  stroke={isDarkTheme ? 'rgba(255, 255, 255, 0.08)' : 'rgba(15, 23, 42, 0.08)'}
+                  stroke={`rgba(${baseStroke}, 0.08)`}
                   strokeWidth="1"
                   shapeRendering="crispEdges"
                 />
               </pattern>
 
-              {/* Major Checkered Grid (Screen-Space Constant 1.2px Stroke, every 4 cells) */}
+              {/* Secondary Fine Sub-Grid (Screen-Space Constant 1px Stroke, Smoothly Cross-Faded) */}
               <pattern
-                id={`grid-major-${cleanBoardId}`}
-                x={gridMajorOffsetX}
-                y={gridMajorOffsetY}
-                width={majorScreenStep}
-                height={majorScreenStep}
+                id={`grid-fine-${cleanBoardId}`}
+                x={grid.fineOffsetX}
+                y={grid.fineOffsetY}
+                width={grid.fineStep}
+                height={grid.fineStep}
                 patternUnits="userSpaceOnUse"
               >
                 <path
-                  d={`M ${majorScreenStep} 0 H 0 V ${majorScreenStep}`}
+                  d={`M ${grid.fineStep} 0 H 0 V ${grid.fineStep}`}
                   fill="none"
-                  stroke={isDarkTheme ? 'rgba(255, 255, 255, 0.18)' : 'rgba(15, 23, 42, 0.18)'}
+                  stroke={`rgba(${baseStroke}, ${(0.08 * grid.alphaFine).toFixed(4)})`}
+                  strokeWidth="1"
+                  shapeRendering="crispEdges"
+                />
+              </pattern>
+
+              {/* Major Checkered Grid (Screen-Space Constant 1.2px Stroke, every 4 coarse cells) */}
+              <pattern
+                id={`grid-major-${cleanBoardId}`}
+                x={grid.majorOffsetX}
+                y={grid.majorOffsetY}
+                width={grid.majorStep}
+                height={grid.majorStep}
+                patternUnits="userSpaceOnUse"
+              >
+                <path
+                  d={`M ${grid.majorStep} 0 H 0 V ${grid.majorStep}`}
+                  fill="none"
+                  stroke={`rgba(${baseStroke}, 0.12)`}
                   strokeWidth="1.2"
                   shapeRendering="crispEdges"
                 />
               </pattern>
 
-              {/* Dots Grid (Screen-Space Constant Radius) */}
+              {/* Dots Grid: Coarse and Fine Dots */}
               <pattern
-                id={`grid-dots-${cleanBoardId}`}
-                x={gridOffsetX}
-                y={gridOffsetY}
-                width={screenStep}
-                height={screenStep}
+                id={`grid-dots-coarse-${cleanBoardId}`}
+                x={grid.coarseOffsetX}
+                y={grid.coarseOffsetY}
+                width={grid.coarseStep}
+                height={grid.coarseStep}
                 patternUnits="userSpaceOnUse"
               >
                 <circle
-                  cx={screenStep}
-                  cy={screenStep}
+                  cx={grid.coarseStep}
+                  cy={grid.coarseStep}
                   r="1.5"
-                  fill={isDarkTheme ? 'rgba(255, 255, 255, 0.22)' : 'rgba(15, 23, 42, 0.25)'}
+                  fill={`rgba(${baseStroke}, 0.22)`}
+                />
+              </pattern>
+
+              <pattern
+                id={`grid-dots-fine-${cleanBoardId}`}
+                x={grid.fineOffsetX}
+                y={grid.fineOffsetY}
+                width={grid.fineStep}
+                height={grid.fineStep}
+                patternUnits="userSpaceOnUse"
+              >
+                <circle
+                  cx={grid.fineStep}
+                  cy={grid.fineStep}
+                  r="1.2"
+                  fill={`rgba(${baseStroke}, ${(0.22 * grid.alphaFine).toFixed(4)})`}
                 />
               </pattern>
             </defs>
 
             {gridType === 'lines' && (
               <>
-                <rect width="100%" height="100%" fill={`url(#grid-minor-${cleanBoardId})`} />
+                <rect width="100%" height="100%" fill={`url(#grid-coarse-${cleanBoardId})`} />
+                {grid.alphaFine > 0.005 && (
+                  <rect width="100%" height="100%" fill={`url(#grid-fine-${cleanBoardId})`} />
+                )}
                 <rect width="100%" height="100%" fill={`url(#grid-major-${cleanBoardId})`} />
               </>
             )}
 
             {gridType === 'dots' && (
-              <rect width="100%" height="100%" fill={`url(#grid-dots-${cleanBoardId})`} />
+              <>
+                <rect width="100%" height="100%" fill={`url(#grid-dots-coarse-${cleanBoardId})`} />
+                {grid.alphaFine > 0.005 && (
+                  <rect width="100%" height="100%" fill={`url(#grid-dots-fine-${cleanBoardId})`} />
+                )}
+              </>
             )}
           </svg>
         );
@@ -4705,7 +4825,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
               containerWidth={containerSize.width}
               containerHeight={containerSize.height}
               onNavigate={(newX, newY) => {
-                setViewport((prev) => ({ ...prev, x: newX, y: newY }));
+                animateToViewport({ x: newX, y: newY }, false);
               }}
             />
           </div>
@@ -4714,21 +4834,21 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
         <div class="zoom-hud-pill liquid-glass-surface">
           <button
             class="hud-btn"
-            onClick={() => setViewport((v) => ({ ...v, zoom: Math.max(v.zoom * 0.8, 0.15) }))}
+            onClick={() => handleZoomByFactor(0.8)}
             title="Отдалить (-)"
           >
             <Icon name="zoom-out" size={14} />
           </button>
           <button
             class="hud-btn zoom-value-btn"
-            onClick={() => setViewport((v) => ({ ...v, zoom: 1 }))}
+            onClick={handleResetZoom}
             title="Сбросить масштаб (100%)"
           >
             {Math.round(viewport.zoom * 100)}%
           </button>
           <button
             class="hud-btn"
-            onClick={() => setViewport((v) => ({ ...v, zoom: Math.min(v.zoom * 1.25, 3.5) }))}
+            onClick={() => handleZoomByFactor(1.25)}
             title="Приблизить (+)"
           >
             <Icon name="zoom-in" size={14} />
