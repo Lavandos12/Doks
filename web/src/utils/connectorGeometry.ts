@@ -96,3 +96,85 @@ export function buildBezierEdgePath(
 
   return `M ${x1} ${y1} C ${cx1} ${cy1}, ${cx2} ${cy2}, ${x2} ${y2}`;
 }
+
+/**
+ * Builds an SVG path based on the selected curve type:
+ * - 'straight': direct line from port 1 to port 2
+ * - 'orthogonal': 3-segment orthogonal right-angle routing
+ * - 'bezier': smooth cubic bezier curve
+ */
+export function buildEdgeSvgPath(
+  x1: number,
+  y1: number,
+  side1: PortSide,
+  x2: number,
+  y2: number,
+  side2: PortSide,
+  curveType: 'bezier' | 'orthogonal' | 'straight' = 'bezier'
+): string {
+  if (curveType === 'straight') {
+    return `M ${x1} ${y1} L ${x2} ${y2}`;
+  }
+  if (curveType === 'orthogonal') {
+    if (side1 === 'right' || side1 === 'left') {
+      const midX = (x1 + x2) / 2;
+      return `M ${x1} ${y1} L ${midX} ${y1} L ${midX} ${y2} L ${x2} ${y2}`;
+    } else {
+      const midY = (y1 + y2) / 2;
+      return `M ${x1} ${y1} L ${x1} ${midY} L ${x2} ${midY} L ${x2} ${y2}`;
+    }
+  }
+  return buildBezierEdgePath(x1, y1, side1, x2, y2, side2);
+}
+
+/**
+ * Computes the center/midpoint of an edge for positioning labels or floating inspectors.
+ */
+export function getEdgeMidpoint(
+  x1: number,
+  y1: number,
+  side1: PortSide,
+  x2: number,
+  y2: number,
+  side2: PortSide,
+  curveType: 'bezier' | 'orthogonal' | 'straight' = 'bezier'
+): { x: number; y: number } {
+  if (curveType === 'straight') {
+    return { x: (x1 + x2) / 2, y: (y1 + y2) / 2 };
+  }
+  if (curveType === 'orthogonal') {
+    if (side1 === 'right' || side1 === 'left') {
+      const midX = (x1 + x2) / 2;
+      return { x: midX, y: (y1 + y2) / 2 };
+    } else {
+      const midY = (y1 + y2) / 2;
+      return { x: (x1 + x2) / 2, y: midY };
+    }
+  }
+
+  // Bezier curve evaluation at t = 0.5
+  const dist = Math.hypot(x2 - x1, y2 - y1);
+  const offset = Math.min(Math.max(dist * 0.4, 40), 180);
+
+  const dirVector = (s: PortSide) => {
+    if (s === 'top') return { dx: 0, dy: -1 };
+    if (s === 'right') return { dx: 1, dy: 0 };
+    if (s === 'bottom') return { dx: 0, dy: 1 };
+    return { dx: -1, dy: 0 };
+  };
+
+  const d1 = dirVector(side1);
+  const d2 = dirVector(side2);
+
+  const cx1 = x1 + d1.dx * offset;
+  const cy1 = y1 + d1.dy * offset;
+  const cx2 = x2 + d2.dx * offset;
+  const cy2 = y2 + d2.dy * offset;
+
+  // B(0.5) = (1-t)^3*P0 + 3(1-t)^2*t*P1 + 3(1-t)*t^2*P2 + t^3*P3 with t=0.5:
+  // 0.125 * P0 + 0.375 * P1 + 0.375 * P2 + 0.125 * P3
+  return {
+    x: 0.125 * x1 + 0.375 * cx1 + 0.375 * cx2 + 0.125 * x2,
+    y: 0.125 * y1 + 0.375 * cy1 + 0.375 * cy2 + 0.125 * y2
+  };
+}

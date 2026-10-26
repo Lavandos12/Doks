@@ -139,6 +139,7 @@ export function nodeMapToData(id: string, map: Y.Map<any>): BoardNodeData {
     z: map.get('z') ?? 1,
     locked: map.get('locked') || false,
     fontSize: map.get('fontSize') || undefined,
+    shapeVariant: map.get('shapeVariant') || undefined,
     deleted: map.get('deleted') || false,
     deletedAt: map.get('deletedAt') || undefined,
     scope: map.get('scope') || undefined,

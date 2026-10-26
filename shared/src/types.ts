@@ -78,6 +78,7 @@ export interface BoardNodeData {
   locked?: boolean;
   fontSize?: number;
   hasCheckbox?: boolean;
+  shapeVariant?: 'rectangle' | 'rounded' | 'diamond' | 'pill' | 'circle';
   deleted: boolean;
   deletedAt?: number;
   scope?: WorkspaceScope;
@@ -95,7 +96,9 @@ export interface BoardEdgeData {
   label?: string;
   color?: string;
   direction?: 'forward' | 'both' | 'none';
-  style?: 'solid' | 'dashed';
+  style?: 'solid' | 'dashed' | 'dotted';
+  curveType?: 'bezier' | 'orthogonal' | 'straight';
+  thickness?: number;
   deleted: boolean;
   deletedAt?: number;
   scope?: WorkspaceScope;

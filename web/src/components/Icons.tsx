@@ -91,7 +91,11 @@ export type IconName =
   | 'diamond'
   | 'share'
   | 'settings'
-  | 'menu';
+  | 'menu'
+  | 'undo'
+  | 'redo'
+  | 'rotate-ccw'
+  | 'rotate-cw';
 
 export function Icon({
   name,
@@ -632,6 +636,22 @@ export function Icon({
             <line x1="3" y1="12" x2="21" y2="12" />
             <line x1="3" y1="6" x2="21" y2="6" />
             <line x1="3" y1="18" x2="21" y2="18" />
+          </>
+        );
+      case 'undo':
+      case 'rotate-ccw':
+        return (
+          <>
+            <polyline points="1 4 1 10 7 10" />
+            <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
+          </>
+        );
+      case 'redo':
+      case 'rotate-cw':
+        return (
+          <>
+            <polyline points="23 4 23 10 17 10" />
+            <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
           </>
         );
       default:

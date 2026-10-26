@@ -174,6 +174,7 @@ export function Sidebar() {
         onClick={() => openTab('note', note.id, note.title)}
         draggable={true}
         onDragStart={(e) => {
+          e.dataTransfer?.setData('application/x-doks-note', note.id);
           e.dataTransfer?.setData('application/doks-note-id', note.id);
           e.dataTransfer?.setData('text/plain', note.title);
         }}

@@ -475,4 +475,33 @@ test.describe('F12: Playwright E2E Scenarios for Doks', () => {
     await labelInput.fill('API Flow');
     await expect(page.locator('.edge-text-label')).toHaveText('API Flow');
   });
+
+  test('Scenario 12: Undo & Redo HUD controls', async ({ page }) => {
+    await page.goto(`http://127.0.0.1:${port1}`);
+    await openBoard(page);
+
+    // Place a sticky
+    await page.click('button[title*="Стикер"]');
+    const canvas = page.locator('.board-container');
+    await canvas.click({ position: { x: 300, y: 300 } });
+
+    const nodes = page.locator('.board-node-box');
+    await expect(nodes).toHaveCount(1);
+
+    // Click Undo in the HUD
+    const undoBtn = page.locator('button[title*="Отменить действие"]');
+    await expect(undoBtn).toBeVisible();
+    await undoBtn.click();
+
+    // Expect node to be undone
+    await expect(nodes).toHaveCount(0);
+
+    // Click Redo in the HUD
+    const redoBtn = page.locator('button[title*="Повторить действие"]');
+    await expect(redoBtn).toBeVisible();
+    await redoBtn.click();
+
+    // Expect node to be restored
+    await expect(nodes).toHaveCount(1);
+  });
 });

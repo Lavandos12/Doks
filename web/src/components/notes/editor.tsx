@@ -7,13 +7,16 @@ import { markdown } from '@codemirror/lang-markdown';
 import { autocompletion } from '@codemirror/autocomplete';
 import { oneDark } from '@codemirror/theme-one-dark';
 import { yCollab } from 'y-codemirror.next';
-import { getNoteDocName } from '@doks/shared';
+import { getNoteDocName, getScopedBoardDocName } from '@doks/shared';
 import { yjsClient } from '../../state/yjs-client.js';
 import {
   notes,
   openTab,
   renameNote,
-  theme
+  theme,
+  selectedBoardId,
+  currentScope,
+  ensureSplitTabs
 } from '../../state/app-state.js';
 import {
   wikilinksCompletionSource,
@@ -43,6 +46,24 @@ export function NoteEditor({ noteId }: NoteEditorProps) {
   // Live content string for preview and outline
   const [contentString, setContentString] = useState<string>('');
   const [backlinks, setBacklinks] = useState<Array<{ id: string; title: string }>>([]);
+
+  const linkedBoardCards = useMemo(() => {
+    const found: Array<{ nodeId: string; boardTitle: string }> = [];
+    try {
+      if (selectedBoardId.value) {
+        const bDoc = yjsClient.getOrCreateDoc(getScopedBoardDocName(currentScope.value, selectedBoardId.value));
+        if (bDoc) {
+          const yNodes = bDoc.getMap('nodes');
+          yNodes.forEach((nodeMap: any, id: string) => {
+            if (nodeMap?.get && nodeMap.get('noteId') === noteId && !nodeMap.get('deleted')) {
+              found.push({ nodeId: id, boardTitle: 'Активная доска' });
+            }
+          });
+        }
+      }
+    } catch {}
+    return found;
+  }, [noteId, currentScope.value, selectedBoardId.value]);
 
   const currentNote = notes.value.find((n) => n.id === noteId);
   const title = currentNote?.title || 'Без названия';
@@ -401,8 +422,33 @@ export function NoteEditor({ noteId }: NoteEditorProps) {
 
               {rightPanelTab === 'backlinks' && (
                 <div class="backlinks-list">
+                  {linkedBoardCards.length > 0 && (
+                    <div class="note-backlinks-panel" style={{ marginTop: 0, paddingTop: 0, borderTop: 'none', marginBottom: '14px' }}>
+                      <div class="note-backlinks-title">
+                        <Icon name="layout-canvas" size={13} />
+                        <span>На доске ({linkedBoardCards.length})</span>
+                      </div>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '6px' }}>
+                        {linkedBoardCards.map((c) => (
+                          <button
+                            key={c.nodeId}
+                            class="note-backlink-chip"
+                            title="Перейти к карточке на холсте"
+                            onClick={() => {
+                              ensureSplitTabs();
+                              window.dispatchEvent(new CustomEvent('doks-focus-node', { detail: { nodeId: c.nodeId } }));
+                            }}
+                          >
+                            <Icon name="sparkles" size={12} />
+                            <span>Карточка</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   {backlinks.length === 0 ? (
-                    <div class="backlinks-empty">На эту заметку пока никто не ссылается</div>
+                    <div class="backlinks-empty">На эту заметку пока нет текстовых [[ссылок]]</div>
                   ) : (
                     backlinks.map((bl) => (
                       <div

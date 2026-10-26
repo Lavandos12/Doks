@@ -68,31 +68,31 @@ export function AiExportModal({ boardId, selectedNodeIds = [], onClose }: AiExpo
   };
 
   return (
-    <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 ai-export-modal">
-      <div class="bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded-xl shadow-2xl max-w-2xl w-full flex flex-col max-h-[85vh] overflow-hidden">
+    <div class="doks-modal-backdrop ai-export-modal" onClick={onClose} role="dialog" aria-modal="true">
+      <div class="doks-modal-dialog ai-export-dialog" onClick={(e) => e.stopPropagation()}>
         {/* Header */}
-        <div class="flex items-center justify-between px-6 py-4 border-b border-[var(--border-subtle)]">
-          <div class="flex items-center gap-2">
-            <Icon name="sparkles" size={20} class="text-[var(--accent)]" />
-            <h2 class="text-base font-semibold text-[var(--text-primary)]">{t('ai.modal_title')}</h2>
+        <div class="modal-header">
+          <div class="modal-title-group">
+            <Icon name="sparkles" size={20} class="text-accent" />
+            <h3 class="modal-title">{t('ai.modal_title')}</h3>
           </div>
           <button
             onClick={onClose}
             aria-label={t('ai.close')}
             data-testid="close-ai-modal"
-            class="text-[var(--text-secondary)] hover:text-[var(--text-primary)] p-1 rounded-md"
+            class="modal-close-btn"
           >
             <Icon name="x" size={18} />
           </button>
         </div>
 
         {/* Body */}
-        <div class="flex-1 overflow-y-auto p-6 space-y-4">
-          <div class="grid grid-cols-2 gap-4">
-            <div>
-              <label class="block text-xs font-medium text-[var(--text-secondary)] mb-1">Область</label>
+        <div class="modal-body ai-export-body">
+          <div class="ai-export-grid">
+            <div class="ai-export-field">
+              <label class="ai-export-label">Область</label>
               <select
-                class="w-full bg-[var(--bg-secondary)] border border-[var(--border-subtle)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none"
+                class="ai-export-select"
                 value={scope}
                 onChange={(e) => setScope((e.target as HTMLSelectElement).value as any)}
               >
@@ -103,10 +103,10 @@ export function AiExportModal({ boardId, selectedNodeIds = [], onClose }: AiExpo
               </select>
             </div>
 
-            <div>
-              <label class="block text-xs font-medium text-[var(--text-secondary)] mb-1">Связанные заметки</label>
+            <div class="ai-export-field">
+              <label class="ai-export-label">Связанные заметки</label>
               <select
-                class="w-full bg-[var(--bg-secondary)] border border-[var(--border-subtle)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none"
+                class="ai-export-select"
                 value={includeNotes}
                 onChange={(e) => setIncludeNotes((e.target as HTMLSelectElement).value as any)}
               >
@@ -117,38 +117,36 @@ export function AiExportModal({ boardId, selectedNodeIds = [], onClose }: AiExpo
             </div>
           </div>
 
-          <div class="flex items-center gap-6 pt-2">
-            <label class="flex items-center gap-2 text-sm text-[var(--text-secondary)] cursor-pointer">
+          <div class="ai-export-options-row">
+            <label class="ai-export-checkbox-label">
               <input
                 type="checkbox"
                 checked={anonymize}
                 onChange={(e) => setAnonymize((e.target as HTMLInputElement).checked)}
-                class="rounded border-[var(--border-subtle)]"
               />
-              Анонимизировать участников
+              <span>Анонимизировать участников</span>
             </label>
 
-            <label class="flex items-center gap-2 text-sm text-[var(--text-secondary)] cursor-pointer">
+            <label class="ai-export-checkbox-label">
               <input
                 type="checkbox"
                 checked={compact}
                 onChange={(e) => setCompact((e.target as HTMLInputElement).checked)}
-                class="rounded border-[var(--border-subtle)]"
               />
-              Сжатый объём (обрезка длинных заметок)
+              <span>Сжатый объём (обрезка длинных заметок)</span>
             </label>
           </div>
 
           {/* Stats & Tokens */}
-          <div class="bg-[var(--bg-secondary)] rounded-lg p-3 text-xs space-y-1 text-[var(--text-secondary)]">
-            <div class="flex justify-between">
+          <div class="ai-export-stats-card">
+            <div class="ai-export-stat-line">
               <span>Символов: {result?.charCount || 0}</span>
-              <span class="font-medium text-[var(--text-primary)]">
+              <span class="ai-export-token-pill">
                 Оценка токенов: ~{result?.estimatedTokens || 0}
               </span>
             </div>
             {result && result.estimatedTokens > 100000 && (
-              <div class="text-amber-500 font-medium flex items-center gap-1">
+              <div class="ai-export-warning">
                 <Icon name="alert-triangle" size={14} />
                 <span>Внимание: объём превышает 100 000 токенов. Рекомендуется включить сжатие или сузить область.</span>
               </div>
@@ -156,38 +154,38 @@ export function AiExportModal({ boardId, selectedNodeIds = [], onClose }: AiExpo
           </div>
 
           {/* Preview snippet */}
-          <div>
-            <label class="block text-xs font-medium text-[var(--text-secondary)] mb-1">Предпросмотр</label>
+          <div class="ai-export-preview-container">
+            <label class="ai-export-label">Предпросмотр контекста для ИИ</label>
             <textarea
               readOnly
               rows={8}
               value={loading ? 'Генерация контекста...' : result?.markdown || ''}
-              class="w-full bg-[var(--bg-secondary)] border border-[var(--border-subtle)] rounded-lg p-3 text-xs font-mono text-[var(--text-primary)] focus:outline-none resize-none ai-export-preview"
+              class="ai-export-textarea ai-export-preview"
             />
           </div>
         </div>
 
         {/* Footer */}
-        <div class="flex items-center justify-between px-6 py-4 border-t border-[var(--border-subtle)] bg-[var(--bg-secondary)]">
-          <div class="text-xs text-[var(--text-secondary)]">
+        <div class="modal-footer ai-export-footer">
+          <div class="ai-export-hint">
             Готово для отправки в Claude, Gemini или ChatGPT
           </div>
-          <div class="flex gap-2">
+          <div class="modal-buttons">
             <button
               onClick={handleCopy}
               disabled={loading || !result}
-              class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[var(--border-subtle)] text-xs font-medium text-[var(--text-primary)] hover:bg-[var(--bg-primary)] disabled:opacity-50"
+              class="btn-secondary"
             >
               <Icon name={copied ? 'check' : 'share'} size={14} />
-              {copied ? t('ai.copied') : t('ai.copy')}
+              <span>{copied ? t('ai.copied') : t('ai.copy')}</span>
             </button>
             <button
               onClick={handleDownload}
               disabled={loading || !result}
-              class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--accent)] text-white text-xs font-medium hover:opacity-90 disabled:opacity-50 shadow-sm"
+              class="btn-primary"
             >
               <Icon name="download" size={14} />
-              Скачать .md
+              <span>Скачать .md</span>
             </button>
           </div>
         </div>

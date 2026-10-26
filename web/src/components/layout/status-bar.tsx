@@ -18,10 +18,15 @@ export function StatusBar() {
     <footer class="app-status-bar">
       <div class="status-left">
         <div class="status-indicator">
-          {conn === 'connected' ? (
-            <span class="status-badge success" title="Подключено к локальному агенту">
+          {currentScope.value === 'solo' ? (
+            <span class="status-badge success" title="Личное пространство активно и сохраняется локально">
               <span class="status-dot green"></span>
-              <span class="status-label">{t('status.synced')}</span>
+              <span class="status-label">Локально • Соло</span>
+            </span>
+          ) : conn === 'connected' ? (
+            <span class="status-badge success" title="Подключено к локальному агенту и синхронизировано">
+              <span class="status-dot green"></span>
+              <span class="status-label">Синхронизировано • Команда</span>
             </span>
           ) : conn === 'connecting' ? (
             <span class="status-badge warning" title="Подключение к агенту...">
@@ -92,8 +97,8 @@ export function StatusBar() {
           onClick={() => (currentView.value = 'network')}
           title="Открыть участников и сеть"
         >
-          <span class={`peers-dot ${connectedCount > 0 ? 'online' : 'solo'}`}></span>
-          <span>{t('status.online_count', { count: connectedCount + 1 })}</span>
+          <span class={`peers-dot ${currentScope.value === 'solo' ? 'solo' : connectedCount > 0 ? 'online' : 'solo'}`}></span>
+          <span>{currentScope.value === 'solo' ? 'Соло (Вы)' : t('status.online_count', { count: connectedCount + 1 })}</span>
         </div>
 
         <div

@@ -78,6 +78,91 @@ body, html {
   -webkit-font-smoothing: antialiased;
 }
 
+/* Global Form Controls & Buttons Dark Reset */
+button, input, select, textarea {
+  font-family: inherit;
+  color: var(--text-primary);
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  outline: none;
+  border-radius: 6px;
+  font-size: 13px;
+  transition: border-color 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+button {
+  cursor: pointer;
+  user-select: none;
+  padding: 6px 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+}
+
+button:hover {
+  background-color: var(--bg-card-hover);
+  border-color: var(--border-focus);
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+select {
+  padding: 6px 10px;
+  appearance: none;
+  -webkit-appearance: none;
+  background-color: var(--bg-card);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239da5b4' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  padding-right: 28px;
+  cursor: pointer;
+}
+
+select option {
+  background-color: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+input[type="text"], input[type="search"], input[type="password"], textarea {
+  padding: 7px 10px;
+}
+
+input:focus, select:focus, textarea:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.btn-primary-sm, .btn-primary {
+  background-color: var(--accent);
+  color: #ffffff;
+  border: 1px solid var(--accent);
+  font-weight: 500;
+}
+
+.btn-primary-sm:hover, .btn-primary:hover {
+  background-color: var(--accent-hover);
+  border-color: var(--accent-hover);
+}
+
+.btn-secondary-sm, .btn-secondary {
+  background-color: var(--bg-card);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  font-weight: 500;
+}
+
+.btn-secondary-sm:hover, .btn-secondary:hover {
+  background-color: var(--bg-card-hover);
+  border-color: var(--border-focus);
+}
+
 /* App Main Layout */
 .app-layout {
   display: flex;
@@ -3536,4 +3621,436 @@ body, html {
   opacity: 0.7;
   pointer-events: none;
   user-select: none;
+}
+
+/* ==========================================================================
+   Doks v2.0 Flagship Enhancements: Modals, Edges, D&D, Alignment & Shapes
+   ========================================================================== */
+
+/* 1. Unified Glass Modal Backdrop & Dialog System */
+.doks-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(8, 10, 15, 0.72);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  z-index: 99999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  animation: doksModalFadeIn 0.16s ease-out;
+}
+
+.doks-modal-dialog {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.06);
+  max-width: 620px;
+  width: 100%;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: doksModalScaleIn 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes doksModalFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes doksModalScaleIn {
+  from { opacity: 0; transform: scale(0.96) translateY(6px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+/* 2. AI Export Modal Layout & Theming */
+.ai-export-dialog {
+  max-width: 660px;
+}
+
+.ai-export-body {
+  padding: 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  overflow-y: auto;
+}
+
+.ai-export-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.ai-export-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ai-export-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.ai-export-select {
+  width: 100%;
+  padding: 8px 12px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  color: var(--text-primary);
+  font-size: 0.85rem;
+}
+
+.ai-export-options-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 18px;
+  padding: 4px 0;
+}
+
+.ai-export-checkbox-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+  user-select: none;
+}
+
+.ai-export-checkbox-label input[type="checkbox"] {
+  accent-color: var(--accent);
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
+.ai-export-stats-card {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ai-export-stat-line {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.ai-export-token-pill {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.ai-export-warning {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--warning);
+  font-size: 0.76rem;
+}
+
+.ai-export-preview-container {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ai-export-textarea {
+  width: 100%;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  color: var(--text-primary);
+  line-height: 1.45;
+  resize: vertical;
+  min-height: 140px;
+}
+
+.ai-export-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 24px;
+  border-top: 1px solid var(--border-color);
+  background: var(--bg-card);
+}
+
+.ai-export-hint {
+  font-size: 0.76rem;
+  color: var(--text-muted);
+}
+
+/* 3. Ghost Drop Preview & Card Entrance Animation */
+.ghost-drop-preview {
+  position: absolute;
+  pointer-events: none;
+  border: 2px dashed var(--accent);
+  background: rgba(124, 140, 255, 0.12);
+  border-radius: 10px;
+  box-shadow: 0 0 20px rgba(124, 140, 255, 0.35);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--accent);
+  font-size: 0.8rem;
+  font-weight: 600;
+  z-index: 1000;
+  transition: transform 0.06s ease-out;
+}
+
+@keyframes doksCardDropIn {
+  from {
+    opacity: 0;
+    transform: scale(0.9) translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.board-node.drop-in-animated {
+  animation: doksCardDropIn 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* 4. Floating Edge Inspector Bar & Reconnect Handles */
+.floating-edge-pill {
+  position: absolute;
+  z-index: 80;
+  transform: translate(-50%, -50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  background: rgba(20, 22, 28, 0.94);
+  border: 1px solid var(--border-color);
+  border-radius: 24px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(8px);
+  pointer-events: auto;
+  user-select: none;
+}
+
+.edge-swatch-list {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding-right: 6px;
+  border-right: 1px solid var(--border-color);
+}
+
+.edge-color-swatch {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  cursor: pointer;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  transition: transform 0.1s ease;
+  padding: 0;
+}
+
+.edge-color-swatch:hover {
+  transform: scale(1.25);
+}
+
+.edge-color-swatch.active {
+  border: 2px solid #ffffff;
+  transform: scale(1.25);
+  box-shadow: 0 0 6px rgba(255, 255, 255, 0.5);
+}
+
+.edge-pill-btn {
+  background: transparent;
+  border: none;
+  padding: 3px 6px;
+  color: var(--text-secondary);
+  border-radius: 4px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.edge-pill-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text-primary);
+}
+
+.edge-pill-btn.active {
+  background: var(--accent);
+  color: #ffffff;
+}
+
+.edge-reconnect-handle {
+  cursor: grab;
+  fill: var(--accent);
+  stroke: #ffffff;
+  stroke-width: 2px;
+  transition: r 0.1s ease;
+}
+
+.edge-reconnect-handle:hover {
+  r: 8px;
+  cursor: grabbing;
+}
+
+/* 5. Miro-Grade Multi-Select Alignment Bar */
+.align-toolbar {
+  position: absolute;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 10px;
+  background: rgba(26, 29, 37, 0.94);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(10px);
+  z-index: 70;
+  pointer-events: auto;
+}
+
+.align-toolbar-btn {
+  padding: 5px 8px;
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  border-radius: 6px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.75rem;
+  transition: all 0.1s ease;
+}
+
+.align-toolbar-btn:hover {
+  background: var(--bg-card-hover);
+  color: var(--text-primary);
+}
+
+.align-toolbar-divider {
+  width: 1px;
+  height: 18px;
+  background: var(--border-color);
+  margin: 0 4px;
+}
+
+/* 6. Flowchart Shape Variants */
+.shape-variant-rounded {
+  border-radius: 16px !important;
+}
+
+.shape-variant-diamond {
+  clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%);
+}
+
+.shape-variant-pill {
+  border-radius: 9999px !important;
+}
+
+.shape-variant-circle {
+  border-radius: 50% !important;
+}
+
+/* 7. Obsidian [[Wikilinks]] Popover & Backlinks Panel */
+.wikilink-suggestions-popover {
+  position: absolute;
+  width: 260px;
+  max-height: 200px;
+  overflow-y: auto;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+  z-index: 10000;
+  display: flex;
+  flex-direction: column;
+  padding: 4px;
+}
+
+.wikilink-suggestion-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.8rem;
+  color: var(--text-primary);
+}
+
+.wikilink-suggestion-item:hover, .wikilink-suggestion-item.active {
+  background: var(--bg-card-hover);
+  color: var(--accent);
+}
+
+.note-backlinks-panel {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.note-backlinks-title {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.note-backlink-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+
+.note-backlink-chip:hover {
+  background: var(--bg-card-hover);
+  color: var(--text-primary);
+  border-color: var(--border-focus);
 }

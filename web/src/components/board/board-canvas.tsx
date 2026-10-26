@@ -37,10 +37,17 @@ import { showToast } from '../../ui/toast.js';
 import {
   findMagneticTargetPort,
   buildBezierEdgePath,
+  buildEdgeSvgPath,
+  getEdgeMidpoint,
   getPortCoordinates,
   type PortSide,
   type BoxNode
 } from '../../utils/connectorGeometry.js';
+import {
+  matchShortcut,
+  isEditableElementFocused,
+  CANVAS_UNDO_ORIGIN
+} from '../../utils/hotkeysAndUndo.js';
 
 export const CANVAS_COLORS: Record<string, string> = {
   '1': '#d97706', // Warm Amber
@@ -171,8 +178,26 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
   // Remote cursors awareness
   const [remoteCursors, setRemoteCursors] = useState<RemoteCursor[]>([]);
 
-  // Internal clipboard for copy/paste
-  const clipboardRef = useRef<BoardNodeData[]>([]);
+  // Internal clipboard for copy/paste (nodes + connecting edges)
+  const clipboardRef = useRef<{ nodes: BoardNodeData[]; edges: BoardEdgeData[] }>({ nodes: [], edges: [] });
+
+  // Real-time ghost preview card for drag-and-drop
+  const [ghostDropPreview, setGhostDropPreview] = useState<{ x: number; y: number; title: string } | null>(null);
+
+  // Exact cursor canvas coordinates for paste
+  const lastMouseCanvasPosRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+
+  // Dynamic edge reconnection dragging state
+  const [reconnectEdgeState, setReconnectEdgeState] = useState<{
+    edgeId: string;
+    which: 'from' | 'to';
+    startPoint: { x: number; y: number };
+    currentX: number;
+    currentY: number;
+    snappedTarget: { nodeId: string; side: PortSide; point: { x: number; y: number } } | null;
+  } | null>(null);
+  const reconnectEdgeStateRef = useRef(reconnectEdgeState);
+  reconnectEdgeStateRef.current = reconnectEdgeState;
 
   // Note picker modal for note cards
   const [isNotePickerOpen, setIsNotePickerOpen] = useState(false);
@@ -262,7 +287,8 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
     yEdges.observe(updateState);
 
     const um = new Y.UndoManager([yNodes, yEdges], {
-      trackedOrigins: new Set([null, undefined, 'user'])
+      trackedOrigins: new Set([null, undefined, 'user', CANVAS_UNDO_ORIGIN]),
+      captureTimeout: 400
     });
     undoManagerRef.current = um;
 
@@ -346,81 +372,102 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
     }
   };
 
-  // Keyboard shortcuts
+  // Keyboard shortcuts (Physical keycode layout-independent)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      const target = e.target as HTMLElement;
-      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) {
-        return;
-      }
+      if (isEditableElementFocused()) return;
 
       // Spacebar for Pan
       if (e.code === 'Space' && !isSpacePressed) {
         setIsSpacePressed(true);
       }
 
-      // Tool switches
-      if (!e.ctrlKey && !e.metaKey && !e.shiftKey) {
-        if (e.key.toLowerCase() === 'v') setActiveTool('select');
-        if (e.key.toLowerCase() === 'h') setActiveTool('hand');
-        if (e.key.toLowerCase() === 's') setActiveTool('sticky');
-        if (e.key.toLowerCase() === 't') setActiveTool('text');
-        if (e.key.toLowerCase() === 'n') {
+      // Undo / Redo
+      if (matchShortcut(e, 'mod+z')) {
+        e.preventDefault();
+        undoManagerRef.current?.undo();
+        return;
+      }
+      if (matchShortcut(e, 'mod+shift+z') || matchShortcut(e, 'mod+y')) {
+        e.preventDefault();
+        undoManagerRef.current?.redo();
+        return;
+      }
+
+      // Select All (Ctrl+A)
+      if (matchShortcut(e, 'mod+a')) {
+        e.preventDefault();
+        const nonDeletedIds = nodesList.filter((n) => !n.deleted).map((n) => n.id);
+        setSelectedNodeIds(new Set(nonDeletedIds));
+        setSelectedEdgeId(null);
+        return;
+      }
+
+      // Copy (Ctrl+C)
+      if (matchShortcut(e, 'mod+c')) {
+        e.preventDefault();
+        copySelected();
+        return;
+      }
+
+      // Paste (Ctrl+V)
+      if (matchShortcut(e, 'mod+v')) {
+        e.preventDefault();
+        const targetPos = lastMouseCanvasPosRef.current;
+        pasteClipboard(targetPos.x, targetPos.y);
+        return;
+      }
+
+      // Duplicate (Ctrl+D)
+      if (matchShortcut(e, 'mod+d')) {
+        e.preventDefault();
+        duplicateSelected();
+        return;
+      }
+
+      // Wrap in Frame (Ctrl+G)
+      if (matchShortcut(e, 'mod+g')) {
+        e.preventDefault();
+        wrapSelectedInFrame();
+        return;
+      }
+
+      // Lock toggle (Ctrl+L)
+      if (matchShortcut(e, 'mod+l')) {
+        e.preventDefault();
+        toggleLockSelected();
+        return;
+      }
+
+      // AI Context Export (Ctrl+Shift+E)
+      if (matchShortcut(e, 'mod+shift+e')) {
+        e.preventDefault();
+        setShowAiModal(true);
+        return;
+      }
+
+      // Delete selected
+      if (matchShortcut(e, 'delete') || matchShortcut(e, 'backspace')) {
+        e.preventDefault();
+        deleteSelected();
+        return;
+      }
+
+      // Tool switches using physical hardware e.code
+      if (!e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey) {
+        if (e.code === 'KeyV' || e.code === 'KeyS') setActiveTool('select');
+        if (e.code === 'KeyH') setActiveTool('hand');
+        if (e.code === 'KeyT') setActiveTool('text');
+        if (e.code === 'KeyN') {
           const centerX = (window.innerWidth / 2 - viewport.x) / viewport.zoom;
           const centerY = (window.innerHeight / 2 - viewport.y) / viewport.zoom;
           setPickerPos({ x: centerX - 140, y: centerY - 110 });
           setIsNotePickerOpen(true);
         }
-        if (e.key.toLowerCase() === 'f') setActiveTool('frame');
-        if (e.key.toLowerCase() === 'c') setActiveTool('arrow');
-        if (e.key.toLowerCase() === 'r') setActiveTool('shape');
-        if (e.key.toLowerCase() === 'i') fileAttachmentInputRef.current?.click();
-      }
-
-      // Delete selected
-      if (e.key === 'Delete' || e.key === 'Backspace') {
-        e.preventDefault();
-        deleteSelected();
-      }
-
-      // Undo / Redo
-      if (e.ctrlKey && !e.shiftKey && e.key.toLowerCase() === 'z') {
-        e.preventDefault();
-        undoManagerRef.current?.undo();
-      }
-      if (e.ctrlKey && (e.key.toLowerCase() === 'y' || (e.shiftKey && e.key.toLowerCase() === 'z'))) {
-        e.preventDefault();
-        undoManagerRef.current?.redo();
-      }
-
-      // Lock toggle (Ctrl+L)
-      if (e.ctrlKey && e.key.toLowerCase() === 'l') {
-        e.preventDefault();
-        toggleLockSelected();
-      }
-
-      // AI Context Export (Ctrl+Shift+E)
-      if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'e') {
-        e.preventDefault();
-        setShowAiModal(true);
-      }
-
-      // Duplicate (Ctrl+D)
-      if (e.ctrlKey && e.key.toLowerCase() === 'd') {
-        e.preventDefault();
-        duplicateSelected();
-      }
-
-      // Copy (Ctrl+C)
-      if (e.ctrlKey && e.key.toLowerCase() === 'c') {
-        const toCopy = nodesList.filter((n) => selectedNodeIds.has(n.id));
-        if (toCopy.length > 0) clipboardRef.current = toCopy;
-      }
-
-      // Paste (Ctrl+V)
-      if (e.ctrlKey && e.key.toLowerCase() === 'v') {
-        e.preventDefault();
-        pasteClipboard();
+        if (e.code === 'KeyF') setActiveTool('frame');
+        if (e.code === 'KeyC' || e.code === 'KeyL') setActiveTool('arrow');
+        if (e.code === 'KeyR') setActiveTool('shape');
+        if (e.code === 'KeyI') fileAttachmentInputRef.current?.click();
       }
     };
 
@@ -469,51 +516,223 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
     }, 'user');
   };
 
-  // Duplicate selected nodes with offset
-  const duplicateSelected = () => {
-    const newSelected = new Set<string>();
-    boardDoc.transact(() => {
-      for (const id of selectedNodeIds) {
-        const src = nodeLookup.get(id);
-        if (src) {
-          const newId = crypto.randomUUID();
-          const newMap = new Y.Map();
-          yNodes.set(newId, newMap);
-          setNodeProperties(newMap, {
-            ...src,
-            id: newId,
-            x: src.x + 32,
-            y: src.y + 32,
-            text: src.text,
-            locked: false
-          });
-          newSelected.add(newId);
-        }
-      }
-    }, 'user');
-    setSelectedNodeIds(newSelected);
+  // Copy selected nodes and connected edges
+  const copySelected = () => {
+    const selectedNodes = nodesList.filter((n) => selectedNodeIds.has(n.id) && !n.deleted);
+    if (selectedNodes.length === 0) return;
+    const selectedIds = new Set(selectedNodes.map((n) => n.id));
+    const connectedEdges = edgesList.filter(
+      (e) => !e.deleted && selectedIds.has(e.from) && selectedIds.has(e.to)
+    );
+    clipboardRef.current = {
+      nodes: selectedNodes,
+      edges: connectedEdges
+    };
+    showToast(`Скопировано: ${selectedNodes.length} эл.`);
   };
 
-  // Paste clipboard items
-  const pasteClipboard = () => {
-    if (clipboardRef.current.length === 0) return;
+  // Duplicate selected nodes with offset and duplicate connecting edges
+  const duplicateSelected = () => {
+    if (selectedNodeIds.size === 0) return;
+    const toDup = nodesList.filter((n) => selectedNodeIds.has(n.id) && !n.deleted);
+    const selectedIds = new Set(toDup.map((n) => n.id));
+    const connectedEdges = edgesList.filter(
+      (e) => !e.deleted && selectedIds.has(e.from) && selectedIds.has(e.to)
+    );
+
+    const idMap = new Map<string, string>();
     const newSelected = new Set<string>();
+
     boardDoc.transact(() => {
-      for (const src of clipboardRef.current) {
+      for (const src of toDup) {
         const newId = crypto.randomUUID();
+        idMap.set(src.id, newId);
         const newMap = new Y.Map();
         yNodes.set(newId, newMap);
         setNodeProperties(newMap, {
           ...src,
           id: newId,
-          x: src.x + 40,
-          y: src.y + 40,
+          x: src.x + 28,
+          y: src.y + 28,
           locked: false
         });
         newSelected.add(newId);
       }
-    }, 'user');
+
+      for (const edge of connectedEdges) {
+        const fromId = idMap.get(edge.from);
+        const toId = idMap.get(edge.to);
+        if (fromId && toId) {
+          const newEdgeId = crypto.randomUUID();
+          yEdges.set(newEdgeId, {
+            ...edge,
+            id: newEdgeId,
+            from: fromId,
+            to: toId
+          });
+        }
+      }
+    }, CANVAS_UNDO_ORIGIN);
+
     setSelectedNodeIds(newSelected);
+  };
+
+  // Paste clipboard items with cursor coordinates or default offset
+  const pasteClipboard = (targetWorldX?: number, targetWorldY?: number) => {
+    const { nodes: clipNodes, edges: clipEdges } = clipboardRef.current;
+    if (clipNodes.length === 0) return;
+
+    let offsetX = 28;
+    let offsetY = 28;
+
+    if (targetWorldX !== undefined && targetWorldY !== undefined && targetWorldX !== 0 && targetWorldY !== 0) {
+      const minX = Math.min(...clipNodes.map((n) => n.x));
+      const minY = Math.min(...clipNodes.map((n) => n.y));
+      offsetX = targetWorldX - minX;
+      offsetY = targetWorldY - minY;
+    }
+
+    const idMap = new Map<string, string>();
+    const newSelected = new Set<string>();
+
+    boardDoc.transact(() => {
+      for (const src of clipNodes) {
+        const newId = crypto.randomUUID();
+        idMap.set(src.id, newId);
+        const newMap = new Y.Map();
+        yNodes.set(newId, newMap);
+        setNodeProperties(newMap, {
+          ...src,
+          id: newId,
+          x: Math.round(src.x + offsetX),
+          y: Math.round(src.y + offsetY),
+          locked: false
+        });
+        newSelected.add(newId);
+      }
+
+      for (const edge of clipEdges) {
+        const fromId = idMap.get(edge.from);
+        const toId = idMap.get(edge.to);
+        if (fromId && toId) {
+          const newEdgeId = crypto.randomUUID();
+          yEdges.set(newEdgeId, {
+            ...edge,
+            id: newEdgeId,
+            from: fromId,
+            to: toId
+          });
+        }
+      }
+    }, CANVAS_UNDO_ORIGIN);
+
+    setSelectedNodeIds(newSelected);
+    setSelectedEdgeId(null);
+  };
+
+  // Wrap selected nodes into a new Frame container (Ctrl+G)
+  const wrapSelectedInFrame = () => {
+    const selectedNodes = nodesList.filter((n) => selectedNodeIds.has(n.id) && !n.deleted);
+    if (selectedNodes.length === 0) return;
+
+    const minX = Math.min(...selectedNodes.map((n) => n.x)) - 32;
+    const minY = Math.min(...selectedNodes.map((n) => n.y)) - 48;
+    const maxX = Math.max(...selectedNodes.map((n) => n.x + n.w)) + 32;
+    const maxY = Math.max(...selectedNodes.map((n) => n.y + n.h)) + 32;
+
+    const frameId = crypto.randomUUID();
+    const frameMap = new Y.Map();
+
+    boardDoc.transact(() => {
+      yNodes.set(frameId, frameMap);
+      setNodeProperties(frameMap, {
+        id: frameId,
+        type: 'frame',
+        x: Math.round(minX),
+        y: Math.round(minY),
+        w: Math.round(maxX - minX),
+        h: Math.round(maxY - minY),
+        text: 'Группа / Фрейм',
+        color: 'default',
+        author: agentStatus.value?.memberName || 'Вы',
+        z: 0,
+        deleted: false,
+        locked: false
+      });
+    }, CANVAS_UNDO_ORIGIN);
+
+    setSelectedNodeIds(new Set([frameId]));
+    showToast('Выделенные элементы объединены во фрейм');
+  };
+
+  // Miro-grade Multi-select Alignment
+  const alignSelectedNodes = (type: 'left' | 'center' | 'right' | 'top' | 'middle' | 'bottom' | 'distribute-h' | 'distribute-v') => {
+    const selectedNodes = nodesList.filter((n) => selectedNodeIds.has(n.id) && !n.deleted && !n.locked);
+    if (selectedNodes.length <= 1) return;
+
+    boardDoc.transact(() => {
+      if (type === 'left') {
+        const minX = Math.min(...selectedNodes.map((n) => n.x));
+        selectedNodes.forEach((n) => {
+          const map = yNodes.get(n.id);
+          if (map) map.set('x', minX);
+        });
+      } else if (type === 'center') {
+        const avgCenterX = selectedNodes.reduce((acc, n) => acc + (n.x + n.w / 2), 0) / selectedNodes.length;
+        selectedNodes.forEach((n) => {
+          const map = yNodes.get(n.id);
+          if (map) map.set('x', Math.round(avgCenterX - n.w / 2));
+        });
+      } else if (type === 'right') {
+        const maxRight = Math.max(...selectedNodes.map((n) => n.x + n.w));
+        selectedNodes.forEach((n) => {
+          const map = yNodes.get(n.id);
+          if (map) map.set('x', maxRight - n.w);
+        });
+      } else if (type === 'top') {
+        const minY = Math.min(...selectedNodes.map((n) => n.y));
+        selectedNodes.forEach((n) => {
+          const map = yNodes.get(n.id);
+          if (map) map.set('y', minY);
+        });
+      } else if (type === 'middle') {
+        const avgCenterY = selectedNodes.reduce((acc, n) => acc + (n.y + n.h / 2), 0) / selectedNodes.length;
+        selectedNodes.forEach((n) => {
+          const map = yNodes.get(n.id);
+          if (map) map.set('y', Math.round(avgCenterY - n.h / 2));
+        });
+      } else if (type === 'bottom') {
+        const maxBottom = Math.max(...selectedNodes.map((n) => n.y + n.h));
+        selectedNodes.forEach((n) => {
+          const map = yNodes.get(n.id);
+          if (map) map.set('y', maxBottom - n.h);
+        });
+      } else if (type === 'distribute-h') {
+        const sorted = [...selectedNodes].sort((a, b) => a.x - b.x);
+        const minX = sorted[0].x;
+        const totalW = sorted.reduce((acc, n) => acc + n.w, 0);
+        const maxRight = sorted[sorted.length - 1].x + sorted[sorted.length - 1].w;
+        const gap = (maxRight - minX - totalW) / (sorted.length - 1);
+        let curX = minX;
+        sorted.forEach((n) => {
+          const map = yNodes.get(n.id);
+          if (map) map.set('x', Math.round(curX));
+          curX += n.w + gap;
+        });
+      } else if (type === 'distribute-v') {
+        const sorted = [...selectedNodes].sort((a, b) => a.y - b.y);
+        const minY = sorted[0].y;
+        const totalH = sorted.reduce((acc, n) => acc + n.h, 0);
+        const maxBottom = sorted[sorted.length - 1].y + sorted[sorted.length - 1].h;
+        const gap = (maxBottom - minY - totalH) / (sorted.length - 1);
+        let curY = minY;
+        sorted.forEach((n) => {
+          const map = yNodes.get(n.id);
+          if (map) map.set('y', Math.round(curY));
+          curY += n.h + gap;
+        });
+      }
+    }, CANVAS_UNDO_ORIGIN);
   };
 
   // Create node and AUTO-RETURN to select tool
@@ -684,6 +903,7 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
   useEffect(() => {
     const handleGlobalPointerMove = (e: PointerEvent) => {
       const pos = screenToCanvas(e.clientX, e.clientY);
+      lastMouseCanvasPosRef.current = pos;
       awareness.setLocalStateField('cursor', {
         x: pos.x,
         y: pos.y,
@@ -698,6 +918,28 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
           x: panState.originX + (e.clientX - panState.startX),
           y: panState.originY + (e.clientY - panState.startY)
         }));
+      }
+
+      // Live edge reconnection handle drag
+      if (reconnectEdgeStateRef.current) {
+        const boxNodes: BoxNode[] = visibleNodes.map((n) => ({
+          id: n.id,
+          x: n.x,
+          y: n.y,
+          width: n.w,
+          height: n.h
+        }));
+        const snapped = findMagneticTargetPort(boxNodes, '', pos.x, pos.y, 28);
+        setReconnectEdgeState((prev) =>
+          prev
+            ? {
+                ...prev,
+                currentX: snapped ? snapped.point.x : pos.x,
+                currentY: snapped ? snapped.point.y : pos.y,
+                snappedTarget: snapped
+              }
+            : null
+        );
       }
 
       // Dragging nodes with Smart Alignment Guides & Grid snap
@@ -860,6 +1102,43 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
       setResizeState(null);
       setAlignmentGuides([]);
       setMarqueeBox(null);
+      undoManagerRef.current?.stopCapturing();
+
+      // Handle edge reconnection completion
+      const recState = reconnectEdgeStateRef.current;
+      if (recState) {
+        reconnectEdgeStateRef.current = null;
+        setReconnectEdgeState(null);
+        const pos = screenToCanvas(e.clientX, e.clientY);
+        const boxNodes: BoxNode[] = visibleNodes.map((n) => ({
+          id: n.id,
+          x: n.x,
+          y: n.y,
+          width: n.w,
+          height: n.h
+        }));
+        const target = recState.snappedTarget || findMagneticTargetPort(boxNodes, '', pos.x, pos.y, 28);
+        if (target) {
+          const existing = yEdges.get(recState.edgeId);
+          if (existing) {
+            boardDoc.transact(() => {
+              if (recState.which === 'from') {
+                yEdges.set(recState.edgeId, {
+                  ...existing,
+                  from: target.nodeId,
+                  fromSide: target.side
+                });
+              } else {
+                yEdges.set(recState.edgeId, {
+                  ...existing,
+                  to: target.nodeId,
+                  toSide: target.side
+                });
+              }
+            }, CANVAS_UNDO_ORIGIN);
+          }
+        }
+      }
 
       const state = connectingStateRef.current;
       if (state) {
@@ -1185,24 +1464,122 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
       onDragOver={(e) => {
         if (
           e.dataTransfer?.types.includes('application/doks-note-id') ||
-          (e.dataTransfer?.files && e.dataTransfer.files.length > 0)
+          e.dataTransfer?.types.includes('application/x-doks-note') ||
+          (e.dataTransfer?.types.includes('Files'))
         ) {
           e.preventDefault();
           e.dataTransfer.dropEffect = 'copy';
+          const pos = screenToCanvas(e.clientX, e.clientY);
+          setGhostDropPreview({
+            x: pos.x - 120,
+            y: pos.y - 70,
+            title: e.dataTransfer.types.includes('Files') ? 'Добавить файл(ы)' : 'Добавить заметку'
+          });
+        }
+      }}
+      onDragLeave={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+          setGhostDropPreview(null);
         }
       }}
       onDrop={async (e) => {
         e.preventDefault();
+        setGhostDropPreview(null);
         const pos = screenToCanvas(e.clientX, e.clientY);
-        const noteId = e.dataTransfer?.getData('application/doks-note-id');
+
+        // 1. Note dragged from sidebar
+        const noteId = e.dataTransfer?.getData('application/x-doks-note') || e.dataTransfer?.getData('application/doks-note-id');
         if (noteId) {
-          createNoteCardAt(noteId, pos.x, pos.y);
+          createNoteCardAt(noteId, pos.x - 120, pos.y - 70);
           return;
         }
 
+        // 2. Files dropped from OS
         if (e.dataTransfer?.files && e.dataTransfer.files.length > 0) {
-          for (let i = 0; i < e.dataTransfer.files.length; i++) {
-            await handleUploadFileToBoard(e.dataTransfer.files[i], pos.x + i * 20, pos.y + i * 20);
+          const files = Array.from(e.dataTransfer.files);
+          const gridCols = Math.ceil(Math.sqrt(files.length));
+          const colW = 260;
+          const rowH = 180;
+
+          for (let i = 0; i < files.length; i++) {
+            const file = files[i];
+            const col = i % gridCols;
+            const row = Math.floor(i / gridCols);
+            const dropX = pos.x + col * colW;
+            const dropY = pos.y + row * rowH;
+
+            const ext = file.name.slice(file.name.lastIndexOf('.')).toLowerCase();
+
+            if (ext === '.canvas') {
+              try {
+                const text = await file.text();
+                const json = JSON.parse(text);
+                const idMap = new Map<string, string>();
+                boardDoc.transact(() => {
+                  if (Array.isArray(json.nodes)) {
+                    for (const cn of json.nodes) {
+                      const newId = crypto.randomUUID();
+                      idMap.set(cn.id, newId);
+                      const nodeMap = new Y.Map();
+                      yNodes.set(newId, nodeMap);
+                      setNodeProperties(nodeMap, {
+                        id: newId,
+                        type: cn.type === 'file' ? 'note' : cn.type === 'text' ? 'text' : 'sticky',
+                        x: Math.round(dropX + (cn.x || 0)),
+                        y: Math.round(dropY + (cn.y || 0)),
+                        w: cn.width || 250,
+                        h: cn.height || 140,
+                        text: cn.text || cn.file || '',
+                        color: String(cn.color || '3'),
+                        author: agentStatus.value?.memberName || 'Вы',
+                        deleted: false,
+                        z: 1
+                      });
+                    }
+                  }
+                  if (Array.isArray(json.edges)) {
+                    for (const ce of json.edges) {
+                      const fromId = idMap.get(ce.fromNode);
+                      const toId = idMap.get(ce.toNode);
+                      if (fromId && toId) {
+                        const edgeId = crypto.randomUUID();
+                        yEdges.set(edgeId, {
+                          id: edgeId,
+                          from: fromId,
+                          to: toId,
+                          fromSide: ce.fromSide || 'right',
+                          toSide: ce.toSide || 'left',
+                          label: ce.label || '',
+                          color: ce.color ? String(ce.color) : undefined,
+                          deleted: false
+                        });
+                      }
+                    }
+                  }
+                }, CANVAS_UNDO_ORIGIN);
+                showToast(`Импортирован холст "${file.name}"`);
+              } catch (err) {
+                console.error('Failed to parse .canvas file:', err);
+              }
+            } else if (ext === '.md' || ext === '.txt') {
+              try {
+                const content = await file.text();
+                const title = file.name.replace(/\.(md|txt)$/i, '');
+                const res = await fetch(`/api/notes?scope=${encodeURIComponent(currentScope.value)}`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ title, content })
+                });
+                if (res.ok) {
+                  const noteData = await res.json();
+                  createNoteCardAt(noteData.id, dropX, dropY);
+                }
+              } catch (err) {
+                console.error('Failed to import markdown file:', err);
+              }
+            } else {
+              await handleUploadFileToBoard(file, dropX, dropY);
+            }
           }
         }
       }}
@@ -1332,6 +1709,43 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
           </button>
         </div>
       </div>
+
+      {/* Miro Multi-Select Alignment Bar */}
+      {selectedNodeIds.size > 1 && (
+        <div class="align-toolbar liquid-glass-surface" onClick={(e) => e.stopPropagation()}>
+          <button class="align-toolbar-btn" onClick={() => alignSelectedNodes('left')} title="Выровнять по левому краю">
+            <span>Слева</span>
+          </button>
+          <button class="align-toolbar-btn" onClick={() => alignSelectedNodes('center')} title="Выровнять по центру">
+            <span>Центр</span>
+          </button>
+          <button class="align-toolbar-btn" onClick={() => alignSelectedNodes('right')} title="Выровнять по правому краю">
+            <span>Справа</span>
+          </button>
+          <div class="align-toolbar-divider" />
+          <button class="align-toolbar-btn" onClick={() => alignSelectedNodes('top')} title="Выровнять по верху">
+            <span>Сверху</span>
+          </button>
+          <button class="align-toolbar-btn" onClick={() => alignSelectedNodes('middle')} title="Выровнять по середине">
+            <span>Середина</span>
+          </button>
+          <button class="align-toolbar-btn" onClick={() => alignSelectedNodes('bottom')} title="Выровнять по низу">
+            <span>Снизу</span>
+          </button>
+          <div class="align-toolbar-divider" />
+          <button class="align-toolbar-btn" onClick={() => alignSelectedNodes('distribute-h')} title="Распределить по горизонтали">
+            <span>По гориз.</span>
+          </button>
+          <button class="align-toolbar-btn" onClick={() => alignSelectedNodes('distribute-v')} title="Распределить по вертикали">
+            <span>По верт.</span>
+          </button>
+          <div class="align-toolbar-divider" />
+          <button class="align-toolbar-btn" onClick={wrapSelectedInFrame} title="Объединить во фрейм (Ctrl+G)">
+            <Icon name="frame" size={14} />
+            <span>В фрейм</span>
+          </button>
+        </div>
+      )}
 
       {/* 2. Floating Context Inspector Bar */}
       {selectionBounds && selectedNodeIds.size > 0 && (
@@ -1465,6 +1879,73 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
             return null;
           })()}
 
+          {/* Flowchart Shape Variant Switcher */}
+          {(() => {
+            const hasShape = Array.from(selectedNodeIds).some((id) => nodeLookup.get(id)?.type === 'shape');
+            if (!hasShape) return null;
+            return (
+              <>
+                <div class="inspector-divider" />
+                <button
+                  class="inspector-btn"
+                  title="Форма: Прямоугольник"
+                  onClick={() => {
+                    boardDoc.transact(() => {
+                      for (const id of selectedNodeIds) {
+                        const map = yNodes.get(id);
+                        if (map) map.set('shapeVariant', 'rectangle');
+                      }
+                    }, CANVAS_UNDO_ORIGIN);
+                  }}
+                >
+                  <Icon name="square" size={14} />
+                </button>
+                <button
+                  class="inspector-btn"
+                  title="Форма: Скруглённый прямоугольник"
+                  onClick={() => {
+                    boardDoc.transact(() => {
+                      for (const id of selectedNodeIds) {
+                        const map = yNodes.get(id);
+                        if (map) map.set('shapeVariant', 'rounded');
+                      }
+                    }, CANVAS_UNDO_ORIGIN);
+                  }}
+                >
+                  <Icon name="shape" size={14} />
+                </button>
+                <button
+                  class="inspector-btn"
+                  title="Форма: Ромб"
+                  onClick={() => {
+                    boardDoc.transact(() => {
+                      for (const id of selectedNodeIds) {
+                        const map = yNodes.get(id);
+                        if (map) map.set('shapeVariant', 'diamond');
+                      }
+                    }, CANVAS_UNDO_ORIGIN);
+                  }}
+                >
+                  <Icon name="diamond" size={14} />
+                </button>
+                <button
+                  class="inspector-btn"
+                  title="Форма: Круг"
+                  onClick={() => {
+                    boardDoc.transact(() => {
+                      for (const id of selectedNodeIds) {
+                        const map = yNodes.get(id);
+                        if (map) map.set('shapeVariant', 'circle');
+                      }
+                    }, CANVAS_UNDO_ORIGIN);
+                  }}
+                >
+                  <Icon name="circle" size={14} />
+                </button>
+              </>
+            );
+          })()}
+
           {/* Lock / Unlock */}
           <button
             class="inspector-btn"
@@ -1514,69 +1995,151 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
 
           const p1 = getPortCoord(fromNode, edge.fromSide);
           const p2 = getPortCoord(toNode, edge.toSide);
-          const midX = ((p1.x + p2.x) / 2) * viewport.zoom + viewport.x;
-          const midY = ((p1.y + p2.y) / 2) * viewport.zoom + viewport.y;
+          const mid = getEdgeMidpoint(
+            p1.x,
+            p1.y,
+            edge.fromSide || 'right',
+            p2.x,
+            p2.y,
+            edge.toSide || 'left',
+            edge.curveType || 'bezier'
+          );
+          const midX = mid.x * viewport.zoom + viewport.x;
+          const midY = mid.y * viewport.zoom + viewport.y;
+
+          const EDGE_PALETTE = ['#7c8cff', '#98c379', '#e5c07b', '#e06c75', '#56b6c2', '#c678dd', '#ffffff', '#656c7d'];
 
           return (
             <div
               class="floating-edge-pill liquid-glass-surface"
               style={{
                 left: `${midX}px`,
-                top: `${midY - 24}px`,
+                top: `${midY - 14}px`,
                 transform: 'translate(-50%, -100%)'
               }}
               onMouseDown={(e) => e.stopPropagation()}
               onClick={(e) => e.stopPropagation()}
             >
+              {/* 8 Color Swatches */}
+              <div class="edge-swatch-list">
+                {EDGE_PALETTE.map((col) => (
+                  <button
+                    key={col}
+                    class={`edge-color-swatch ${edge.color === col ? 'active' : ''}`}
+                    style={{ backgroundColor: col }}
+                    title={`Цвет стрелки: ${col}`}
+                    onClick={() => {
+                      boardDoc.transact(() => {
+                        yEdges.set(edge.id, { ...edge, color: col });
+                      }, CANVAS_UNDO_ORIGIN);
+                    }}
+                  />
+                ))}
+              </div>
+
+              {/* Curve Switcher */}
+              <button
+                class={`edge-pill-btn ${(!edge.curveType || edge.curveType === 'bezier') ? 'active' : ''}`}
+                title="Плавная кривая Безье"
+                onClick={() => {
+                  boardDoc.transact(() => {
+                    yEdges.set(edge.id, { ...edge, curveType: 'bezier' });
+                  }, CANVAS_UNDO_ORIGIN);
+                }}
+              >
+                Кривая
+              </button>
+              <button
+                class={`edge-pill-btn ${edge.curveType === 'orthogonal' ? 'active' : ''}`}
+                title="Ортогональная ломаная"
+                onClick={() => {
+                  boardDoc.transact(() => {
+                    yEdges.set(edge.id, { ...edge, curveType: 'orthogonal' });
+                  }, CANVAS_UNDO_ORIGIN);
+                }}
+              >
+                Ломаная
+              </button>
+              <button
+                class={`edge-pill-btn ${edge.curveType === 'straight' ? 'active' : ''}`}
+                title="Прямая линия"
+                onClick={() => {
+                  boardDoc.transact(() => {
+                    yEdges.set(edge.id, { ...edge, curveType: 'straight' });
+                  }, CANVAS_UNDO_ORIGIN);
+                }}
+              >
+                Прямая
+              </button>
+
+              {/* Thickness Toggle */}
+              <button
+                class="edge-pill-btn"
+                title={`Толщина: ${edge.thickness || 2}px`}
+                onClick={() => {
+                  const nextThick = (edge.thickness === 2 || !edge.thickness) ? 3 : edge.thickness === 3 ? 5 : 2;
+                  boardDoc.transact(() => {
+                    yEdges.set(edge.id, { ...edge, thickness: nextThick });
+                  }, CANVAS_UNDO_ORIGIN);
+                }}
+              >
+                <span>{edge.thickness || 2}px</span>
+              </button>
+
+              {/* Style Switcher */}
+              <button
+                class={`edge-pill-btn ${edge.style && edge.style !== 'solid' ? 'active' : ''}`}
+                title={`Стиль линии: ${edge.style || 'solid'}`}
+                onClick={() => {
+                  const nextStyle = !edge.style || edge.style === 'solid' ? 'dashed' : edge.style === 'dashed' ? 'dotted' : 'solid';
+                  boardDoc.transact(() => {
+                    yEdges.set(edge.id, { ...edge, style: nextStyle });
+                  }, CANVAS_UNDO_ORIGIN);
+                }}
+              >
+                <Icon name="shape" size={13} />
+              </button>
+
+              {/* Direction Switcher */}
+              <button
+                class="edge-pill-btn"
+                title={`Направление: ${edge.direction || 'forward'}`}
+                onClick={() => {
+                  const nextDir = edge.direction === 'forward' ? 'both' : edge.direction === 'both' ? 'none' : 'forward';
+                  boardDoc.transact(() => {
+                    yEdges.set(edge.id, { ...edge, direction: nextDir });
+                  }, CANVAS_UNDO_ORIGIN);
+                }}
+              >
+                <Icon name="arrow" size={13} />
+              </button>
+
+              {/* Edge Label Input */}
               <input
                 type="text"
                 class="edge-label-input"
-                placeholder="Подпись связи..."
+                placeholder="Подпись..."
                 value={edge.label || ''}
                 onInput={(e) => {
                   const val = (e.target as HTMLInputElement).value;
-                  const edgeMap = yEdges.get(edge.id);
-                  if (edgeMap) yEdges.set(edge.id, { ...edgeMap, label: val });
+                  boardDoc.transact(() => {
+                    yEdges.set(edge.id, { ...edge, label: val });
+                  }, CANVAS_UNDO_ORIGIN);
                 }}
               />
+
+              {/* Delete Button */}
               <button
-                class={`inspector-btn ${edge.style === 'dashed' ? 'active' : ''}`}
-                title={edge.style === 'dashed' ? 'Сплошная линия' : 'Пунктирная линия'}
-                onClick={() => {
-                  const edgeMap = yEdges.get(edge.id);
-                  if (edgeMap) {
-                    yEdges.set(edge.id, {
-                      ...edgeMap,
-                      style: edgeMap.style === 'dashed' ? 'solid' : 'dashed'
-                    });
-                  }
-                }}
-              >
-                <Icon name="shape" size={14} />
-              </button>
-              <button
-                class="inspector-btn"
-                title="Направление стрелки"
-                onClick={() => {
-                  const edgeMap = yEdges.get(edge.id);
-                  if (edgeMap) {
-                    const nextDir = edgeMap.direction === 'forward' ? 'both' : edgeMap.direction === 'both' ? 'none' : 'forward';
-                    yEdges.set(edge.id, { ...edgeMap, direction: nextDir });
-                  }
-                }}
-              >
-                <Icon name="arrow" size={14} />
-              </button>
-              <button
-                class="inspector-btn danger"
+                class="edge-pill-btn danger"
                 title="Удалить связь (Delete)"
                 onClick={() => {
-                  const edgeMap = yEdges.get(edge.id);
-                  if (edgeMap) yEdges.set(edge.id, { ...edgeMap, deleted: true });
+                  boardDoc.transact(() => {
+                    yEdges.set(edge.id, { ...edge, deleted: true, deletedAt: Date.now() });
+                  }, CANVAS_UNDO_ORIGIN);
                   setSelectedEdgeId(null);
                 }}
               >
-                <Icon name="trash" size={14} />
+                <Icon name="trash" size={13} />
               </button>
             </div>
           );
@@ -1603,7 +2166,7 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
               markerHeight="6"
               orient="auto-start-reverse"
             >
-              <path d="M 0 1 L 10 5 L 0 9 z" fill="var(--accent, #38bdf8)" />
+              <path d="M 0 1 L 10 5 L 0 9 z" fill="var(--accent, #7c8cff)" />
             </marker>
             <marker
               id="arrow-marker-start"
@@ -1614,8 +2177,39 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
               markerHeight="6"
               orient="auto-start-reverse"
             >
-              <path d="M 10 1 L 0 5 L 10 9 z" fill="var(--accent, #38bdf8)" />
+              <path d="M 10 1 L 0 5 L 10 9 z" fill="var(--accent, #7c8cff)" />
             </marker>
+            {/* Dynamic arrow markers colored to match each edge */}
+            {edgesList.map((edge) => {
+              const isSel = selectedEdgeId === edge.id;
+              const arrowColor = edge.color || (isSel ? '#7c8cff' : 'rgba(255, 255, 255, 0.45)');
+              return (
+                <Fragment key={edge.id}>
+                  <marker
+                    id={`arrow-${edge.id}`}
+                    viewBox="0 0 10 10"
+                    refX="8"
+                    refY="5"
+                    markerWidth="6"
+                    markerHeight="6"
+                    orient="auto-start-reverse"
+                  >
+                    <path d="M 0 1 L 10 5 L 0 9 z" fill={arrowColor} />
+                  </marker>
+                  <marker
+                    id={`arrow-start-${edge.id}`}
+                    viewBox="0 0 10 10"
+                    refX="2"
+                    refY="5"
+                    markerWidth="6"
+                    markerHeight="6"
+                    orient="auto-start-reverse"
+                  >
+                    <path d="M 10 1 L 0 5 L 10 9 z" fill={arrowColor} />
+                  </marker>
+                </Fragment>
+              );
+            })}
           </defs>
 
           {/* Alignment snap lines */}
@@ -1656,10 +2250,14 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
             const p1 = getPortCoord(fromNode, fromSide);
             const p2 = getPortCoord(toNode, toSide);
 
-            const pathD = buildBezierEdgePath(p1.x, p1.y, fromSide, p2.x, p2.y, toSide);
-            const midX = (p1.x + p2.x) / 2;
-            const midY = (p1.y + p2.y) / 2;
+            const pathD = buildEdgeSvgPath(p1.x, p1.y, fromSide, p2.x, p2.y, toSide, edge.curveType || 'bezier');
+            const mid = getEdgeMidpoint(p1.x, p1.y, fromSide, p2.x, p2.y, toSide, edge.curveType || 'bezier');
+            const midX = mid.x;
+            const midY = mid.y;
             const isSelected = selectedEdgeId === edge.id;
+            const strokeColor = edge.color || (isSelected ? '#7c8cff' : 'rgba(255, 255, 255, 0.45)');
+            const strokeW = edge.thickness || (isSelected ? 3 : 2);
+            const strokeDash = edge.style === 'dashed' ? '6 4' : edge.style === 'dotted' ? '2 3' : undefined;
 
             return (
               <g key={edge.id} class="canvas-edge-group">
@@ -1680,12 +2278,12 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
                 <path
                   d={pathD}
                   class={`canvas-edge-path ${isSelected ? 'selected' : ''}`}
-                  stroke={isSelected ? 'var(--accent, #38bdf8)' : 'rgba(255, 255, 255, 0.45)'}
-                  strokeWidth={isSelected ? 3 : 2}
-                  strokeDasharray={edge.style === 'dashed' ? '5 5' : undefined}
+                  stroke={strokeColor}
+                  strokeWidth={strokeW}
+                  strokeDasharray={strokeDash}
                   fill="none"
-                  markerEnd={edge.direction !== 'none' ? 'url(#arrow-marker)' : undefined}
-                  markerStart={edge.direction === 'both' ? 'url(#arrow-marker-start)' : undefined}
+                  markerEnd={edge.direction !== 'none' ? `url(#arrow-${edge.id})` : undefined}
+                  markerStart={edge.direction === 'both' ? `url(#arrow-start-${edge.id})` : undefined}
                   onClick={(e) => {
                     e.stopPropagation();
                     setSelectedEdgeId(edge.id);
@@ -1698,6 +2296,7 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
                     y={midY - 8}
                     class="edge-text-label"
                     textAnchor="middle"
+                    fill={strokeColor}
                     onClick={(e) => {
                       e.stopPropagation();
                       setSelectedEdgeId(edge.id);
@@ -1706,9 +2305,73 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
                     {edge.label}
                   </text>
                 )}
+                {/* Reconnection handles at endpoints */}
+                {isSelected && (
+                  <>
+                    <circle
+                      cx={p1.x}
+                      cy={p1.y}
+                      r="5"
+                      class="edge-reconnect-handle"
+                      title="Перетащите для изменения источника"
+                      onMouseDown={(e) => {
+                        e.stopPropagation();
+                        setReconnectEdgeState({
+                          edgeId: edge.id,
+                          which: 'from',
+                          startPoint: p1,
+                          currentX: p1.x,
+                          currentY: p1.y,
+                          snappedTarget: null
+                        });
+                      }}
+                    />
+                    <circle
+                      cx={p2.x}
+                      cy={p2.y}
+                      r="5"
+                      class="edge-reconnect-handle"
+                      title="Перетащите для изменения цели"
+                      onMouseDown={(e) => {
+                        e.stopPropagation();
+                        setReconnectEdgeState({
+                          edgeId: edge.id,
+                          which: 'to',
+                          startPoint: p2,
+                          currentX: p2.x,
+                          currentY: p2.y,
+                          snappedTarget: null
+                        });
+                      }}
+                    />
+                  </>
+                )}
               </g>
             );
           })}
+
+          {/* Live edge reconnection dragging line */}
+          {reconnectEdgeState && (
+            <g class="connecting-preview-group">
+              <line
+                x1={reconnectEdgeState.startPoint.x}
+                y1={reconnectEdgeState.startPoint.y}
+                x2={reconnectEdgeState.currentX}
+                y2={reconnectEdgeState.currentY}
+                stroke="#7c8cff"
+                strokeWidth="2.5"
+                strokeDasharray="4 4"
+              />
+              {reconnectEdgeState.snappedTarget && (
+                <circle
+                  cx={reconnectEdgeState.snappedTarget.point.x}
+                  cy={reconnectEdgeState.snappedTarget.point.y}
+                  r="7"
+                  class="magnetic-snap-ring"
+                />
+              )}
+            </g>
+          )}
 
           {/* Temporary arrow during drag with magnetic live snap */}
           {connectingState && (
@@ -1752,18 +2415,35 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
           )}
         </svg>
 
+        {/* Real-time Ghost Drop Preview Card */}
+        {ghostDropPreview && (
+          <div
+            class="ghost-drop-preview"
+            style={{
+              left: `${ghostDropPreview.x}px`,
+              top: `${ghostDropPreview.y}px`,
+              width: '240px',
+              height: '140px'
+            }}
+          >
+            <Icon name="upload" size={24} />
+            <span>{ghostDropPreview.title}</span>
+          </div>
+        )}
+
         {/* Nodes Layer */}
         {visibleNodes.map((node) => {
           const isSelected = selectedNodeIds.has(node.id);
           const nodeColorHex = CANVAS_COLORS[node.color || ''] || CANVAS_COLORS.default;
           const isFrame = node.type === 'frame';
           const isNote = node.type === 'note';
+          const shapeClass = node.type === 'shape' && node.shapeVariant ? `shape-variant-${node.shapeVariant}` : '';
 
           return (
             <div
               key={node.id}
               data-node-id={node.id}
-              class={`board-node-box type-${node.type} ${isSelected ? 'selected' : ''} ${node.locked ? 'locked' : ''}`}
+              class={`board-node-box type-${node.type} ${shapeClass} ${isSelected ? 'selected' : ''} ${node.locked ? 'locked' : ''}`}
               style={{
                 left: `${node.x}px`,
                 top: `${node.y}px`,
@@ -2246,7 +2926,14 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
 
       {/* Empty State Seed Card */}
       {visibleNodes.length === 0 && (
-        <div class="canvas-empty-state liquid-glass-surface" onMouseDown={(e) => e.stopPropagation()}>
+        <div
+          class="canvas-empty-state liquid-glass-surface"
+          onMouseDown={(e) => {
+            if (activeTool === 'select' || activeTool === 'hand') {
+              e.stopPropagation();
+            }
+          }}
+        >
           <div class="empty-state-title">Доска пуста</div>
           <div class="empty-state-desc">Создайте стикер (S) или заполните шаблоном задач</div>
           <button
@@ -2316,6 +3003,21 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
             title="Миникарта"
           >
             <Icon name="frame" size={14} />
+          </button>
+          <div class="hud-divider" />
+          <button
+            class="hud-btn"
+            onClick={() => undoManagerRef.current?.undo()}
+            title="Отменить действие (Ctrl+Z)"
+          >
+            <Icon name="undo" size={14} />
+          </button>
+          <button
+            class="hud-btn"
+            onClick={() => undoManagerRef.current?.redo()}
+            title="Повторить действие (Ctrl+Y)"
+          >
+            <Icon name="redo" size={14} />
           </button>
         </div>
       </div>
