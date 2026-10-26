@@ -1,5 +1,6 @@
 import os from 'node:os';
 import net from 'node:net';
+import { execSync } from 'node:child_process';
 
 export interface NetworkInterfaceInfo {
   name: string;
@@ -7,6 +8,52 @@ export interface NetworkInterfaceInfo {
   netmask: string;
   cidr: string;
   kind: 'radmin' | 'tailscale' | 'zerotier' | 'lan' | 'vpn-tun';
+}
+
+let lastRadminCheckTime = 0;
+let lastRadminCheckResult = false;
+
+/**
+ * On Windows, Famatech Radmin adapter keeps dormant static 26.x.x.x even when turned off.
+ * This verifies if the actual Radmin VPN process or service is running.
+ */
+export function isRadminTunnelOperational(): boolean {
+  if (process.platform !== 'win32') return true;
+  if (process.env.NODE_ENV === 'test' || process.env.VITEST || process.env.DOKS_FORCE_RADMIN) {
+    return true;
+  }
+  const now = Date.now();
+  if (now - lastRadminCheckTime < 10000) {
+    return lastRadminCheckResult;
+  }
+  lastRadminCheckTime = now;
+
+  try {
+    const stdout = execSync('tasklist /NH /FI "IMAGENAME eq RadminVPN.exe"', {
+      encoding: 'utf8',
+      stdio: ['pipe', 'pipe', 'ignore'],
+      timeout: 1000,
+    });
+    if (stdout.toLowerCase().includes('radminvpn.exe')) {
+      lastRadminCheckResult = true;
+      return true;
+    }
+  } catch {}
+
+  try {
+    const stdoutSvc = execSync('sc query RvControlSvc', {
+      encoding: 'utf8',
+      stdio: ['pipe', 'pipe', 'ignore'],
+      timeout: 1000,
+    });
+    if (stdoutSvc.includes('RUNNING')) {
+      lastRadminCheckResult = true;
+      return true;
+    }
+  } catch {}
+
+  lastRadminCheckResult = false;
+  return false;
 }
 
 /**
@@ -100,14 +147,22 @@ export function listOverlayInterfaces(): NetworkInterfaceInfo[] {
   return result.sort((a, b) => priority[a.kind] - priority[b.kind]);
 }
 
-export function detectRadminIp(): string | null {
+export function detectRadminIp(verifyActiveProcess = true): string | null {
   const all = listOverlayInterfaces();
   const radmin = all.find((i) => i.kind === 'radmin');
-  return radmin ? radmin.address : null;
+  if (!radmin) return null;
+  if (verifyActiveProcess && !isRadminTunnelOperational()) {
+    return null;
+  }
+  return radmin.address;
 }
 
-export function detectPreferredMeshIp(): { ip: string | null; kind: string; all: NetworkInterfaceInfo[] } {
-  const all = listOverlayInterfaces();
+export function detectPreferredMeshIp(meshEnabled = true): { ip: string | null; kind: string; all: NetworkInterfaceInfo[] } {
+  if (!meshEnabled) {
+    return { ip: '127.0.0.1', kind: 'local-only', all: [] };
+  }
+  const radmin = detectRadminIp(true);
+  const all = listOverlayInterfaces().filter((i) => i.kind !== 'radmin' || Boolean(radmin));
   if (all.length === 0) {
     return { ip: null, kind: 'local-only', all: [] };
   }

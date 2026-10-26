@@ -29,14 +29,14 @@ export function NotePickerModal({ isOpen, onClose, onSelectNote }: NotePickerMod
   };
 
   return (
-    <div class="modal-backdrop" onClick={onClose}>
-      <div class="modal-dialog note-picker-dialog" onClick={(e) => e.stopPropagation()}>
+    <div class="modal-overlay doks-modal-backdrop note-picker-backdrop" onClick={onClose}>
+      <div class="modal-card doks-modal-dialog note-picker-dialog liquid-glass-surface" onClick={(e) => e.stopPropagation()}>
         <div class="modal-header">
-          <div class="modal-title-row">
-            <Icon name="file-text" size={18} />
-            <h3>Добавить карточку заметки на доску</h3>
+          <div class="modal-title-group" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <Icon name="file-text" size={18} class="text-accent" />
+            <h3 class="modal-title" style={{ margin: 0, fontSize: '16px', fontWeight: 600 }}>Добавить карточку заметки на доску</h3>
           </div>
-          <button class="modal-close-btn" onClick={onClose}>
+          <button class="modal-close-btn" onClick={onClose} aria-label="Закрыть">
             <Icon name="x" size={16} />
           </button>
         </div>

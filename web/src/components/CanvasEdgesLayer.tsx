@@ -73,22 +73,22 @@ export const CanvasEdgesLayer: FunctionComponent<Props> = ({
                   viewBox="0 0 12 12"
                   refX="10"
                   refY="6"
-                  markerWidth="7"
-                  markerHeight="7"
+                  markerWidth="8"
+                  markerHeight="8"
                   orient="auto-start-reverse"
                 >
-                  <path d="M 1 2 L 10 6 L 1 10 z" fill={strokeColor} />
+                  <path d="M 0 1 L 10 6 L 0 11 z" fill={strokeColor} />
                 </marker>
                 <marker
                   id={`arrow-start-${edge.id}`}
                   viewBox="0 0 12 12"
                   refX="2"
                   refY="6"
-                  markerWidth="7"
-                  markerHeight="7"
+                  markerWidth="8"
+                  markerHeight="8"
                   orient="auto"
                 >
-                  <path d="M 11 2 L 2 6 L 11 10 z" fill={strokeColor} />
+                  <path d="M 10 1 L 0 6 L 10 11 z" fill={strokeColor} />
                 </marker>
                 {/* Legacy marker aliases */}
                 <marker
@@ -96,11 +96,11 @@ export const CanvasEdgesLayer: FunctionComponent<Props> = ({
                   viewBox="0 0 12 12"
                   refX="10"
                   refY="6"
-                  markerWidth="7"
-                  markerHeight="7"
+                  markerWidth="8"
+                  markerHeight="8"
                   orient="auto-start-reverse"
                 >
-                  <path d="M 1 2 L 10 6 L 1 10 z" fill={strokeColor} />
+                  <path d="M 0 1 L 10 6 L 0 11 z" fill={strokeColor} />
                 </marker>
               </Fragment>
             );

@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import { extractTextFromDocxBuffer } from './docx-extractor.js';
 
 export interface AttachmentInfo {
   hash: string;
@@ -9,6 +10,7 @@ export interface AttachmentInfo {
   filePath: string;
   mimeType: string;
   humanReadableName?: string;
+  extractedText?: string;
 }
 
 export interface AttachmentMetadataRecord {
@@ -19,6 +21,7 @@ export interface AttachmentMetadataRecord {
   createdAt: number;
   fileName: string;
   humanReadableName: string;
+  extractedText?: string;
 }
 
 const MIME_TYPES: Record<string, string> = {
@@ -147,6 +150,27 @@ export class AttachmentManager {
       } catch {}
     }
 
+    // 3.5 Extract text for .docx, .txt, .md, code files
+    let extractedText: string | undefined = undefined;
+    const lowerName = candidateName.toLowerCase();
+    if (lowerName.endsWith('.docx')) {
+      extractedText = extractTextFromDocxBuffer(buffer);
+    } else if (
+      lowerName.endsWith('.txt') ||
+      lowerName.endsWith('.md') ||
+      lowerName.endsWith('.csv') ||
+      lowerName.endsWith('.json') ||
+      lowerName.endsWith('.js') ||
+      lowerName.endsWith('.ts') ||
+      lowerName.endsWith('.py') ||
+      lowerName.endsWith('.html') ||
+      lowerName.endsWith('.css')
+    ) {
+      try {
+        extractedText = buffer.toString('utf8');
+      } catch {}
+    }
+
     // 4. Save metadata record
     const metaRecord: AttachmentMetadataRecord = {
       id: hash,
@@ -155,7 +179,8 @@ export class AttachmentManager {
       size: buffer.length,
       createdAt: Date.now(),
       fileName: candidateName,
-      humanReadableName
+      humanReadableName,
+      extractedText
     };
     this.metadata.set(hash, metaRecord);
     this.saveMetadata();
@@ -166,7 +191,8 @@ export class AttachmentManager {
       humanReadableName,
       size: buffer.length,
       filePath: blobPath,
-      mimeType: metaRecord.mimeType
+      mimeType: metaRecord.mimeType,
+      extractedText
     };
   }
 
@@ -185,7 +211,8 @@ export class AttachmentManager {
           humanReadableName: record.humanReadableName,
           size: record.size,
           filePath: blobPath,
-          mimeType: record.mimeType
+          mimeType: record.mimeType,
+          extractedText: record.extractedText
         };
       }
     }

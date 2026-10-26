@@ -34,6 +34,9 @@ import { AiExportModal } from './ai-export-modal.js';
 import { NotePickerModal } from './note-picker-modal.js';
 import { BoardMinimap } from './board-minimap.js';
 import { TransferModal } from './transfer-modal.js';
+import { AutoDiagramModal } from './auto-diagram-modal.js';
+import { pointsToSmoothSvgPath, computeBoundingBox, type Point } from '../../utils/strokeSmoother.js';
+import { computeAutoLayout, type GeneratedDiagramNode, type GeneratedDiagramEdge } from '../../utils/diagramGenerator.js';
 import { t } from '../../i18n/index.js';
 import { showConfirm } from '../../ui/dialogs.js';
 import { showToast } from '../../ui/toast.js';
@@ -62,7 +65,7 @@ export const CANVAS_COLORS: Record<string, string> = {
   default: '#d97706'
 };
 
-export type CanvasTool = 'select' | 'hand' | 'sticky' | 'text' | 'note' | 'frame' | 'arrow' | 'shape';
+export type CanvasTool = 'select' | 'hand' | 'sticky' | 'text' | 'note' | 'frame' | 'arrow' | 'shape' | 'draw' | 'eraser';
 type ResizeHandle = 'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w';
 
 interface BoardCanvasProps {
@@ -115,7 +118,19 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
   const [selectedNodeIds, setSelectedNodeIds] = useState<Set<string>>(new Set());
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
   const [showAiModal, setShowAiModal] = useState(false);
+  const [isAutoDiagramModalOpen, setIsAutoDiagramModalOpen] = useState(false);
   const [activeColor, setActiveColor] = useState<string>('3');
+
+  // Freehand drawing state
+  const [drawMode, setDrawMode] = useState<'pen' | 'brush' | 'highlighter'>('pen');
+  const [drawWidth, setDrawWidth] = useState<number>(3);
+  const [drawColor, setDrawColor] = useState<string>('#818cf8');
+  const [currentStroke, setCurrentStroke] = useState<Point[] | null>(null);
+  const currentStrokeRef = useRef<Point[] | null>(null);
+  currentStrokeRef.current = currentStroke;
+
+  // Document inline reader expanded state per node
+  const [previewDocIds, setPreviewDocIds] = useState<Set<string>>(new Set());
 
   // Dragging multiple nodes
   const [dragState, setDragState] = useState<{
@@ -565,6 +580,8 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
         if (e.code === 'KeyV' || e.code === 'KeyS') setActiveTool('select');
         if (e.code === 'KeyH') setActiveTool('hand');
         if (e.code === 'KeyT') setActiveTool('text');
+        if (e.code === 'KeyP') setActiveTool('draw');
+        if (e.code === 'KeyE') setActiveTool('eraser');
         if (e.code === 'KeyN') {
           const centerX = (window.innerWidth / 2 - viewport.x) / viewport.zoom;
           const centerY = (window.innerHeight / 2 - viewport.y) / viewport.zoom;
@@ -575,6 +592,20 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
         if (e.code === 'KeyC' || e.code === 'KeyL') setActiveTool('arrow');
         if (e.code === 'KeyR') setActiveTool('shape');
         if (e.code === 'KeyI') fileAttachmentInputRef.current?.click();
+
+        // Mindmap Quick-Branching (Tab on selected node)
+        if (e.code === 'Tab' && selectedNodeIds.size === 1) {
+          const activeTag = (document.activeElement?.tagName || '').toLowerCase();
+          if (activeTag !== 'textarea' && activeTag !== 'input') {
+            e.preventDefault();
+            const selectedId = Array.from(selectedNodeIds)[0];
+            const srcNode = nodeLookup.get(selectedId);
+            if (srcNode) {
+              chainNextSticky(srcNode, 'right');
+            }
+            return;
+          }
+        }
       }
     };
 
@@ -930,6 +961,8 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
       const id = crypto.randomUUID();
       const nodeMap = new Y.Map();
       const isImage = (data.mimeType || '').startsWith('image/') && !data.mimeType.includes('svg');
+      const isPdf = (data.mimeType || '').includes('pdf') || file.name.toLowerCase().endsWith('.pdf');
+      const hasTextPreview = Boolean(data.extractedText);
 
       boardDoc.transact(() => {
         yNodes.set(id, nodeMap);
@@ -938,12 +971,14 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
           type: isImage ? 'sticky' : 'file',
           x: Math.round(x),
           y: Math.round(y),
-          w: isImage ? 280 : 220,
-          h: isImage ? 200 : 110,
+          w: isImage ? 280 : hasTextPreview || isPdf ? 360 : 240,
+          h: isImage ? 200 : hasTextPreview || isPdf ? 280 : 130,
           text: file.name,
           fileHash: data.hash,
           fileName: data.fileName,
-          author: agentStatus.value?.memberName || 'Вы',
+          extractedText: data.extractedText,
+          showPreview: hasTextPreview || isPdf,
+          author: currentScope.value === 'team' ? (agentStatus.value?.memberName || '') : '',
           done: false,
           z: 1,
           deleted: false,
@@ -1006,6 +1041,94 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
     }, 50);
   };
 
+  // Topological 1-Click Auto-Layout
+  const handleTriggerAutoLayout = () => {
+    const activeNodes = nodesList.filter((n) => !n.deleted && n.type !== 'frame');
+    const activeEdges = edgesList.filter((e) => !e.deleted);
+    if (activeNodes.length === 0) return;
+
+    const targetNodes = selectedNodeIds.size > 1
+      ? activeNodes.filter((n) => selectedNodeIds.has(n.id))
+      : activeNodes;
+
+    const nodeBoxes = targetNodes.map((n) => ({ id: n.id, x: n.x, y: n.y, width: n.w, height: n.h }));
+    const edgePairs = activeEdges.map((e) => ({ from: e.from, to: e.to }));
+
+    const minX = Math.min(...targetNodes.map((n) => n.x));
+    const minY = Math.min(...targetNodes.map((n) => n.y));
+
+    const newPositions = computeAutoLayout(nodeBoxes, edgePairs, Math.max(80, minX), Math.max(80, minY));
+
+    boardDoc.transact(() => {
+      for (const [nodeId, pos] of newPositions.entries()) {
+        const map = yNodes.get(nodeId);
+        if (map) {
+          map.set('x', pos.x);
+          map.set('y', pos.y);
+        }
+      }
+    }, CANVAS_UNDO_ORIGIN);
+
+    showToast('Граф аккуратно выровнен');
+  };
+
+  // Generate Auto-Diagram from Text / Presets
+  const handleGenerateAutoDiagram = ({
+    nodes: genNodes,
+    edges: genEdges
+  }: {
+    nodes: GeneratedDiagramNode[];
+    edges: GeneratedDiagramEdge[];
+  }) => {
+    boardDoc.transact(() => {
+      for (const gn of genNodes) {
+        const nodeMap = new Y.Map();
+        yNodes.set(gn.id, nodeMap);
+        setNodeProperties(nodeMap, {
+          id: gn.id,
+          type: 'sticky',
+          shapeVariant: gn.shapeType,
+          x: gn.x,
+          y: gn.y,
+          w: gn.width,
+          h: gn.height,
+          text: gn.text,
+          color: 'default',
+          author: currentScope.value === 'team' ? (agentStatus.value?.memberName || '') : '',
+          done: false,
+          z: 1,
+          deleted: false,
+          locked: false
+        });
+      }
+
+      for (const ge of genEdges) {
+        yEdges.set(ge.id, {
+          id: ge.id,
+          from: ge.fromNode,
+          to: ge.toNode,
+          fromSide: ge.fromSide,
+          toSide: ge.toSide,
+          color: ge.color,
+          direction: 'forward',
+          style: 'solid',
+          curveType: 'bezier',
+          deleted: false
+        });
+      }
+    }, CANVAS_UNDO_ORIGIN);
+
+    if (genNodes.length > 0) {
+      setViewport({
+        x: Math.round(window.innerWidth / 2 - genNodes[0].x - 100),
+        y: Math.round(window.innerHeight / 2 - genNodes[0].y - 50),
+        zoom: 1
+      });
+      setSelectedNodeIds(new Set(genNodes.map((n) => n.id)));
+    }
+    showToast(`Создано: ${genNodes.length} узлов и ${genEdges.length} связей`);
+  };
+
   // Global Pointer Events
   useEffect(() => {
     const handleGlobalPointerMove = (e: PointerEvent) => {
@@ -1025,6 +1148,29 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
           x: panState.originX + (e.clientX - panState.startX),
           y: panState.originY + (e.clientY - panState.startY)
         }));
+      }
+
+      // Freehand drawing in-progress
+      if (currentStrokeRef.current) {
+        const next = [...currentStrokeRef.current, pos];
+        currentStrokeRef.current = next;
+        setCurrentStroke(next);
+      }
+
+      // Eraser dragging over drawing nodes
+      if (activeTool === 'eraser' && (e.buttons === 1 || e.buttons === 2)) {
+        const hitDrawing = nodesList.find(
+          (n) => !n.deleted && n.type === 'drawing' && pos.x >= n.x && pos.x <= n.x + n.w && pos.y >= n.y && pos.y <= n.y + n.h
+        );
+        if (hitDrawing) {
+          const map = yNodes.get(hitDrawing.id);
+          if (map) {
+            boardDoc.transact(() => {
+              map.set('deleted', true);
+              map.set('deletedAt', Date.now());
+            }, CANVAS_UNDO_ORIGIN);
+          }
+        }
       }
 
       // Live edge reconnection handle drag
@@ -1284,6 +1430,37 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
       setMarqueeBox(null);
       undoManagerRef.current?.stopCapturing();
 
+      // Freehand drawing commit
+      const stroke = currentStrokeRef.current;
+      if (stroke) {
+        currentStrokeRef.current = null;
+        setCurrentStroke(null);
+        if (stroke.length >= 2) {
+          const pathD = pointsToSmoothSvgPath(stroke);
+          const bbox = computeBoundingBox(stroke, 8);
+          const newId = crypto.randomUUID();
+          const nodeMap = new Y.Map();
+          boardDoc.transact(() => {
+            yNodes.set(newId, nodeMap);
+            setNodeProperties(nodeMap, {
+              id: newId,
+              type: 'drawing',
+              x: bbox.x,
+              y: bbox.y,
+              w: bbox.width,
+              h: bbox.height,
+              svgPath: pathD,
+              color: drawColor,
+              strokeWidth: drawWidth,
+              opacity: drawMode === 'highlighter' ? 0.35 : 1,
+              z: 2,
+              deleted: false,
+              locked: false
+            });
+          }, CANVAS_UNDO_ORIGIN);
+        }
+      }
+
       // Handle edge reconnection completion
       const recState = reconnectEdgeStateRef.current;
       if (recState) {
@@ -1398,6 +1575,28 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
       const pos = screenToCanvas(e.clientX, e.clientY);
 
       // Tool actions
+      if (activeTool === 'draw') {
+        const p = screenToCanvas(e.clientX, e.clientY);
+        currentStrokeRef.current = [p];
+        setCurrentStroke([p]);
+        return;
+      }
+      if (activeTool === 'eraser') {
+        const p = screenToCanvas(e.clientX, e.clientY);
+        const hitDrawing = nodesList.find(
+          (n) => !n.deleted && n.type === 'drawing' && p.x >= n.x && p.x <= n.x + n.w && p.y >= n.y && p.y <= n.y + n.h
+        );
+        if (hitDrawing) {
+          const map = yNodes.get(hitDrawing.id);
+          if (map) {
+            boardDoc.transact(() => {
+              map.set('deleted', true);
+              map.set('deletedAt', Date.now());
+            }, CANVAS_UNDO_ORIGIN);
+          }
+        }
+        return;
+      }
       if (activeTool === 'sticky') {
         createNodeAt('sticky', pos.x - 100, pos.y - 65, activeColor);
         return;
@@ -1808,6 +2007,42 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
               }
             }}
           />
+          <button
+            class={`tb-btn ${activeTool === 'draw' ? 'active' : ''}`}
+            data-tool="draw"
+            onClick={() => setActiveTool('draw')}
+            title="Рисование / Ручка (P)"
+          >
+            <Icon name="pen" size={17} />
+          </button>
+          <button
+            class={`tb-btn ${activeTool === 'eraser' ? 'active' : ''}`}
+            data-tool="eraser"
+            onClick={() => setActiveTool('eraser')}
+            title="Ластик (E)"
+          >
+            <Icon name="eraser" size={17} />
+          </button>
+        </div>
+
+        <div class="toolbox-divider" />
+
+        {/* Auto-Diagrams & Auto-Layout Suite */}
+        <div class="toolbox-group">
+          <button
+            class="tb-btn"
+            onClick={() => setIsAutoDiagramModalOpen(true)}
+            title="Автодиаграммы и Mindmap"
+          >
+            <Icon name="sparkles" size={17} />
+          </button>
+          <button
+            class="tb-btn"
+            onClick={handleTriggerAutoLayout}
+            title="Авто-раскладка (выравнивание графа)"
+          >
+            <Icon name="layout" size={17} />
+          </button>
         </div>
 
         <div class="toolbox-divider" />
@@ -1836,6 +2071,77 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
           </button>
         </div>
       </div>
+
+      {/* Freehand Drawing Sub-Bar */}
+      {activeTool === 'draw' && (
+        <div
+          class="floating-draw-subbar liquid-glass-surface"
+          onMouseDown={(e) => e.stopPropagation()}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            type="button"
+            class={`draw-mode-btn ${drawMode === 'pen' ? 'active' : ''}`}
+            onClick={() => {
+              setDrawMode('pen');
+              setDrawWidth(3);
+            }}
+          >
+            Ручка
+          </button>
+          <button
+            type="button"
+            class={`draw-mode-btn ${drawMode === 'brush' ? 'active' : ''}`}
+            onClick={() => {
+              setDrawMode('brush');
+              setDrawWidth(6);
+            }}
+          >
+            Кисть
+          </button>
+          <button
+            type="button"
+            class={`draw-mode-btn ${drawMode === 'highlighter' ? 'active' : ''}`}
+            onClick={() => {
+              setDrawMode('highlighter');
+              setDrawWidth(20);
+            }}
+          >
+            Маркер
+          </button>
+
+          <div class="toolbox-divider" />
+
+          {/* Stroke Width Selector */}
+          <div style={{ display: 'flex', gap: '4px' }}>
+            {[2, 4, 8, 16].map((w) => (
+              <button
+                key={w}
+                type="button"
+                class={`draw-width-btn ${drawWidth === w ? 'active' : ''}`}
+                onClick={() => setDrawWidth(w)}
+              >
+                {w}px
+              </button>
+            ))}
+          </div>
+
+          <div class="toolbox-divider" />
+
+          {/* Color swatches */}
+          <div style={{ display: 'flex', gap: '6px' }}>
+            {['#818cf8', '#38bdf8', '#34d399', '#facc15', '#fb7185', '#c084fc', '#f8fafc', '#1e293b'].map((c) => (
+              <button
+                key={c}
+                type="button"
+                class={`color-dot palette-swatch ${drawColor === c ? 'active' : ''}`}
+                style={{ backgroundColor: c }}
+                onClick={() => setDrawColor(c)}
+              />
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Miro Multi-Select Alignment Bar */}
       {selectedNodeIds.size > 1 && (
@@ -2284,6 +2590,19 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
               )}
             </g>
           )}
+
+          {/* Live freehand drawing stroke preview */}
+          {currentStroke && currentStroke.length > 1 && (
+            <path
+              d={pointsToSmoothSvgPath(currentStroke)}
+              stroke={drawColor}
+              strokeWidth={drawWidth}
+              fill="none"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              opacity={drawMode === 'highlighter' ? 0.35 : 1}
+            />
+          )}
         </svg>
 
         {/* Real-time Ghost Drop Preview Card */}
@@ -2390,7 +2709,28 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
               )}
 
               {/* Node Content */}
-              {isNote ? (
+              {node.type === 'drawing' ? (
+                <div style={{ width: '100%', height: '100%', pointerEvents: 'none' }}>
+                  <svg
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                      overflow: 'visible',
+                      pointerEvents: 'none'
+                    }}
+                  >
+                    <path
+                      d={node.svgPath}
+                      stroke={node.color || '#818cf8'}
+                      strokeWidth={node.strokeWidth || 3}
+                      fill="none"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      opacity={node.opacity ?? 1}
+                    />
+                  </svg>
+                </div>
+              ) : isNote ? (
                 (() => {
                   const noteMeta = node.noteId ? maps.notes.get(node.noteId) : null;
                   const isDeleted = !noteMeta || noteMeta.deleted;
@@ -2482,21 +2822,103 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
                       </div>
                     );
                   }
+                  const isPdf = (node.fileName || '').toLowerCase().endsWith('.pdf');
+                  const isExpanded = node.showPreview ?? previewDocIds.has(node.id);
+                  const togglePreview = (e: MouseEvent) => {
+                    e.stopPropagation();
+                    const next = !isExpanded;
+                    setPreviewDocIds((prev) => {
+                      const s = new Set(prev);
+                      if (next) s.add(node.id);
+                      else s.delete(node.id);
+                      return s;
+                    });
+                    const map = yNodes.get(node.id);
+                    if (map) {
+                      map.set('showPreview', next);
+                      if (next && node.h < 260) {
+                        map.set('h', 280);
+                        map.set('w', Math.max(node.w, 340));
+                      }
+                    }
+                  };
+
+                  const convertToNote = (e: MouseEvent) => {
+                    e.stopPropagation();
+                    const noteTitle = (node.fileName || node.text || 'Документ').replace(/\.[^/.]+$/, '');
+                    const noteContent = node.extractedText || `# ${noteTitle}\n\n`;
+                    const noteId = createNote(noteTitle, null);
+                    const noteDoc = yjsClient.getOrCreateDoc(getScopedNoteDocName(currentScope.value, noteId));
+                    noteDoc.getText('text').insert(0, noteContent);
+                    openTab('note', noteId, noteTitle);
+                    ensureSplitTabs();
+                    setWorkspaceMode('split');
+                    showToast(`Создана заметка "${noteTitle}" в Split-View`);
+                  };
+
                   return (
-                    <div class="node-file-container" onMouseDown={(e) => e.stopPropagation()}>
-                      <Icon name="attachment" size={24} />
-                      <span class="node-file-label" title={node.fileName || node.text}>
-                        {node.fileName || node.text}
-                      </span>
-                      <a
-                        href={`/api/attachments/${node.fileHash}`}
-                        download={node.fileName || 'file'}
-                        class="btn-secondary-sm"
-                        target="_blank"
-                        rel="noopener"
-                      >
-                        Скачать
-                      </a>
+                    <div class="node-file-wrapper" onMouseDown={(e) => handleNodePointerDown(node, e as any)}>
+                      <div class="node-file-header" onMouseDown={(e) => handleNodePointerDown(node, e as any)}>
+                        <div class="node-file-title-group">
+                          <Icon name="file-text" size={16} />
+                          <span class="node-file-name" title={node.fileName || node.text}>
+                            {node.fileName || node.text}
+                          </span>
+                        </div>
+                        <div class="node-file-actions" onMouseDown={(e) => e.stopPropagation()}>
+                          {(node.extractedText || isPdf) && (
+                            <button
+                              type="button"
+                              class={`node-file-btn ${isExpanded ? 'active' : ''}`}
+                              onClick={togglePreview}
+                              title={isExpanded ? 'Скрыть содержимое' : 'Читать на доске'}
+                            >
+                              <Icon name="eye" size={12} />
+                              <span>{isExpanded ? 'Скрыть' : 'Читать'}</span>
+                            </button>
+                          )}
+                          {node.extractedText && (
+                            <button
+                              type="button"
+                              class="node-file-btn"
+                              onClick={convertToNote}
+                              title="Преобразовать в заметку в Split-View"
+                            >
+                              <Icon name="note-card" size={12} />
+                              <span>В заметку</span>
+                            </button>
+                          )}
+                          <a
+                            href={`/api/attachments/${node.fileHash}`}
+                            download={node.fileName || 'file'}
+                            class="node-file-btn"
+                            target="_blank"
+                            rel="noopener"
+                            title="Скачать файл"
+                          >
+                            <Icon name="download" size={12} />
+                            <span>Скачать</span>
+                          </a>
+                        </div>
+                      </div>
+
+                      {isExpanded && (
+                        isPdf ? (
+                          <iframe
+                            src={`/api/attachments/${node.fileHash}`}
+                            class="node-file-pdf-iframe"
+                            title={node.fileName || 'PDF'}
+                          />
+                        ) : (
+                          <div
+                            class="node-file-reader-body scrollable-card-content"
+                            onWheel={(e) => e.stopPropagation()}
+                            onMouseDown={(e) => e.stopPropagation()}
+                          >
+                            {node.extractedText || 'Текст документа извлекается или пуст...'}
+                          </div>
+                        )
+                      )}
                     </div>
                   );
                 })()
@@ -2536,8 +2958,8 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
                 />
               )}
 
-              {/* Author micro-badge in Team Scope */}
-              {node.type === 'sticky' && currentScope.value === 'team' && node.author && (
+              {/* Author micro-badge in Team Scope (never show debug 'Tester') */}
+              {node.type === 'sticky' && currentScope.value === 'team' && node.author && node.author !== 'Tester' && (
                 <span class="node-author-microbadge" title={`Автор: ${node.author}`}>
                   {node.author}
                 </span>
@@ -2793,6 +3215,14 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
         fromScope={currentScope.value}
         boardId={boardId}
         nodeIds={transferNodeIds}
+      />
+
+      <AutoDiagramModal
+        isOpen={isAutoDiagramModalOpen}
+        onClose={() => setIsAutoDiagramModalOpen(false)}
+        onGenerate={handleGenerateAutoDiagram}
+        defaultOriginX={Math.round((window.innerWidth / 2 - viewport.x) / viewport.zoom)}
+        defaultOriginY={Math.round((window.innerHeight / 2 - viewport.y) / viewport.zoom)}
       />
 
       {/* Empty State Seed Card */}

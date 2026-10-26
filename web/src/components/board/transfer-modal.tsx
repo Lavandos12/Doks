@@ -62,7 +62,6 @@ export function TransferModal({
   }, [targetScope]);
 
   const handleSubmit = async () => {
-    if (nodeIds.length === 0) return;
     setIsSubmitting(true);
     setErrorMsg(null);
 
@@ -73,24 +72,29 @@ export function TransferModal({
         // Temporarily switch scope to create target board
         const savedScope = currentScope.value;
         setScope(targetScope);
-        finalTargetBoardId = createBoard(newBoardTitle.trim() || 'Новая доска');
+        finalTargetBoardId = createBoard(newBoardTitle.trim() || (isPromote ? 'Командная доска' : 'Личная доска'));
         setScope(savedScope);
       }
 
-      const res = await transferNodesAcrossScopes({
-        fromScope,
-        toScope: targetScope,
-        boardId,
-        targetBoardId: finalTargetBoardId,
-        nodeIds,
-        includeLinkedNotes,
-        mode: transferMode
-      });
+      if (nodeIds.length > 0) {
+        const res = await transferNodesAcrossScopes({
+          fromScope,
+          toScope: targetScope,
+          boardId,
+          targetBoardId: finalTargetBoardId,
+          nodeIds,
+          includeLinkedNotes,
+          mode: transferMode
+        });
 
-      if (res.success) {
-        onClose();
+        if (res.success) {
+          onClose();
+        } else {
+          setErrorMsg(res.error || 'Ошибка переноса элементов');
+        }
       } else {
-        setErrorMsg(res.error || 'Ошибка переноса элементов');
+        // Empty board cloned successfully
+        onClose();
       }
     } catch (err: any) {
       setErrorMsg(err.message || 'Сбой сети при переносе');
@@ -100,25 +104,25 @@ export function TransferModal({
   };
 
   return (
-    <div class="modal-backdrop" onClick={onClose}>
-      <div class="modal-card transfer-modal" onClick={(e) => e.stopPropagation()}>
+    <div class="modal-overlay doks-modal-backdrop transfer-modal-backdrop" onClick={onClose}>
+      <div class="modal-card doks-modal-dialog transfer-modal liquid-glass-surface" onClick={(e) => e.stopPropagation()}>
         <div class="modal-header">
-          <div class="modal-header-icon-title">
-            <span class="scope-icon-large">
+          <div class="modal-header-icon-title" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <span class="scope-icon-large text-accent">
               <Icon name={isPromote ? 'globe-mesh' : 'lock'} size={24} />
             </span>
             <div>
-              <h3 class="modal-title">
+              <h3 class="modal-title" style={{ margin: 0, fontSize: '18px', fontWeight: 600 }}>
                 {isPromote ? 'Опубликовать в Команду' : 'Форкнуть в Соло'}
               </h3>
-              <p class="modal-subtitle">
+              <p class="modal-subtitle" style={{ margin: '4px 0 0', fontSize: '12px', color: 'var(--text-secondary)' }}>
                 {isPromote
                   ? 'Выбранные элементы будут сгруппированы во фрейм и отправлены в P2P меш'
                   : 'Создает полностью изолированную приватную копию на вашем ПК'}
               </p>
             </div>
           </div>
-          <button class="modal-close-btn" onClick={onClose}>
+          <button class="modal-close-btn" onClick={onClose} aria-label="Закрыть">
             <Icon name="x" size={18} />
           </button>
         </div>
@@ -127,9 +131,9 @@ export function TransferModal({
           {errorMsg && <div class="modal-alert-error">{errorMsg}</div>}
 
           <div class="form-group">
-            <label class="form-label">Выбрано элементов</label>
+            <label class="form-label">Область переноса</label>
             <div class="transfer-count-chip">
-              <span>{nodeIds.length} объектов на доске</span>
+              <span>{nodeIds.length > 0 ? `Вся текущая доска (${nodeIds.length} объектов)` : 'Создание копии доски'}</span>
             </div>
           </div>
 
@@ -196,14 +200,14 @@ export function TransferModal({
           )}
         </div>
 
-        <div class="modal-footer">
+        <div class="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '18px' }}>
           <button class="btn btn-secondary" onClick={onClose} disabled={isSubmitting}>
             Отмена
           </button>
           <button
             class="btn btn-primary"
             onClick={handleSubmit}
-            disabled={isSubmitting || nodeIds.length === 0}
+            disabled={isSubmitting}
           >
             {isSubmitting
               ? 'Перенос...'

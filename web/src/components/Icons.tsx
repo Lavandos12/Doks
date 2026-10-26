@@ -95,7 +95,10 @@ export type IconName =
   | 'undo'
   | 'redo'
   | 'rotate-ccw'
-  | 'rotate-cw';
+  | 'rotate-cw'
+  | 'pen'
+  | 'brush'
+  | 'eraser';
 
 export function Icon({
   name,
@@ -652,6 +655,18 @@ export function Icon({
           <>
             <polyline points="23 4 23 10 17 10" />
             <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+          </>
+        );
+      case 'pen':
+      case 'brush':
+        return (
+          <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
+        );
+      case 'eraser':
+        return (
+          <>
+            <path d="M20 20H7L3 16C2 15 2 13 3 12L13 2C14 1 16 1 17 2L21 6C22 7 22 9 21 10L14 17" />
+            <line x1="17" y1="17" x2="11" y2="11" />
           </>
         );
       default:

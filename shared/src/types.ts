@@ -45,7 +45,7 @@ export interface FolderMeta {
   scope?: WorkspaceScope;
 }
 
-export type BoardNodeType = 'sticky' | 'text' | 'note' | 'frame' | 'shape' | 'file' | 'image' | 'link';
+export type BoardNodeType = 'sticky' | 'text' | 'note' | 'frame' | 'shape' | 'file' | 'image' | 'link' | 'drawing';
 
 export interface AttachmentMeta {
   hash: string;
@@ -57,6 +57,7 @@ export interface AttachmentMeta {
   deleted: boolean;
   deletedAt?: number;
   scope?: WorkspaceScope;
+  extractedText?: string;
 }
 
 export interface BoardNodeData {
@@ -79,6 +80,11 @@ export interface BoardNodeData {
   fontSize?: number;
   hasCheckbox?: boolean;
   shapeVariant?: 'rectangle' | 'rounded' | 'diamond' | 'pill' | 'circle';
+  svgPath?: string;
+  strokeWidth?: number;
+  opacity?: number;
+  extractedText?: string;
+  showPreview?: boolean;
   deleted: boolean;
   deletedAt?: number;
   scope?: WorkspaceScope;

@@ -636,7 +636,28 @@ export class AgentHttpServer {
         hash: info.hash,
         fileName: info.fileName,
         size: info.size,
-        mimeType: info.mimeType
+        mimeType: info.mimeType,
+        extractedText: info.extractedText
+      };
+    });
+
+    // API: Get attachment metadata and extracted text
+    this.fastify.get('/api/attachments/:hash/content', async (req, reply) => {
+      if (!this.attachmentManager) {
+        return reply.code(500).send({ error: 'Attachment manager not available' });
+      }
+      const { hash } = req.params as { hash: string };
+      const att = this.attachmentManager.getAttachment(hash);
+      if (!att) {
+        return reply.code(404).send({ error: 'Attachment not found' });
+      }
+      return {
+        id: att.hash,
+        originalName: att.fileName,
+        fileName: att.fileName,
+        mimeType: att.mimeType,
+        size: att.size,
+        extractedText: att.extractedText || ''
       };
     });
 
