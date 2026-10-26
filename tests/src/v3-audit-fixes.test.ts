@@ -13,6 +13,7 @@ import {
 import { extractTextFromDocxBuffer } from '../../agent/src/storage/docx-extractor.js';
 import { AttachmentManager } from '../../agent/src/storage/attachments.js';
 import { pointsToSmoothSvgPath, computeBoundingBox } from '../../web/src/utils/strokeSmoother.js';
+import { getPortAngle, computeArrowheadPolygon } from '../../web/src/utils/connectorGeometry.js';
 import {
   generateDiagramFromText,
   DIAGRAM_PRESETS,
@@ -47,6 +48,64 @@ function createSyntheticDocxBuffer(xmlContent: string, deflate = true): Buffer {
   header.writeUInt16LE(0, 28); // extra field len
 
   return Buffer.concat([header, fileNameBuf, dataBuf]);
+}
+
+function createBit3WordDocxBuffer(xmlContent: string): Buffer {
+  const fileName = 'word/document.xml';
+  const fileNameBuf = Buffer.from(fileName, 'utf8');
+  const rawData = Buffer.from(xmlContent, 'utf8');
+  const compressedData = zlib.deflateRawSync(rawData);
+
+  // 1. Local file header with Bit 3 flag (Data Descriptor): compressedSize & uncompressedSize === 0
+  const localHeader = Buffer.alloc(30);
+  localHeader.writeUInt32LE(0x04034b50, 0);
+  localHeader.writeUInt16LE(20, 4);
+  localHeader.writeUInt16LE(0x0008, 6); // Bit 3 flag
+  localHeader.writeUInt16LE(8, 8); // Deflate
+  localHeader.writeUInt16LE(0, 10);
+  localHeader.writeUInt16LE(0, 12);
+  localHeader.writeUInt32LE(0, 14);
+  localHeader.writeUInt32LE(0, 18); // 0 in local header (streaming format)
+  localHeader.writeUInt32LE(0, 22); // 0 in local header
+  localHeader.writeUInt16LE(fileNameBuf.length, 26);
+  localHeader.writeUInt16LE(0, 28);
+
+  const localEntry = Buffer.concat([localHeader, fileNameBuf, compressedData]);
+
+  // 2. Central Directory Header
+  const cdHeader = Buffer.alloc(46);
+  cdHeader.writeUInt32LE(0x02014b50, 0);
+  cdHeader.writeUInt16LE(20, 4);
+  cdHeader.writeUInt16LE(20, 6);
+  cdHeader.writeUInt16LE(0x0008, 8);
+  cdHeader.writeUInt16LE(8, 10);
+  cdHeader.writeUInt16LE(0, 12);
+  cdHeader.writeUInt16LE(0, 14);
+  cdHeader.writeUInt32LE(0, 16);
+  cdHeader.writeUInt32LE(compressedData.length, 20); // Real compressed size in Central Directory!
+  cdHeader.writeUInt32LE(rawData.length, 24); // Real uncompressed size in Central Directory!
+  cdHeader.writeUInt16LE(fileNameBuf.length, 28);
+  cdHeader.writeUInt16LE(0, 30);
+  cdHeader.writeUInt16LE(0, 32);
+  cdHeader.writeUInt16LE(0, 34);
+  cdHeader.writeUInt16LE(0, 36);
+  cdHeader.writeUInt32LE(0, 38);
+  cdHeader.writeUInt32LE(0, 42); // localHeaderOffset = 0
+
+  const cdEntry = Buffer.concat([cdHeader, fileNameBuf]);
+
+  // 3. End of Central Directory
+  const eocd = Buffer.alloc(22);
+  eocd.writeUInt32LE(0x06054b50, 0);
+  eocd.writeUInt16LE(0, 4);
+  eocd.writeUInt16LE(0, 6);
+  eocd.writeUInt16LE(1, 8);
+  eocd.writeUInt16LE(1, 10);
+  eocd.writeUInt32LE(cdEntry.length, 12);
+  eocd.writeUInt32LE(localEntry.length, 16);
+  eocd.writeUInt16LE(0, 20);
+
+  return Buffer.concat([localEntry, cdEntry, eocd]);
 }
 
 describe('V3 Audit Fixes & Polish Suite', () => {
@@ -133,6 +192,20 @@ describe('V3 Audit Fixes & Polish Suite', () => {
       expect(text).toBe('Uncompressed Title');
     });
 
+    it('extracts Russian text from Microsoft Word Bit-3 Data Descriptor streaming docx', () => {
+      const russianText = 'Дисперсные системы и коллоидные растворы в фармации';
+      const sampleXml = `<?xml version="1.0" encoding="UTF-8"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body>
+    <w:p><w:r><w:t>${russianText}</w:t></w:r></w:p>
+  </w:body>
+</w:document>`;
+
+      const docxBuf = createBit3WordDocxBuffer(sampleXml);
+      const text = extractTextFromDocxBuffer(docxBuf);
+      expect(text).toBe(russianText);
+    });
+
     it('gracefully returns empty string for corrupted or non-docx buffers', () => {
       expect(extractTextFromDocxBuffer(Buffer.from('not a zip file'))).toBe('');
       expect(extractTextFromDocxBuffer(Buffer.alloc(0))).toBe('');
@@ -192,6 +265,18 @@ describe('V3 Audit Fixes & Polish Suite', () => {
       expect(bbox.y).toBe(180); // 200 - 20
       expect(bbox.width).toBe(240); // 300 - 100 + 40
       expect(bbox.height).toBe(240); // 400 - 200 + 40
+    });
+
+    it('calculates explicit arrowhead polygon points accurately', () => {
+      // Pointing right (into left port, angle 0)
+      const pointsRight = computeArrowheadPolygon(100, 100, 0, 12, 6);
+      expect(pointsRight).toBe('100.0,100.0 88.0,94.0 88.0,106.0');
+
+      // Port angles: left is 0, top is PI/2, right is PI, bottom is -PI/2
+      expect(getPortAngle('left')).toBe(0);
+      expect(getPortAngle('top')).toBe(Math.PI / 2);
+      expect(getPortAngle('right')).toBe(Math.PI);
+      expect(getPortAngle('bottom')).toBe(-Math.PI / 2);
     });
   });
 

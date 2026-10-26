@@ -196,6 +196,14 @@ export class AttachmentManager {
     };
   }
 
+  public updateExtractedText(hash: string, text: string): void {
+    const record = this.metadata.get(hash);
+    if (record) {
+      record.extractedText = text;
+      this.saveMetadata();
+    }
+  }
+
   /**
    * Resolves attachment by SHA-256 hash or filename.
    */

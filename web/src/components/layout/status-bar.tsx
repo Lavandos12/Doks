@@ -14,7 +14,7 @@ export function StatusBar() {
   const connectedCount = status?.connectedCount ?? 0;
   const radminFound = status?.radminFound ?? false;
   const effectiveIp = status?.effectiveIp ?? '127.0.0.1';
-  const memberName = status?.memberName || 'Пользователь';
+  const displayName = (!status?.memberName || status.memberName === 'Tester') ? 'Вы' : status.memberName;
   const memberColor = status?.memberColor || '#7c8cff';
 
   return (
@@ -112,7 +112,7 @@ export function StatusBar() {
             title={t('status.user_profile')}
           >
             <span class="user-color-dot" style={{ backgroundColor: memberColor }}></span>
-            <span class="user-name">{memberName}</span>
+            <span class="user-name">{displayName}</span>
           </div>
         </div>
       </footer>

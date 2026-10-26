@@ -1,6 +1,6 @@
 import { h, Fragment, FunctionComponent } from 'preact';
 import { useState } from 'preact/hooks';
-import { PortSide, getPortCoordinates } from '../utils/connectorGeometry.js';
+import { PortSide, getPortCoordinates, getPortAngle, computeArrowheadPolygon } from '../utils/connectorGeometry.js';
 import { buildEdgeSvgPath, EdgeCurveType } from '../utils/edgePaths.js';
 
 export interface CanvasEdgeModel {
@@ -139,17 +139,17 @@ export const CanvasEdgesLayer: FunctionComponent<Props> = ({
               : undefined;
 
           const dir = edge.direction || 'forward';
-          const markerEnd = dir === 'forward' || dir === 'both' ? `url(#arrow-end-${edge.id})` : undefined;
-          const markerStart = dir === 'both' ? `url(#arrow-start-${edge.id})` : undefined;
+          const endAngle = getPortAngle(side2);
+          const startAngle = getPortAngle(side1);
 
           return (
             <g key={edge.id} className={isSelected ? 'doks-edge-group canvas-edge-group is-selected' : 'doks-edge-group canvas-edge-group'}>
-              {/* 18px invisible hit-target so clicking the arrow is effortless */}
+              {/* 20px transparent hit-target so clicking the arrow is effortless */}
               <path
                 d={path}
                 fill="none"
-                stroke="transparent"
-                strokeWidth={18}
+                stroke="rgba(0,0,0,0.001)"
+                strokeWidth={20}
                 className="canvas-edge-hit-area"
                 style={{ pointerEvents: 'stroke', cursor: 'pointer' }}
                 onMouseDown={(e: MouseEvent) => {
@@ -186,11 +186,26 @@ export const CanvasEdgesLayer: FunctionComponent<Props> = ({
                 strokeDasharray={dashArray}
                 strokeLinecap="round"
                 strokeLinejoin="round"
-                markerEnd={markerEnd}
-                markerStart={markerStart}
                 className={`canvas-edge-path ${isSelected ? 'selected' : ''}`}
                 style={{ pointerEvents: 'none', transition: 'stroke 120ms ease' }}
               />
+              {/* Solid SVG triangle polygon arrowheads (guaranteed to render in all browsers) */}
+              {(dir === 'forward' || dir === 'both') && (
+                <polygon
+                  points={computeArrowheadPolygon(p2.x, p2.y, endAngle)}
+                  fill={strokeColor}
+                  className="canvas-edge-arrowhead"
+                  style={{ pointerEvents: 'none', transition: 'fill 120ms ease' }}
+                />
+              )}
+              {dir === 'both' && (
+                <polygon
+                  points={computeArrowheadPolygon(p1.x, p1.y, startAngle)}
+                  fill={strokeColor}
+                  className="canvas-edge-arrowhead"
+                  style={{ pointerEvents: 'none', transition: 'fill 120ms ease' }}
+                />
+              )}
               {/* Endpoint handles when selected */}
               {isSelected && (
                 <Fragment>
@@ -311,7 +326,7 @@ export const CanvasEdgesLayer: FunctionComponent<Props> = ({
               left: `${labelX}px`,
               top: `${labelY - 54}px`,
               transform: 'translateX(-50%)',
-              zIndex: 60,
+              zIndex: 200,
               pointerEvents: 'auto',
             }}
             onMouseDown={(e: MouseEvent) => e.stopPropagation()}

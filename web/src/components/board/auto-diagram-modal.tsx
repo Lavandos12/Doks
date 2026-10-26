@@ -81,8 +81,8 @@ export function AutoDiagramModal({
             </select>
           </div>
 
-          <div class="diagram-field-group" style={{ marginTop: '12px' }}>
-            <div class="diagram-label-row">
+          <div class="diagram-field-group" style={{ marginTop: '14px' }}>
+            <div class="diagram-label-group">
               <label class="diagram-label">Схема или структура текста</label>
               <span class="diagram-hint">Стрелки (A -&gt; B -&gt; C) или список с отступами</span>
             </div>

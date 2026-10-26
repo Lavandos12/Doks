@@ -92,7 +92,8 @@ export function loadOrCreateConfig(options: ConfigOptions = {}): AgentConfig {
   const radminIp = findRadminIp();
   const agentId = existing.agentId || crypto.randomUUID();
   const teamKey = options.teamKey || existing.teamKey || generateTeamKey();
-  const memberName = options.memberName || existing.memberName || `User-${agentId.slice(0, 4)}`;
+  const rawMemberName = options.memberName || existing.memberName;
+  const memberName = (!rawMemberName || rawMemberName === 'Tester') ? 'Вы' : rawMemberName;
   const memberColor = existing.memberColor || AUTHOR_COLORS[Math.floor(Math.random() * AUTHOR_COLORS.length)];
   const peerPort = options.peerPort ?? existing.peerPort ?? 4747;
   const webPort = options.webPort ?? existing.webPort ?? 3000;

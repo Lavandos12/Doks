@@ -178,3 +178,33 @@ export function getEdgeMidpoint(
     y: 0.125 * y1 + 0.375 * cy1 + 0.375 * cy2 + 0.125 * y2
   };
 }
+
+export function getPortAngle(side: PortSide): number {
+  switch (side) {
+    case 'left':
+      return 0;
+    case 'top':
+      return Math.PI / 2;
+    case 'right':
+      return Math.PI;
+    case 'bottom':
+      return -Math.PI / 2;
+  }
+}
+
+/**
+ * Computes triangle polygon points for an arrowhead pointing towards (tipX, tipY) at given angle.
+ */
+export function computeArrowheadPolygon(
+  tipX: number,
+  tipY: number,
+  angle: number,
+  len = 12,
+  width = 6
+): string {
+  const base1X = tipX - len * Math.cos(angle) + width * Math.sin(angle);
+  const base1Y = tipY - len * Math.sin(angle) - width * Math.cos(angle);
+  const base2X = tipX - len * Math.cos(angle) - width * Math.sin(angle);
+  const base2Y = tipY - len * Math.sin(angle) + width * Math.cos(angle);
+  return `${tipX.toFixed(1)},${tipY.toFixed(1)} ${base1X.toFixed(1)},${base1Y.toFixed(1)} ${base2X.toFixed(1)},${base2Y.toFixed(1)}`;
+}

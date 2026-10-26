@@ -40,18 +40,6 @@ export function isRadminTunnelOperational(): boolean {
     }
   } catch {}
 
-  try {
-    const stdoutSvc = execSync('sc query RvControlSvc', {
-      encoding: 'utf8',
-      stdio: ['pipe', 'pipe', 'ignore'],
-      timeout: 1000,
-    });
-    if (stdoutSvc.includes('RUNNING')) {
-      lastRadminCheckResult = true;
-      return true;
-    }
-  } catch {}
-
   lastRadminCheckResult = false;
   return false;
 }

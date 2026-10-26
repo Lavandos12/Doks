@@ -18,14 +18,23 @@ import { yjsClient, agentStatus } from '../../state/yjs-client.js';
 import {
   openTab,
   notes,
+  boards,
+  createBoard,
+  deleteBoard,
+  renameBoard,
+  setScope,
   maps,
   restoreNote,
   createNote,
   currentScope,
   ensureSplitTabs,
+  isSplitView,
+  workspaceMode,
   setWorkspaceMode,
   isCommandPaletteOpen
 } from '../../state/app-state.js';
+import { NoteEditor } from '../notes/editor.js';
+import { NetworkPopover } from '../layout/network-popover.js';
 import { CanvasEdgesLayer, type CanvasEdgeModel } from '../CanvasEdgesLayer.js';
 import { useCanvasDropZone } from '../../hooks/useCanvasDropZone.js';
 import { seedDefaultBoard } from './board-seed.js';
@@ -132,6 +141,20 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
   // Document inline reader expanded state per node
   const [previewDocIds, setPreviewDocIds] = useState<Set<string>>(new Set());
 
+  // Miro Floating Dock & Islands state
+  const [activeFlyout, setActiveFlyout] = useState<'none' | 'sticky' | 'shape' | 'arrow' | 'draw'>('none');
+  const [isBoardsPopoverOpen, setIsBoardsPopoverOpen] = useState(false);
+  const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
+  const [isNotesDrawerOpen, setIsNotesDrawerOpen] = useState(false);
+  const [selectedDrawerNoteId, setSelectedDrawerNoteId] = useState<string | null>(null);
+  const [isNetworkPopoverOpen, setIsNetworkPopoverOpen] = useState(false);
+  const [selectedShapeVariant, setSelectedShapeVariant] = useState<'rectangle' | 'rounded' | 'circle' | 'diamond' | 'parallelogram' | 'cylinder'>('rectangle');
+  const [defaultLineStyle, setDefaultLineStyle] = useState<{ curveType: 'bezier' | 'orthogonal' | 'straight'; style: 'solid' | 'dashed'; color: string }>({
+    curveType: 'bezier',
+    style: 'solid',
+    color: '#818cf8'
+  });
+
   // Dragging multiple nodes
   const [dragState, setDragState] = useState<{
     startX: number;
@@ -231,6 +254,10 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
 
   // Hidden attachment file input
   const fileAttachmentInputRef = useRef<HTMLInputElement>(null);
+
+  const currentBoardMeta = useMemo(() => {
+    return boards.value.find((b) => b.id === boardId);
+  }, [boards.value, boardId]);
 
   // Undo manager
   const undoManagerRef = useRef<Y.UndoManager | null>(null);
@@ -350,6 +377,34 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
       window.removeEventListener('doks-focus-node' as any, handleFocusNode);
     };
   }, [docName]);
+
+  // Auto-fetch extracted text for document cards missing text
+  useEffect(() => {
+    for (const node of nodesList) {
+      if (
+        node.fileHash &&
+        !node.extractedText &&
+        (node.fileName || '').match(/\.(docx|txt|md|csv|json|js|ts|py|html|css)$/i)
+      ) {
+        fetch(`/api/attachments/${node.fileHash}/content`)
+          .then((res) => (res.ok ? res.json() : null))
+          .then((data) => {
+            if (data?.extractedText) {
+              const map = yNodes.get(node.id);
+              if (map && !map.get('extractedText')) {
+                boardDoc.transact(() => {
+                  map.set('extractedText', data.extractedText);
+                  if (map.get('showPreview') === undefined) {
+                    map.set('showPreview', true);
+                  }
+                }, CANVAS_UNDO_ORIGIN);
+              }
+            }
+          })
+          .catch(() => {});
+      }
+    }
+  }, [nodesList, yNodes, boardDoc]);
 
   // Coordinate transformation helpers
   const screenToCanvas = (clientX: number, clientY: number) => {
@@ -1910,89 +1965,492 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
         }
       }}
     >
-      {/* 1. Miro-level Floating Toolbox */}
-      <div class="board-toolbox liquid-glass-surface" onMouseDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()}>
-        <div class="toolbox-group">
+      {/* =========================================================================
+          ISLAND 1: TOP-LEFT FLOATING MIRO BOARD BAR
+          ========================================================================= */}
+      <div
+        class="miro-board-bar liquid-glass-surface"
+        onMouseDown={(e) => e.stopPropagation()}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Boards Popover Trigger */}
+        <button
+          class="miro-board-selector-btn"
+          onClick={() => {
+            setIsBoardsPopoverOpen(!isBoardsPopoverOpen);
+            setIsExportMenuOpen(false);
+          }}
+          title="Список досок и шаблоны"
+        >
+          <Icon name="layout" size={16} />
+          <span class="miro-board-title">{currentBoardMeta?.title || 'Новая доска'}</span>
+          <Icon name="chevron-down" size={12} />
+        </button>
+
+        <div class="miro-divider" />
+
+        {/* Scope Switcher Pill: [ Соло | Команда ] */}
+        <div class="miro-scope-pill" role="tablist">
           <button
-            class={`tb-btn ${activeTool === 'select' ? 'active' : ''}`}
-            data-tool="select"
-            onClick={() => setActiveTool('select')}
-            title="Выбор и перемещение (V)"
+            class={`scope-pill-btn miro-scope-btn ${currentScope.value === 'solo' ? 'active solo' : ''}`}
+            onClick={() => setScope('solo')}
+            title="Личное пространство (Alt+1)"
           >
-            <Icon name="select" size={17} />
+            <Icon name="lock" size={12} />
+            <span>Соло</span>
           </button>
           <button
-            class={`tb-btn ${activeTool === 'hand' ? 'active' : ''}`}
-            data-tool="hand"
-            onClick={() => setActiveTool('hand')}
-            title="Панорамирование (H / Space)"
+            class={`scope-pill-btn miro-scope-btn ${currentScope.value === 'team' ? 'active team' : ''}`}
+            onClick={() => setScope('team')}
+            title="Командное пространство (Alt+2)"
           >
-            <Icon name="hand" size={17} />
+            <Icon name="globe-mesh" size={12} />
+            <span>Команда</span>
           </button>
         </div>
 
-        <div class="toolbox-divider" />
+        {!isSplitView.value && (
+          <>
+            <div class="miro-divider" />
+            {/* Workspace Mode Switcher: [ Холст | Сплит | Заметки ] */}
+            <div class="workspace-mode-segmented-pill" role="tablist" aria-label="Режим рабочей области">
+              <button
+                class={`mode-pill-btn workspace-mode-btn ${workspaceMode.value === 'canvas' ? 'active' : ''}`}
+                data-mode="canvas"
+                onClick={() => setWorkspaceMode('canvas')}
+                title="Холст (Бесконечная доска)"
+              >
+                <Icon name="layout-canvas" size={13} />
+                <span class="mode-label">Холст</span>
+              </button>
+              <button
+                class={`mode-pill-btn workspace-mode-btn ${workspaceMode.value === 'split' ? 'active' : ''}`}
+                data-mode="split"
+                onClick={() => setWorkspaceMode('split')}
+                title="Сплит (Холст + Заметка рядом, Ctrl+\)"
+              >
+                <Icon name="layout-split" size={13} />
+                <span class="mode-label">Сплит</span>
+              </button>
+              <button
+                class={`mode-pill-btn workspace-mode-btn ${workspaceMode.value === 'vault' ? 'active' : ''}`}
+                data-mode="vault"
+                onClick={() => setWorkspaceMode('vault')}
+                title="Заметки (Редактор базы знаний)"
+              >
+                <Icon name="layout-doc" size={13} />
+                <span class="mode-label">Заметки</span>
+              </button>
+            </div>
+          </>
+        )}
 
-        <div class="toolbox-group">
+        <div class="miro-divider" />
+
+        {/* Export / File Dropdown */}
+        <button
+          class="miro-action-btn"
+          onClick={() => {
+            setIsExportMenuOpen(!isExportMenuOpen);
+            setIsBoardsPopoverOpen(false);
+          }}
+          title="Файл, экспорт и резервное копирование"
+        >
+          <Icon name="download" size={14} />
+          <span>Экспорт</span>
+        </button>
+
+        {/* Cross-scope promotion bridge */}
+        <button
+          class="miro-action-btn"
+          data-testid="scope-transfer-btn"
+          onClick={() => handleOpenTransferModal()}
+          title={currentScope.value === 'solo' ? 'Опубликовать доску в Команду' : 'Склонировать доску в Соло'}
+        >
+          <Icon name={currentScope.value === 'solo' ? 'promote' : 'fork'} size={14} />
+          <span>{currentScope.value === 'solo' ? 'В Команду' : 'В Соло'}</span>
+        </button>
+
+        {/* Boards & Templates Dropdown Popover */}
+        {isBoardsPopoverOpen && (
+          <div class="miro-boards-popover liquid-glass-surface">
+            <div class="miro-popover-header">
+              <span class="miro-popover-title">Доски</span>
+              <button
+                class="btn-primary-xs"
+                onClick={() => {
+                  const newId = createBoard('Новая доска');
+                  openTab('board', newId, 'Новая доска');
+                  setIsBoardsPopoverOpen(false);
+                }}
+              >
+                <Icon name="plus" size={12} />
+                <span>Новая</span>
+              </button>
+            </div>
+            <div class="miro-boards-list">
+              {boards.value.filter((b) => !b.deleted).map((b) => (
+                <div
+                  key={b.id}
+                  class={`miro-board-item ${b.id === boardId ? 'active' : ''}`}
+                  onClick={() => {
+                    openTab('board', b.id, b.title);
+                    setIsBoardsPopoverOpen(false);
+                  }}
+                >
+                  <Icon name="layout" size={14} />
+                  <span class="miro-board-name">{b.title}</span>
+                  {b.id === boardId && <span class="miro-active-dot" />}
+                </div>
+              ))}
+            </div>
+            <div class="miro-popover-divider" />
+            <button
+              class="miro-template-btn"
+              onClick={() => {
+                seedDefaultBoard(boardDoc, agentStatus.value?.memberName || 'Вы');
+                setIsBoardsPopoverOpen(false);
+              }}
+            >
+              <Icon name="sparkles" size={13} />
+              <span>Заполнить шаблоном задач</span>
+            </button>
+          </div>
+        )}
+
+        {/* Export Menu Dropdown */}
+        {isExportMenuOpen && (
+          <div class="miro-export-popover liquid-glass-surface">
+            <button
+              class="miro-menu-item"
+              onClick={() => {
+                setShowAiModal(true);
+                setIsExportMenuOpen(false);
+              }}
+            >
+              <Icon name="sparkles" size={14} />
+              <span>Экспорт для ИИ...</span>
+            </button>
+            <div class="miro-popover-divider" />
+            <a
+              class="miro-menu-item"
+              href={`/api/export/board/${boardId}`}
+              download={`${currentBoardMeta?.title || 'board'}.canvas`}
+              onClick={() => setIsExportMenuOpen(false)}
+            >
+              <Icon name="download" size={14} />
+              <span>Скачать .canvas (Obsidian)</span>
+            </a>
+            <a
+              class="miro-menu-item"
+              href="/api/export/vault"
+              download="doks-vault.zip"
+              onClick={() => setIsExportMenuOpen(false)}
+            >
+              <Icon name="archive" size={14} />
+              <span>Резервная копия хранилища (.zip)</span>
+            </a>
+          </div>
+        )}
+      </div>
+
+      {/* =========================================================================
+          ISLAND 2: LEFT-CENTER VERTICAL MIRO CREATION DOCK
+          ========================================================================= */}
+      <div
+        class="miro-creation-dock-container"
+        onMouseDown={(e) => e.stopPropagation()}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div class="miro-creation-dock liquid-glass-surface">
+          {/* 1. Select (V) */}
           <button
-            class={`tb-btn ${activeTool === 'sticky' ? 'active' : ''}`}
-            data-tool="sticky"
-            onClick={() => setActiveTool('sticky')}
-            title="Стикер (S)"
+            class={`miro-dock-btn ${activeTool === 'select' ? 'active' : ''}`}
+            data-tool="select"
+            onClick={() => {
+              setActiveTool('select');
+              setActiveFlyout('none');
+            }}
+            title="Выбор и перемещение (V)"
           >
-            <Icon name="sticky" size={17} />
+            <Icon name="select" size={20} />
           </button>
+
+          {/* 2. Hand (H) */}
           <button
-            class={`tb-btn ${activeTool === 'text' ? 'active' : ''}`}
+            class={`miro-dock-btn ${activeTool === 'hand' ? 'active' : ''}`}
+            data-tool="hand"
+            onClick={() => {
+              setActiveTool('hand');
+              setActiveFlyout('none');
+            }}
+            title="Панорамирование (H / Space)"
+          >
+            <Icon name="hand" size={20} />
+          </button>
+
+          <div class="miro-dock-divider" />
+
+          {/* 3. Sticky Note (S) + Flyout */}
+          <div class="miro-dock-tool-wrapper">
+            <button
+              class={`miro-dock-btn ${activeTool === 'sticky' ? 'active' : ''}`}
+              data-tool="sticky"
+              onClick={() => {
+                setActiveTool('sticky');
+                setActiveFlyout(activeFlyout === 'sticky' ? 'none' : 'sticky');
+              }}
+              title="Стикеры Miro (S)"
+            >
+              <Icon name="sticky" size={20} />
+            </button>
+            {activeFlyout === 'sticky' && (
+              <div class="miro-flyout-menu liquid-glass-surface">
+                <div class="miro-flyout-title">Цвет стикера</div>
+                <div class="miro-sticky-swatch-grid">
+                  {Object.entries(CANVAS_COLORS).filter(([k]) => k !== 'default').map(([key, hex]) => (
+                    <button
+                      key={key}
+                      type="button"
+                      class={`miro-sticky-swatch ${activeColor === key ? 'active' : ''}`}
+                      style={{ backgroundColor: hex }}
+                      onClick={() => {
+                        setActiveColor(key);
+                        setActiveTool('sticky');
+                        setActiveFlyout('none');
+                      }}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* 4. Shapes (R) + Flyout */}
+          <div class="miro-dock-tool-wrapper">
+            <button
+              class={`miro-dock-btn ${activeTool === 'shape' ? 'active' : ''}`}
+              data-tool="shape"
+              onClick={() => {
+                setActiveTool('shape');
+                setActiveFlyout(activeFlyout === 'shape' ? 'none' : 'shape');
+              }}
+              title="Геометрические фигуры (R)"
+            >
+              <Icon name="shape" size={20} />
+            </button>
+            {activeFlyout === 'shape' && (
+              <div class="miro-flyout-menu liquid-glass-surface">
+                <div class="miro-flyout-title">Форма фигуры</div>
+                <div class="miro-shape-grid">
+                  <button
+                    class={`miro-shape-pick-btn ${selectedShapeVariant === 'rectangle' ? 'active' : ''}`}
+                    onClick={() => { setSelectedShapeVariant('rectangle'); setActiveTool('shape'); setActiveFlyout('none'); }}
+                    title="Прямоугольник"
+                  >
+                    <div class="shape-preview rect-preview" />
+                    <span>Прямоугольник</span>
+                  </button>
+                  <button
+                    class={`miro-shape-pick-btn ${selectedShapeVariant === 'rounded' ? 'active' : ''}`}
+                    onClick={() => { setSelectedShapeVariant('rounded'); setActiveTool('shape'); setActiveFlyout('none'); }}
+                    title="Скруглённый блок"
+                  >
+                    <div class="shape-preview rounded-preview" />
+                    <span>Скруглённый</span>
+                  </button>
+                  <button
+                    class={`miro-shape-pick-btn ${selectedShapeVariant === 'circle' ? 'active' : ''}`}
+                    onClick={() => { setSelectedShapeVariant('circle'); setActiveTool('shape'); setActiveFlyout('none'); }}
+                    title="Круг / Эллипс"
+                  >
+                    <div class="shape-preview circle-preview" />
+                    <span>Круг</span>
+                  </button>
+                  <button
+                    class={`miro-shape-pick-btn ${selectedShapeVariant === 'diamond' ? 'active' : ''}`}
+                    onClick={() => { setSelectedShapeVariant('diamond'); setActiveTool('shape'); setActiveFlyout('none'); }}
+                    title="Ромб (Условие)"
+                  >
+                    <div class="shape-preview diamond-preview" />
+                    <span>Ромб</span>
+                  </button>
+                  <button
+                    class={`miro-shape-pick-btn ${selectedShapeVariant === 'parallelogram' ? 'active' : ''}`}
+                    onClick={() => { setSelectedShapeVariant('parallelogram'); setActiveTool('shape'); setActiveFlyout('none'); }}
+                    title="Параллелограмм"
+                  >
+                    <div class="shape-preview para-preview" />
+                    <span>Параллелограмм</span>
+                  </button>
+                  <button
+                    class={`miro-shape-pick-btn ${selectedShapeVariant === 'cylinder' ? 'active' : ''}`}
+                    onClick={() => { setSelectedShapeVariant('cylinder'); setActiveTool('shape'); setActiveFlyout('none'); }}
+                    title="База данных (Цилиндр)"
+                  >
+                    <div class="shape-preview cylinder-preview" />
+                    <span>База данных</span>
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* 5. Connection / Arrow (L / C) + Flyout */}
+          <div class="miro-dock-tool-wrapper">
+            <button
+              class={`miro-dock-btn ${activeTool === 'arrow' ? 'active' : ''}`}
+              data-tool="arrow"
+              onClick={() => {
+                setActiveTool('arrow');
+                setActiveFlyout(activeFlyout === 'arrow' ? 'none' : 'arrow');
+              }}
+              title="Связующая стрелка (L / C)"
+            >
+              <Icon name="arrow" size={20} />
+            </button>
+            {activeFlyout === 'arrow' && (
+              <div class="miro-flyout-menu liquid-glass-surface">
+                <div class="miro-flyout-title">Тип линии</div>
+                <div class="miro-line-types">
+                  <button
+                    class={`miro-line-btn ${defaultLineStyle.curveType === 'bezier' ? 'active' : ''}`}
+                    onClick={() => setDefaultLineStyle((prev) => ({ ...prev, curveType: 'bezier' }))}
+                  >
+                    <svg width="24" height="16" viewBox="0 0 24 16" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M 2 14 C 10 14, 14 2, 22 2" />
+                    </svg>
+                    <span>Плавная Безье</span>
+                  </button>
+                  <button
+                    class={`miro-line-btn ${defaultLineStyle.curveType === 'orthogonal' ? 'active' : ''}`}
+                    onClick={() => setDefaultLineStyle((prev) => ({ ...prev, curveType: 'orthogonal' }))}
+                  >
+                    <svg width="24" height="16" viewBox="0 0 24 16" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M 2 14 L 12 14 L 12 2 L 22 2" />
+                    </svg>
+                    <span>Ломаная 90°</span>
+                  </button>
+                  <button
+                    class={`miro-line-btn ${defaultLineStyle.curveType === 'straight' ? 'active' : ''}`}
+                    onClick={() => setDefaultLineStyle((prev) => ({ ...prev, curveType: 'straight' }))}
+                  >
+                    <svg width="24" height="16" viewBox="0 0 24 16" fill="none" stroke="currentColor" strokeWidth="2">
+                      <line x1="2" y1="14" x2="22" y2="2" />
+                    </svg>
+                    <span>Прямая</span>
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* 6. Pen / Brush / Highlighter / Eraser (P / E) + Flyout */}
+          <div class="miro-dock-tool-wrapper">
+            <button
+              class={`miro-dock-btn ${activeTool === 'draw' || activeTool === 'eraser' ? 'active' : ''}`}
+              data-tool="draw"
+              onClick={() => {
+                setActiveTool('draw');
+                setActiveFlyout(activeFlyout === 'draw' ? 'none' : 'draw');
+              }}
+              title="Свободное рисование (P / E)"
+            >
+              <Icon name={activeTool === 'eraser' ? 'eraser' : 'pen'} size={20} />
+            </button>
+            {activeFlyout === 'draw' && (
+              <div class="miro-flyout-menu liquid-glass-surface" style={{ width: '220px' }}>
+                <div class="miro-flyout-title">Инструменты рисования</div>
+                <div class="miro-draw-modes">
+                  <button
+                    class={`miro-draw-mode-btn ${activeTool === 'draw' && drawMode === 'pen' ? 'active' : ''}`}
+                    onClick={() => { setActiveTool('draw'); setDrawMode('pen'); setDrawWidth(3); }}
+                  >
+                    <Icon name="pen" size={14} />
+                    <span>Ручка (3px)</span>
+                  </button>
+                  <button
+                    class={`miro-draw-mode-btn ${activeTool === 'draw' && drawMode === 'brush' ? 'active' : ''}`}
+                    onClick={() => { setActiveTool('draw'); setDrawMode('brush'); setDrawWidth(8); }}
+                  >
+                    <Icon name="brush" size={14} />
+                    <span>Кисть (8px)</span>
+                  </button>
+                  <button
+                    class={`miro-draw-mode-btn ${activeTool === 'draw' && drawMode === 'highlighter' ? 'active' : ''}`}
+                    onClick={() => { setActiveTool('draw'); setDrawMode('highlighter'); setDrawWidth(22); }}
+                  >
+                    <Icon name="brush" size={14} />
+                    <span>Маркер (22px)</span>
+                  </button>
+                  <button
+                    class={`miro-draw-mode-btn ${activeTool === 'eraser' ? 'active' : ''}`}
+                    onClick={() => { setActiveTool('eraser'); }}
+                  >
+                    <Icon name="eraser" size={14} />
+                    <span>Ластик (E)</span>
+                  </button>
+                </div>
+                <div class="miro-popover-divider" />
+                <div class="miro-color-swatches-row">
+                  {['#818cf8', '#38bdf8', '#34d399', '#facc15', '#fb7185', '#c084fc', '#f8fafc', '#475569'].map((col) => (
+                    <button
+                      key={col}
+                      type="button"
+                      class={`drawing-color-swatch ${drawColor === col ? 'active' : ''}`}
+                      style={{ backgroundColor: col }}
+                      onClick={() => setDrawColor(col)}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* 7. Text (T) */}
+          <button
+            class={`miro-dock-btn ${activeTool === 'text' ? 'active' : ''}`}
             data-tool="text"
-            onClick={() => setActiveTool('text')}
+            onClick={() => {
+              setActiveTool('text');
+              setActiveFlyout('none');
+            }}
             title="Текст (T)"
           >
-            <Icon name="text" size={17} />
+            <Icon name="text" size={20} />
           </button>
+
+          {/* 8. Frame (F) */}
           <button
-            class={`tb-btn ${activeTool === 'note' ? 'active' : ''}`}
-            data-tool="note"
-            onClick={() => {
-              const centerX = (window.innerWidth / 2 - viewport.x) / viewport.zoom;
-              const centerY = (window.innerHeight / 2 - viewport.y) / viewport.zoom;
-              setPickerPos({ x: centerX - 150, y: centerY - 120 });
-              setIsNotePickerOpen(true);
-            }}
-            title="Карточка заметки (N)"
-          >
-            <Icon name="note-card" size={17} />
-          </button>
-          <button
-            class={`tb-btn ${activeTool === 'frame' ? 'active' : ''}`}
+            class={`miro-dock-btn ${activeTool === 'frame' ? 'active' : ''}`}
             data-tool="frame"
-            onClick={() => setActiveTool('frame')}
+            onClick={() => {
+              setActiveTool('frame');
+              setActiveFlyout('none');
+            }}
             title="Фрейм / Контейнер (F)"
           >
-            <Icon name="frame" size={17} />
+            <Icon name="frame" size={20} />
           </button>
+
+          <div class="miro-dock-divider" />
+
+          {/* 9. Mindmap & Auto-Diagrams (M) */}
           <button
-            class={`tb-btn ${activeTool === 'arrow' ? 'active' : ''}`}
-            data-tool="arrow"
-            onClick={() => setActiveTool('arrow')}
-            title="Связующая стрелка (C)"
+            class="miro-dock-btn"
+            onClick={() => setIsAutoDiagramModalOpen(true)}
+            title="Mindmap и автодиаграммы (M)"
           >
-            <Icon name="arrow" size={17} />
+            <Icon name="sparkles" size={20} />
           </button>
+
+          {/* 10. Upload Document / Media (U / I) */}
           <button
-            class={`tb-btn ${activeTool === 'shape' ? 'active' : ''}`}
-            data-tool="shape"
-            onClick={() => setActiveTool('shape')}
-            title="Фигура (R)"
-          >
-            <Icon name="shape" size={17} />
-          </button>
-          <button
-            class="tb-btn"
+            class="miro-dock-btn"
             onClick={() => fileAttachmentInputRef.current?.click()}
-            title="Прикрепить файл (I)"
+            title="Загрузить документ (.docx, .pdf, .md, картинки)"
           >
-            <Icon name="attachment" size={17} />
+            <Icon name="upload" size={20} />
           </button>
           <input
             type="file"
@@ -2007,70 +2465,132 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
               }
             }}
           />
-          <button
-            class={`tb-btn ${activeTool === 'draw' ? 'active' : ''}`}
-            data-tool="draw"
-            onClick={() => setActiveTool('draw')}
-            title="Рисование / Ручка (P)"
-          >
-            <Icon name="pen" size={17} />
-          </button>
-          <button
-            class={`tb-btn ${activeTool === 'eraser' ? 'active' : ''}`}
-            data-tool="eraser"
-            onClick={() => setActiveTool('eraser')}
-            title="Ластик (E)"
-          >
-            <Icon name="eraser" size={17} />
-          </button>
         </div>
 
-        <div class="toolbox-divider" />
-
-        {/* Auto-Diagrams & Auto-Layout Suite */}
-        <div class="toolbox-group">
+        {/* Compact Undo / Redo Pill below the Creation Dock */}
+        <div class="miro-undo-redo-pill liquid-glass-surface">
           <button
-            class="tb-btn"
-            onClick={() => setIsAutoDiagramModalOpen(true)}
-            title="Автодиаграммы и Mindmap"
+            class="miro-undo-btn hud-btn"
+            onClick={() => undoManagerRef.current?.undo()}
+            title="Отменить действие (Ctrl+Z)"
           >
-            <Icon name="sparkles" size={17} />
+            <Icon name="undo" size={16} />
           </button>
+          <div class="miro-dock-divider-v" />
           <button
-            class="tb-btn"
-            onClick={handleTriggerAutoLayout}
-            title="Авто-раскладка (выравнивание графа)"
+            class="miro-undo-btn hud-btn"
+            onClick={() => undoManagerRef.current?.redo()}
+            title="Повторить действие (Ctrl+Y)"
           >
-            <Icon name="layout" size={17} />
-          </button>
-        </div>
-
-        <div class="toolbox-divider" />
-
-        {/* Cross-scope promotion bridge & AI Export */}
-        <div class="toolbox-group">
-          <button
-            class="tb-btn promote-btn"
-            data-testid="scope-transfer-btn"
-            onClick={() => handleOpenTransferModal()}
-            title={
-              currentScope.value === 'solo'
-                ? 'Опубликовать выбранное в Команду (P2P меш)'
-                : 'Склонировать выбранное в Соло (Личное)'
-            }
-          >
-            <Icon name={currentScope.value === 'solo' ? 'promote' : 'fork'} size={17} />
-          </button>
-          <button
-            class="tb-btn"
-            data-testid="ai-export-btn"
-            onClick={() => setShowAiModal(true)}
-            title="Экспорт для ИИ (AI Context)"
-          >
-            <Icon name="sparkles" size={17} />
+            <Icon name="redo" size={16} />
           </button>
         </div>
       </div>
+
+      {/* =========================================================================
+          ISLAND 3: TOP-RIGHT FLOATING NOTES & COLLABORATION BAR
+          ========================================================================= */}
+      {!isSplitView.value && (
+        <div
+          class="miro-actions-bar liquid-glass-surface"
+          onMouseDown={(e) => e.stopPropagation()}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* [ Заметки ] Drawer Toggle */}
+          <button
+            class={`miro-action-pill ${isNotesDrawerOpen ? 'active' : ''}`}
+            onClick={() => setIsNotesDrawerOpen(!isNotesDrawerOpen)}
+            title="Открыть базу знаний заметок (Markdown)"
+          >
+            <Icon name="file-text" size={15} />
+            <span>Заметки</span>
+          </button>
+
+          {/* [ ИИ-Контекст ] Button */}
+          <button
+            class="miro-action-pill"
+            data-testid="ai-export-btn"
+            onClick={() => setShowAiModal(true)}
+            title="Экспорт контекста доски для ИИ"
+          >
+            <Icon name="sparkles" size={15} />
+            <span>ИИ-Контекст</span>
+          </button>
+
+          {/* Network Status Pill */}
+          <div
+            class="miro-network-pill"
+            onClick={() => setIsNetworkPopoverOpen(true)}
+            title="Сетевые подключения и P2P"
+          >
+            <span class="status-dot green" />
+            <span>Локально</span>
+          </div>
+        </div>
+      )}
+
+      {/* =========================================================================
+          RIGHT SLIDE-OVER NOTES DRAWER
+          ========================================================================= */}
+      {isNotesDrawerOpen && (
+        <div
+          class="miro-notes-drawer liquid-glass-surface"
+          onMouseDown={(e) => e.stopPropagation()}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div class="miro-notes-drawer-header">
+            <div class="miro-drawer-title-group">
+              <Icon name="file-text" size={16} />
+              <span class="miro-drawer-title">Заметки базы знаний</span>
+            </div>
+            <div class="miro-drawer-actions">
+              <button
+                class="btn-primary-xs"
+                onClick={() => {
+                  const newId = createNote('Новая заметка', null);
+                  setSelectedDrawerNoteId(newId);
+                }}
+                title="Создать новую заметку"
+              >
+                <Icon name="plus" size={13} />
+                <span>Новая</span>
+              </button>
+              <button
+                class="miro-close-btn"
+                onClick={() => setIsNotesDrawerOpen(false)}
+                title="Закрыть шторку"
+              >
+                <Icon name="x" size={16} />
+              </button>
+            </div>
+          </div>
+          <div class="miro-drawer-note-select">
+            <select
+              value={selectedDrawerNoteId || (notes.value.find((n) => !n.deleted)?.id || '')}
+              onChange={(e) => setSelectedDrawerNoteId((e.target as HTMLSelectElement).value)}
+            >
+              {notes.value.filter((n) => !n.deleted).map((n) => (
+                <option key={n.id} value={n.id}>{n.title || 'Без названия'}</option>
+              ))}
+            </select>
+          </div>
+          <div class="miro-drawer-content">
+            {(selectedDrawerNoteId || notes.value.find((n) => !n.deleted)?.id) ? (
+              <NoteEditor
+                key={selectedDrawerNoteId || notes.value.find((n) => !n.deleted)!.id}
+                noteId={selectedDrawerNoteId || notes.value.find((n) => !n.deleted)!.id}
+              />
+            ) : (
+              <div class="miro-empty-notes">
+                <p>В хранилище пока нет заметок</p>
+                <button class="btn-primary-sm" onClick={() => createNote('Первая заметка', null)}>
+                  Создать первую заметку
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Freehand Drawing Sub-Bar */}
       {activeTool === 'draw' && (
@@ -3225,6 +3745,11 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
         defaultOriginY={Math.round((window.innerHeight / 2 - viewport.y) / viewport.zoom)}
       />
 
+      <NetworkPopover
+        isOpen={isNetworkPopoverOpen}
+        onClose={() => setIsNetworkPopoverOpen(false)}
+      />
+
       {/* Empty State Seed Card */}
       {visibleNodes.length === 0 && (
         <div
@@ -3304,21 +3829,6 @@ export function BoardCanvas({ boardId }: BoardCanvasProps) {
             title="Миникарта"
           >
             <Icon name="frame" size={14} />
-          </button>
-          <div class="hud-divider" />
-          <button
-            class="hud-btn"
-            onClick={() => undoManagerRef.current?.undo()}
-            title="Отменить действие (Ctrl+Z)"
-          >
-            <Icon name="undo" size={14} />
-          </button>
-          <button
-            class="hud-btn"
-            onClick={() => undoManagerRef.current?.redo()}
-            title="Повторить действие (Ctrl+Y)"
-          >
-            <Icon name="redo" size={14} />
           </button>
         </div>
       </div>

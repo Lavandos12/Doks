@@ -39,6 +39,7 @@ import {
 import { DocManager } from '../storage/doc-manager.js';
 import { PeerService } from '../peer/peer-service.js';
 import { AttachmentManager } from '../storage/attachments.js';
+import { extractTextFromDocxBuffer } from '../storage/docx-extractor.js';
 import { generateSessionToken } from '../security.js';
 import {
   findAvailablePort,
@@ -651,13 +652,37 @@ export class AgentHttpServer {
       if (!att) {
         return reply.code(404).send({ error: 'Attachment not found' });
       }
+
+      let text = att.extractedText;
+      if (!text && fs.existsSync(att.filePath)) {
+        try {
+          const buf = fs.readFileSync(att.filePath);
+          const lowerName = (att.fileName || '').toLowerCase();
+          if (lowerName.endsWith('.docx')) {
+            text = extractTextFromDocxBuffer(buf);
+          } else if (
+            lowerName.endsWith('.txt') ||
+            lowerName.endsWith('.md') ||
+            lowerName.endsWith('.csv') ||
+            lowerName.endsWith('.json') ||
+            lowerName.endsWith('.js') ||
+            lowerName.endsWith('.ts')
+          ) {
+            text = buf.toString('utf8');
+          }
+          if (text) {
+            this.attachmentManager.updateExtractedText(att.hash, text);
+          }
+        } catch {}
+      }
+
       return {
         id: att.hash,
         originalName: att.fileName,
         fileName: att.fileName,
         mimeType: att.mimeType,
         size: att.size,
-        extractedText: att.extractedText || ''
+        extractedText: text || ''
       };
     });
 

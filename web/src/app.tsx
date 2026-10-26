@@ -30,6 +30,7 @@ import { Icon } from './ui/icons.js';
 export function App() {
   const activeTab = openTabs.value.find((t) => t.id === activeTabId.value);
   const splitTab = isSplitView.value ? openTabs.value.find((t) => t.id === splitTabId.value) : null;
+  const isCanvasMode = currentView.value === 'board' && (!isSplitView.value || !splitTab) && (activeTab?.type === 'board' || !activeTab);
 
   const renderDocContent = (tab: { id: string; type: 'note' | 'board' } | undefined) => {
     if (!tab) {
@@ -62,11 +63,11 @@ export function App() {
   };
 
   return (
-    <div class={`app-layout theme-${theme.value} ${isSidebarCollapsed.value ? 'sidebar-collapsed' : ''}`}>
+    <div class={`app-layout theme-${theme.value} ${isSidebarCollapsed.value ? 'sidebar-collapsed' : ''} ${isCanvasMode ? 'view-board-canvas' : ''}`}>
       <Sidebar />
 
       <div class="main-area">
-        <TabBar />
+        {!isCanvasMode && <TabBar />}
 
         <main class="main-viewport">
           {currentView.value === 'network' && <NetworkScreen />}
