@@ -94,7 +94,9 @@ export interface BoardNodeData {
   hasCheckbox?: boolean;
   shapeVariant?: 'rectangle' | 'rounded' | 'diamond' | 'pill' | 'circle' | 'triangle' | 'parallelogram' | 'cylinder' | 'hexagon';
   svgPath?: string;
+  points?: Array<{ x: number; y: number }>;
   strokeWidth?: number;
+  drawMode?: 'pen' | 'brush' | 'highlighter';
   opacity?: number;
   extractedText?: string;
   showPreview?: boolean;

@@ -505,4 +505,58 @@ test.describe('F12: Playwright E2E Scenarios for Doks', () => {
     // Expect node to be restored
     await expect(nodes).toHaveCount(1);
   });
+
+  test('Scenario 13: Pure Ink Layer isolation and instant text editing', async ({ page }) => {
+    await page.goto(`http://127.0.0.1:${port1}`);
+    await openBoard(page);
+
+    const canvas = page.locator('.board-container');
+
+    // 1. Activate Draw tool (P) and draw a stroke
+    const drawBtn = page.locator('button[data-tool="draw"]');
+    await drawBtn.click();
+
+    const canvasBox = await canvas.boundingBox();
+    if (!canvasBox) throw new Error('Canvas box not found');
+
+    const startX = canvasBox.x + 350;
+    const startY = canvasBox.y + 250;
+
+    await page.mouse.move(startX, startY);
+    await page.mouse.down();
+    await page.mouse.move(startX + 60, startY + 40, { steps: 5 });
+    await page.mouse.move(startX + 120, startY + 20, { steps: 5 });
+    await page.mouse.up();
+
+    // Wait for stroke commit
+    await page.waitForTimeout(300);
+
+    // Verify drawing stroke rendered in .miro-ink-layer
+    const inkPaths = page.locator('.miro-ink-layer path');
+    await expect(inkPaths).toHaveCount(1);
+
+    // Verify drawing is NOT rendered as a selectable .board-node-box
+    const drawingBoxes = page.locator('.board-node-box.type-drawing');
+    await expect(drawingBoxes).toHaveCount(0);
+
+    // Verify no resize handles exist on the canvas
+    const handles = page.locator('.node-resize-handles-layer');
+    await expect(handles).toHaveCount(0);
+
+    // 2. Instant Text Editing: Click Text (T), place on canvas, and type immediately
+    const textBtn = page.locator('button[data-tool="text"]');
+    await textBtn.click();
+    await canvas.click({ position: { x: 500, y: 300 } });
+
+    // Node must be created and textarea immediately focused for typing
+    const textNode = page.locator('.board-node-box.type-text');
+    await expect(textNode).toHaveCount(1);
+
+    const textarea = textNode.locator('textarea');
+    await expect(textarea).toBeFocused();
+
+    // Type text immediately without any extra clicks
+    await page.keyboard.type('Hello Doks Pure Ink');
+    await expect(textarea).toHaveValue('Hello Doks Pure Ink');
+  });
 });

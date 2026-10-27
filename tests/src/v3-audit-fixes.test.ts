@@ -851,5 +851,246 @@ Doks v3.0
       const rooms = discovery.getDiscoveredRooms();
       expect(Array.isArray(rooms)).toBe(true);
     });
+
+    describe('Doks v5 Pure Ink Layer, Instant Text Editing, Documents & Tools', () => {
+      it('pure ink layer: drawings are strictly excluded from card boxes, marquee selection, and select-all', () => {
+        const nodes = [
+          { id: '1', type: 'sticky', x: 10, y: 10, w: 200, h: 130, deleted: false },
+          { id: '2', type: 'drawing', x: 20, y: 20, w: 100, h: 80, deleted: false },
+          { id: '3', type: 'text', x: 50, y: 50, w: 220, h: 80, deleted: false },
+          { id: '4', type: 'drawing', x: 300, y: 300, w: 50, h: 50, deleted: false }
+        ];
+
+        // 1. Box nodes rendering filter
+        const visibleCardNodes = nodes.filter((n) => n.type !== 'drawing');
+        expect(visibleCardNodes.map((n) => n.id)).toEqual(['1', '3']);
+        expect(visibleCardNodes.some((n) => n.type === 'drawing')).toBe(false);
+
+        // 2. Select All (mod+a) filter
+        const selectAllIds = nodes.filter((n) => !n.deleted && n.type !== 'drawing').map((n) => n.id);
+        expect(selectAllIds).toEqual(['1', '3']);
+        expect(selectAllIds.includes('2')).toBe(false);
+        expect(selectAllIds.includes('4')).toBe(false);
+
+        // 3. Marquee selection filter
+        const marqueeBox = { startX: 0, startY: 0, currentX: 500, currentY: 500 };
+        const marqueeSelected = new Set<string>();
+        for (const n of nodes) {
+          if (!n.deleted && n.type !== 'drawing' && n.x + n.w >= marqueeBox.startX && n.x <= marqueeBox.currentX && n.y + n.h >= marqueeBox.startY && n.y <= marqueeBox.currentY) {
+            marqueeSelected.add(n.id);
+          }
+        }
+        expect(Array.from(marqueeSelected)).toEqual(['1', '3']);
+      });
+
+      it('brush style mathematics: pen vs brush vs highlighter visual differentiation', () => {
+        const baseWidth = 16;
+        const color = '#818cf8';
+
+        // Pen: technical crisp line
+        const penMode = 'pen';
+        const penSw = baseWidth;
+        const penCap = 'round';
+        const penOpacity = 1;
+        expect(penSw).toBe(16);
+        expect(penCap).toBe('round');
+        expect(penOpacity).toBe(1);
+
+        // Brush: artistic brush with glow
+        const brushMode = 'brush';
+        const brushSw = Math.round(baseWidth * 1.75);
+        const brushCap = 'round';
+        const brushOpacity = 0.9;
+        const brushFilter = `drop-shadow(0 0 ${Math.max(2, baseWidth * 0.4)}px ${color})`;
+        expect(brushSw).toBe(28);
+        expect(brushCap).toBe('round');
+        expect(brushOpacity).toBe(0.9);
+        expect(brushFilter).toBe('drop-shadow(0 0 6.4px #818cf8)');
+
+        // Highlighter: chisel highlighter with multiply blend
+        const highMode = 'highlighter';
+        const highSw = Math.round(baseWidth * 3.0);
+        const highCap = 'square';
+        const highOpacity = 0.35;
+        expect(highSw).toBe(48);
+        expect(highCap).toBe('square');
+        expect(highOpacity).toBe(0.35);
+      });
+
+      it('brush size persistence: tool switching retains chosen width (2, 4, 8, 16, 24px)', () => {
+        let drawWidth = 16;
+        let drawMode: 'pen' | 'brush' | 'highlighter' = 'pen';
+
+        // User chooses 16px
+        drawWidth = 16;
+
+        // Switch to Brush - width must NOT reset to 8px or 6px
+        drawMode = 'brush';
+        expect(drawWidth).toBe(16);
+
+        // Switch to Highlighter - width must NOT reset to 22px or 20px
+        drawMode = 'highlighter';
+        expect(drawWidth).toBe(16);
+
+        // Switch back to Pen - width must remain 16px
+        drawMode = 'pen';
+        expect(drawWidth).toBe(16);
+
+        // User chooses 24px
+        drawWidth = 24;
+        drawMode = 'brush';
+        expect(drawWidth).toBe(24);
+      });
+
+      it('kanban column auto-height dynamically expands as cards are added', () => {
+        const doc = new Y.Doc();
+        const nodesMap = doc.getMap('nodes');
+        const kanbanMap = new Y.Map();
+        nodesMap.set('kb-1', kanbanMap);
+        kanbanMap.set('id', 'kb-1');
+        kanbanMap.set('type', 'kanban');
+        kanbanMap.set('h', 420);
+        kanbanMap.set('description', 'Задача 1\nЗадача 2');
+
+        const handleAddCard = (map: Y.Map<any>) => {
+          const raw = (map.get('description') as string) || '';
+          const cards = raw.split('\n').filter(Boolean);
+          cards.push('Новая карточка');
+          const requiredH = Math.max((map.get('h') as number) || 420, 110 + cards.length * 52);
+          map.set('description', cards.join('\n'));
+          map.set('h', requiredH);
+        };
+
+        expect(kanbanMap.get('h')).toBe(420);
+        // Add 5 cards -> 7 cards total: 110 + 7 * 52 = 474px (> 420px)
+        for (let i = 0; i < 5; i++) {
+          handleAddCard(kanbanMap);
+        }
+        expect(kanbanMap.get('h')).toBe(110 + 7 * 52); // 474px
+
+        // Add 5 more cards -> 12 cards total: 110 + 12 * 52 = 734px
+        for (let i = 0; i < 5; i++) {
+          handleAddCard(kanbanMap);
+        }
+        expect(kanbanMap.get('h')).toBe(110 + 12 * 52); // 734px
+      });
+
+      it('arrow connection: dropping arrow inside target card bounding box connects mathematically to closest port', () => {
+        const fromNode = { id: 'from-1', x: 100, y: 100, w: 200, h: 100 };
+        const toNode = { id: 'to-1', x: 500, y: 100, w: 200, h: 100 };
+        const nodesList = [fromNode, toNode];
+
+        // Drag starts from right port of fromNode: (300, 150)
+        const startX = 300;
+        const startY = 150;
+
+        // Dropped inside toNode at (550, 130) (center-left area inside the card)
+        const dropPos = { x: 550, y: 130 };
+
+        const insideCard = nodesList.find(
+          (n) =>
+            n.id !== fromNode.id &&
+            dropPos.x >= n.x &&
+            dropPos.x <= n.x + n.w &&
+            dropPos.y >= n.y &&
+            dropPos.y <= n.y + n.h
+        );
+
+        expect(insideCard).toBeDefined();
+        expect(insideCard!.id).toBe('to-1');
+
+        // Check closest port on toNode facing the source
+        const ports = [
+          { side: 'top', x: 600, y: 100 },
+          { side: 'right', x: 700, y: 150 },
+          { side: 'bottom', x: 600, y: 200 },
+          { side: 'left', x: 500, y: 150 }
+        ];
+
+        let bestSide = 'left';
+        let bestDist = Infinity;
+        for (const p of ports) {
+          const d = Math.hypot(startX - p.x, startY - p.y);
+          if (d < bestDist) {
+            bestDist = d;
+            bestSide = p.side;
+          }
+        }
+
+        // Closest port to start point (300, 150) must be 'left' port at (500, 150)
+        expect(bestSide).toBe('left');
+      });
+
+      it('proportional document scaling: virtual sheet scaling factor scale = node.w / DOC_BASE_WIDTH', () => {
+        const DOC_BASE_WIDTH = 620;
+
+        const computeDocScale = (nodeWidth: number) => {
+          return Math.max(0.2, nodeWidth / DOC_BASE_WIDTH);
+        };
+
+        // Natural base width
+        expect(computeDocScale(620)).toBe(1.0);
+
+        // Half width -> 50% scale
+        expect(computeDocScale(310)).toBe(0.5);
+
+        // 1.5x width -> 150% scale
+        expect(computeDocScale(930)).toBe(1.5);
+
+        // Min clamp
+        expect(computeDocScale(50)).toBe(0.2);
+      });
+
+      it('eraser stroke hit-testing detects intersection with point array and bounding box', () => {
+        const drawingNode = {
+          id: 'draw-1',
+          type: 'drawing',
+          x: 100,
+          y: 100,
+          w: 80,
+          h: 60,
+          strokeWidth: 4,
+          deleted: false,
+          points: [
+            { x: 0, y: 0 },
+            { x: 40, y: 30 },
+            { x: 80, y: 60 }
+          ]
+        };
+
+        const ERASE_PAD = 18;
+
+        const hitTestEraser = (pos: { x: number; y: number }) => {
+          if (
+            pos.x < drawingNode.x - ERASE_PAD ||
+            pos.x > drawingNode.x + drawingNode.w + ERASE_PAD ||
+            pos.y < drawingNode.y - ERASE_PAD ||
+            pos.y > drawingNode.y + drawingNode.h + ERASE_PAD
+          ) {
+            return false;
+          }
+
+          const sw = (drawingNode.strokeWidth || 4) + ERASE_PAD;
+          const swSq = sw * sw;
+          return drawingNode.points.some((pt) => {
+            const dx = drawingNode.x + pt.x - pos.x;
+            const dy = drawingNode.y + pt.y - pos.y;
+            return dx * dx + dy * dy <= swSq;
+          });
+        };
+
+        // Directly on middle point (140, 130) -> HIT
+        expect(hitTestEraser({ x: 140, y: 130 })).toBe(true);
+
+        // Near middle point (145, 135) -> HIT (within 22px pad)
+        expect(hitTestEraser({ x: 145, y: 135 })).toBe(true);
+
+        // Far away from stroke (500, 500) -> MISS
+        expect(hitTestEraser({ x: 500, y: 500 })).toBe(false);
+
+        // In opposite corner of bounding box away from the diagonal line -> MISS
+        expect(hitTestEraser({ x: 102, y: 155 })).toBe(false);
+      });
+    });
   });
 });

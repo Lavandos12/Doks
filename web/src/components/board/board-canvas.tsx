@@ -289,12 +289,29 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
   const [isAutoDiagramModalOpen, setIsAutoDiagramModalOpen] = useState(false);
   const [activeColor, setActiveColor] = useState<string>('3');
 
-  // Editing node state (Miro standard: single click drags, double click edits)
+  // Editing node state (Miro standard: single click or double click edits, drag moves)
   const [editingNodeId, setEditingNodeId] = useState<string | null>(null);
+
+  const startEditingNode = useCallback((id: string, selectAll = false) => {
+    setEditingNodeId(id);
+    setSelectedNodeIds(new Set([id]));
+    requestAnimationFrame(() => {
+      const el = document.getElementById(`node-textarea-${id}`) as HTMLTextAreaElement | HTMLInputElement | null;
+      if (el) {
+        el.focus();
+        if (selectAll) {
+          el.select();
+        } else {
+          const len = el.value.length;
+          el.setSelectionRange(len, len);
+        }
+      }
+    });
+  }, []);
 
   // Freehand drawing state
   const [drawMode, setDrawMode] = useState<'pen' | 'brush' | 'highlighter'>('pen');
-  const [drawWidth, setDrawWidth] = useState<number>(3);
+  const [drawWidth, setDrawWidth] = useState<number>(4);
   const [drawColor, setDrawColor] = useState<string>('#818cf8');
   const [currentStroke, setCurrentStroke] = useState<Point[] | null>(null);
   const currentStrokeRef = useRef<Point[] | null>(null);
@@ -319,9 +336,6 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
   }, []);
 
   const [cursorScreenPos, setCursorScreenPos] = useState<{ x: number; y: number } | null>(null);
-
-  // Document inline reader expanded state per node
-  const [previewDocIds, setPreviewDocIds] = useState<Set<string>>(new Set());
 
   // Miro Floating Dock & Islands state
   const [activeFlyout, setActiveFlyout] = useState<'none' | 'sticky' | 'shape' | 'arrow' | 'draw' | 'widgets'>('none');
@@ -902,7 +916,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
       // Select All (Ctrl+A)
       if (matchShortcut(e, 'mod+a')) {
         e.preventDefault();
-        const nonDeletedIds = nodesList.filter((n) => !n.deleted).map((n) => n.id);
+        const nonDeletedIds = nodesList.filter((n) => !n.deleted && n.type !== 'drawing').map((n) => n.id);
         setSelectedNodeIds(new Set(nonDeletedIds));
         setSelectedEdgeId(null);
         return;
@@ -1341,14 +1355,9 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
       });
     }, 'user');
 
-    // Auto-return to Select tool and focus new node
-    setSelectedNodeIds(new Set([id]));
+    // Auto-return to Select tool and focus new node for instant text editing
     setActiveTool('select');
-
-    setTimeout(() => {
-      const el = document.getElementById(`node-textarea-${id}`) as HTMLTextAreaElement;
-      el?.focus();
-    }, 50);
+    startEditingNode(id, true);
   };
 
   // Create a note card linked to an existing note
@@ -1498,7 +1507,11 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
     cards.push('Новая карточка');
     const map = yNodes.get(node.id);
     if (map) {
-      setNodeProperties(map, { description: cards.join('\n') });
+      const requiredH = Math.max(node.h, 110 + cards.length * 52);
+      setNodeProperties(map, {
+        description: cards.join('\n'),
+        h: requiredH
+      });
     }
   };
 
@@ -1784,15 +1797,28 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
       // Eraser dragging over drawing nodes
       if (activeTool === 'eraser' && (e.buttons === 1 || e.buttons === 2 || isErasing)) {
         const ERASE_PAD = 18 / viewport.zoom;
-        const hitDrawing = nodesList.find(
-          (n) =>
-            !n.deleted &&
-            n.type === 'drawing' &&
-            pos.x >= n.x - ERASE_PAD &&
-            pos.x <= n.x + n.w + ERASE_PAD &&
-            pos.y >= n.y - ERASE_PAD &&
-            pos.y <= n.y + n.h + ERASE_PAD
-        );
+        const hitDrawing = nodesList.find((n) => {
+          if (n.deleted || n.type !== 'drawing') return false;
+          if (
+            pos.x < n.x - ERASE_PAD ||
+            pos.x > n.x + n.w + ERASE_PAD ||
+            pos.y < n.y - ERASE_PAD ||
+            pos.y > n.y + n.h + ERASE_PAD
+          ) {
+            return false;
+          }
+          const pts = (n as any).points as Point[] | undefined;
+          if (pts && pts.length > 0) {
+            const sw = (n.strokeWidth || 4) + ERASE_PAD;
+            const swSq = sw * sw;
+            return pts.some((pt) => {
+              const dx = n.x + pt.x - pos.x;
+              const dy = n.y + pt.y - pos.y;
+              return dx * dx + dy * dy <= swSq;
+            });
+          }
+          return true;
+        });
         if (hitDrawing) {
           deleteSingleNode(hitDrawing.id);
         }
@@ -1935,7 +1961,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
 
         const newSelected = new Set<string>();
         for (const n of nodesList) {
-          if (n.x + n.w >= minX && n.x <= maxX && n.y + n.h >= minY && n.y <= maxY) {
+          if (!n.deleted && n.type !== 'drawing' && n.x + n.w >= minX && n.x <= maxX && n.y + n.h >= minY && n.y <= maxY) {
             newSelected.add(n.id);
           }
         }
@@ -1975,6 +2001,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
       // Reconcile dragging for single-step undo
       if (dragState) {
         const delta = dragDeltaRef.current || dragDelta;
+        const totalDist = delta ? Math.hypot(delta.dx, delta.dy) : 0;
         if (delta && (delta.dx !== 0 || delta.dy !== 0)) {
           boardDoc.transact(() => {
             dragState.initialPositions.forEach((initPos, id) => {
@@ -1985,6 +2012,13 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
               }
             });
           }, CANVAS_UNDO_ORIGIN);
+        } else if (totalDist < 4 && dragState.initialPositions.size === 1) {
+          // Click without drag: enter instant text editing
+          const clickedId = Array.from(dragState.initialPositions.keys())[0];
+          const clickedNode = nodeLookup.get(clickedId);
+          if (clickedNode && (clickedNode.type === 'text' || clickedNode.type === 'sticky' || clickedNode.type === 'shape')) {
+            startEditingNode(clickedId, false);
+          }
         }
         dragDeltaRef.current = null;
         setDragState(null);
@@ -2053,9 +2087,11 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
               w: Math.max(bbox.width, 20),
               h: Math.max(bbox.height, 20),
               svgPath: pathD,
+              points: localPoints,
               color: drawColorRef.current,
               strokeWidth: drawWidthRef.current,
-              opacity: drawModeRef.current === 'highlighter' ? 0.35 : 1,
+              drawMode: drawModeRef.current,
+              opacity: drawModeRef.current === 'highlighter' ? 0.35 : (drawModeRef.current === 'brush' ? 0.9 : 1),
               z: 25,
               deleted: false,
               locked: false
@@ -2175,14 +2211,45 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
           return;
         }
 
-        const boxNodes: BoxNode[] = visibleNodes.map((n) => ({
-          id: n.id,
-          x: n.x,
-          y: n.y,
-          width: n.w,
-          height: n.h
-        }));
-        const target = state.snappedTarget || findMagneticTargetPort(boxNodes, state.fromNodeId, pos.x, pos.y, 28);
+        const boxNodes: BoxNode[] = nodesList
+          .filter((n) => !n.deleted && n.type !== 'drawing')
+          .map((n) => ({
+            id: n.id,
+            x: n.x,
+            y: n.y,
+            width: n.w,
+            height: n.h
+          }));
+        let target = state.snappedTarget || findMagneticTargetPort(boxNodes, state.fromNodeId, pos.x, pos.y, 28);
+        if (!target) {
+          const insideCard = nodesList.find(
+            (n) =>
+              !n.deleted &&
+              n.type !== 'drawing' &&
+              n.id !== state.fromNodeId &&
+              pos.x >= n.x &&
+              pos.x <= n.x + n.w &&
+              pos.y >= n.y &&
+              pos.y <= n.y + n.h
+          );
+          if (insideCard) {
+            const box: BoxNode = { id: insideCard.id, x: insideCard.x, y: insideCard.y, width: insideCard.w, height: insideCard.h };
+            const sides: PortSide[] = ['top', 'right', 'bottom', 'left'];
+            let bestDist = Infinity;
+            let bestSide: PortSide = 'left';
+            let bestPt = { x: insideCard.x, y: insideCard.y + insideCard.h / 2 };
+            for (const s of sides) {
+              const pt = getPortCoordinates(box, s);
+              const d = Math.hypot(state.startX - pt.x, state.startY - pt.y);
+              if (d < bestDist) {
+                bestDist = d;
+                bestSide = s;
+                bestPt = pt;
+              }
+            }
+            target = { nodeId: insideCard.id, side: bestSide, point: bestPt };
+          }
+        }
 
         // Strict rejection: NEVER allow self-loops (fromNodeId === target.nodeId)
         if (target) {
@@ -2264,15 +2331,28 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
       if (activeTool === 'eraser') {
         const p = screenToCanvas(e.clientX, e.clientY);
         const ERASE_PAD = 18 / viewport.zoom;
-        const hitDrawing = nodesList.find(
-          (n) =>
-            !n.deleted &&
-            n.type === 'drawing' &&
-            p.x >= n.x - ERASE_PAD &&
-            p.x <= n.x + n.w + ERASE_PAD &&
-            p.y >= n.y - ERASE_PAD &&
-            p.y <= n.y + n.h + ERASE_PAD
-        );
+        const hitDrawing = nodesList.find((n) => {
+          if (n.deleted || n.type !== 'drawing') return false;
+          if (
+            p.x < n.x - ERASE_PAD ||
+            p.x > n.x + n.w + ERASE_PAD ||
+            p.y < n.y - ERASE_PAD ||
+            p.y > n.y + n.h + ERASE_PAD
+          ) {
+            return false;
+          }
+          const pts = (n as any).points as Point[] | undefined;
+          if (pts && pts.length > 0) {
+            const sw = (n.strokeWidth || 4) + ERASE_PAD;
+            const swSq = sw * sw;
+            return pts.some((pt) => {
+              const dx = n.x + pt.x - p.x;
+              const dy = n.y + pt.y - p.y;
+              return dx * dx + dy * dy <= swSq;
+            });
+          }
+          return true;
+        });
         if (hitDrawing) {
           deleteSingleNode(hitDrawing.id);
         }
@@ -2331,6 +2411,11 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
     if (e.button !== 0) return;
     if (dragState) return;
 
+    // If Hand tool (H) is active, do NOT intercept click - let it pan the canvas!
+    if (activeTool === 'hand') {
+      return;
+    }
+
     // If drawing with pen/brush/highlighter, do NOT intercept click - let it draw right over frames/shapes!
     if (activeTool === 'draw') {
       return;
@@ -2342,7 +2427,33 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
 
     if (activeTool === 'eraser') {
       setIsErasing(true);
-      if (!node.locked) {
+      const pos = screenToCanvas(e.clientX, e.clientY);
+      const ERASE_PAD = 18 / viewport.zoom;
+      const hitDrawing = nodesList.find((n) => {
+        if (n.deleted || n.type !== 'drawing') return false;
+        if (
+          pos.x < n.x - ERASE_PAD ||
+          pos.x > n.x + n.w + ERASE_PAD ||
+          pos.y < n.y - ERASE_PAD ||
+          pos.y > n.y + n.h + ERASE_PAD
+        ) {
+          return false;
+        }
+        const pts = (n as any).points as Point[] | undefined;
+        if (pts && pts.length > 0) {
+          const sw = (n.strokeWidth || 4) + ERASE_PAD;
+          const swSq = sw * sw;
+          return pts.some((pt) => {
+            const dx = n.x + pt.x - pos.x;
+            const dy = n.y + pt.y - pos.y;
+            return dx * dx + dy * dy <= swSq;
+          });
+        }
+        return true;
+      });
+      if (hitDrawing) {
+        deleteSingleNode(hitDrawing.id);
+      } else if (!node.locked) {
         deleteSingleNode(node.id);
       }
       return;
@@ -3011,24 +3122,24 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
                 <div class="miro-draw-modes">
                   <button
                     class={`miro-draw-mode-btn ${activeTool === 'draw' && drawMode === 'pen' ? 'active' : ''}`}
-                    onClick={() => { setActiveTool('draw'); setDrawMode('pen'); setDrawWidth(3); }}
+                    onClick={() => { setActiveTool('draw'); setDrawMode('pen'); }}
                   >
                     <Icon name="pen" size={14} />
-                    <span>Ручка (3px)</span>
+                    <span>Ручка</span>
                   </button>
                   <button
                     class={`miro-draw-mode-btn ${activeTool === 'draw' && drawMode === 'brush' ? 'active' : ''}`}
-                    onClick={() => { setActiveTool('draw'); setDrawMode('brush'); setDrawWidth(8); }}
+                    onClick={() => { setActiveTool('draw'); setDrawMode('brush'); }}
                   >
                     <Icon name="brush" size={14} />
-                    <span>Кисть (8px)</span>
+                    <span>Кисть</span>
                   </button>
                   <button
                     class={`miro-draw-mode-btn ${activeTool === 'draw' && drawMode === 'highlighter' ? 'active' : ''}`}
-                    onClick={() => { setActiveTool('draw'); setDrawMode('highlighter'); setDrawWidth(22); }}
+                    onClick={() => { setActiveTool('draw'); setDrawMode('highlighter'); }}
                   >
                     <Icon name="brush" size={14} />
-                    <span>Маркер (22px)</span>
+                    <span>Маркер</span>
                   </button>
                   <button
                     class={`miro-draw-mode-btn ${activeTool === 'eraser' ? 'active' : ''}`}
@@ -3286,7 +3397,6 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
             class={`draw-mode-btn ${drawMode === 'pen' ? 'active' : ''}`}
             onClick={() => {
               setDrawMode('pen');
-              setDrawWidth(3);
             }}
           >
             Ручка
@@ -3296,7 +3406,6 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
             class={`draw-mode-btn ${drawMode === 'brush' ? 'active' : ''}`}
             onClick={() => {
               setDrawMode('brush');
-              setDrawWidth(6);
             }}
           >
             Кисть
@@ -3306,7 +3415,6 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
             class={`draw-mode-btn ${drawMode === 'highlighter' ? 'active' : ''}`}
             onClick={() => {
               setDrawMode('highlighter');
-              setDrawWidth(20);
             }}
           >
             Маркер
@@ -3316,7 +3424,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
 
           {/* Stroke Width Selector */}
           <div style={{ display: 'flex', gap: '4px' }}>
-            {[2, 4, 8, 16].map((w) => (
+            {[2, 4, 8, 16, 24].map((w) => (
               <button
                 key={w}
                 type="button"
@@ -3420,14 +3528,17 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
           <div class="inspector-font-sizes">
             <button
               class="inspector-size-btn"
-              title="Размер S (Текст: 14px / Линия: 2px)"
+              title="Размер S (14px)"
               onClick={() => {
                 boardDoc.transact(() => {
                   for (const id of selectedNodeIds) {
                     const map = yNodes.get(id);
                     if (map) {
                       map.set('fontSize', 14);
-                      map.set('strokeWidth', 2);
+                      const n = nodeLookup.get(id);
+                      if (n?.type === 'shape') {
+                        map.set('strokeWidth', 2);
+                      }
                     }
                   }
                 }, 'user');
@@ -3437,14 +3548,17 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
             </button>
             <button
               class="inspector-size-btn"
-              title="Размер M (Текст: 18px / Линия: 4px)"
+              title="Размер M (18px)"
               onClick={() => {
                 boardDoc.transact(() => {
                   for (const id of selectedNodeIds) {
                     const map = yNodes.get(id);
                     if (map) {
                       map.set('fontSize', 18);
-                      map.set('strokeWidth', 4);
+                      const n = nodeLookup.get(id);
+                      if (n?.type === 'shape') {
+                        map.set('strokeWidth', 3);
+                      }
                     }
                   }
                 }, 'user');
@@ -3454,14 +3568,17 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
             </button>
             <button
               class="inspector-size-btn"
-              title="Размер L (Текст: 24px / Линия: 8px)"
+              title="Размер L (24px)"
               onClick={() => {
                 boardDoc.transact(() => {
                   for (const id of selectedNodeIds) {
                     const map = yNodes.get(id);
                     if (map) {
                       map.set('fontSize', 24);
-                      map.set('strokeWidth', 8);
+                      const n = nodeLookup.get(id);
+                      if (n?.type === 'shape') {
+                        map.set('strokeWidth', 4);
+                      }
                     }
                   }
                 }, 'user');
@@ -3471,14 +3588,17 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
             </button>
             <button
               class="inspector-size-btn"
-              title="Размер XL (Текст: 32px / Линия: 14px)"
+              title="Размер XL (32px)"
               onClick={() => {
                 boardDoc.transact(() => {
                   for (const id of selectedNodeIds) {
                     const map = yNodes.get(id);
                     if (map) {
                       map.set('fontSize', 32);
-                      map.set('strokeWidth', 14);
+                      const n = nodeLookup.get(id);
+                      if (n?.type === 'shape') {
+                        map.set('strokeWidth', 6);
+                      }
                     }
                   }
                 }, 'user');
@@ -3949,20 +4069,6 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
               )}
             </g>
           )}
-
-          {/* Live freehand drawing stroke preview */}
-          {currentStroke && currentStroke.length > 1 && (
-            <path
-              d={pointsToSmoothSvgPath(currentStroke)}
-              stroke={drawColor}
-              style={{ stroke: drawColor }}
-              strokeWidth={drawWidth}
-              fill="none"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              opacity={drawMode === 'highlighter' ? 0.35 : 1}
-            />
-          )}
         </svg>
 
         {/* Real-time Ghost Drop Preview Card */}
@@ -3981,13 +4087,12 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
           </div>
         )}
 
-        {/* Nodes Layer */}
-        {visibleNodes.map((rawNode) => {
+        {/* Nodes Layer (Drawings rendered in dedicated pure ink layer) */}
+        {visibleNodes.filter((n) => n.type !== 'drawing').map((rawNode) => {
           const node = nodeLookup.get(rawNode.id) || rawNode;
           const isSelected = selectedNodeIds.has(node.id);
           const nodeColorHex = CANVAS_COLORS[node.color || ''] || CANVAS_COLORS.default;
           const isFrame = node.type === 'frame';
-          const isDrawing = node.type === 'drawing';
           const isNote = node.type === 'note';
           const shapeClass = node.type === 'shape' && node.shapeVariant ? `shape-variant-${node.shapeVariant}` : '';
 
@@ -3995,45 +4100,37 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
             <div
               key={node.id}
               data-node-id={node.id}
-              class={`board-node-box type-${node.type} ${shapeClass} ${isSelected ? 'selected' : ''} ${node.locked ? 'locked' : ''}`}
+              class={`board-node-box type-${node.type} ${shapeClass} ${isSelected ? 'selected' : ''} ${editingNodeId === node.id ? 'editing' : ''} ${node.locked ? 'locked' : ''}`}
               style={{
                 left: `${node.x}px`,
                 top: `${node.y}px`,
                 width: `${node.w}px`,
                 height: `${node.h}px`,
-                borderColor: isFrame ? 'rgba(255, 255, 255, 0.15)' : isDrawing ? 'transparent' : nodeColorHex,
-                zIndex: node.z ?? (isFrame ? 1 : isDrawing ? 25 : 10)
+                borderColor: isFrame ? 'rgba(255, 255, 255, 0.15)' : node.type === 'text' ? 'transparent' : nodeColorHex,
+                zIndex: node.z ?? (isFrame ? 1 : 10)
               }}
               onMouseDown={(e) => handleNodePointerDown(node, e as any)}
               onDblClick={() => {
-                setEditingNodeId(node.id);
-                setTimeout(() => {
-                  const ta = document.getElementById(`node-textarea-${node.id}`);
-                  if (ta) (ta as HTMLTextAreaElement).focus();
-                }, 10);
+                startEditingNode(node.id, false);
               }}
             >
-              {/* 4 Magnetic Connector Ports (never on drawing nodes) */}
-              {!isDrawing && (
-                <>
-                  <div
-                    class="magnetic-port port-top"
-                    onMouseDown={(e) => handlePortPointerDown(node.id, 'top', e as any)}
-                  />
-                  <div
-                    class="magnetic-port port-right"
-                    onMouseDown={(e) => handlePortPointerDown(node.id, 'right', e as any)}
-                  />
-                  <div
-                    class="magnetic-port port-bottom"
-                    onMouseDown={(e) => handlePortPointerDown(node.id, 'bottom', e as any)}
-                  />
-                  <div
-                    class="magnetic-port port-left"
-                    onMouseDown={(e) => handlePortPointerDown(node.id, 'left', e as any)}
-                  />
-                </>
-              )}
+              {/* 4 Magnetic Connector Ports */}
+              <div
+                class="magnetic-port port-top"
+                onMouseDown={(e) => handlePortPointerDown(node.id, 'top', e as any)}
+              />
+              <div
+                class="magnetic-port port-right"
+                onMouseDown={(e) => handlePortPointerDown(node.id, 'right', e as any)}
+              />
+              <div
+                class="magnetic-port port-bottom"
+                onMouseDown={(e) => handlePortPointerDown(node.id, 'bottom', e as any)}
+              />
+              <div
+                class="magnetic-port port-left"
+                onMouseDown={(e) => handlePortPointerDown(node.id, 'left', e as any)}
+              />
 
               {/* Top drag bar for sticky notes */}
               {node.type === 'sticky' && (
@@ -4082,29 +4179,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
               )}
 
               {/* Node Content */}
-              {node.type === 'drawing' ? (
-                <div style={{ width: '100%', height: '100%', pointerEvents: 'none' }}>
-                  <svg
-                    style={{
-                      width: '100%',
-                      height: '100%',
-                      overflow: 'visible',
-                      pointerEvents: 'none'
-                    }}
-                  >
-                    <path
-                      d={node.svgPath}
-                      stroke={node.color || '#818cf8'}
-                      style={{ stroke: node.color || '#818cf8' }}
-                      strokeWidth={node.strokeWidth || 3}
-                      fill="none"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      opacity={node.opacity ?? 1}
-                    />
-                  </svg>
-                </div>
-              ) : isNote ? (
+              {isNote ? (
                 (() => {
                   const noteMeta = node.noteId ? maps.notes.get(node.noteId) : null;
                   const isDeleted = !noteMeta || noteMeta.deleted;
@@ -4197,25 +4272,8 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
                     );
                   }
                   const isPdf = (node.fileName || '').toLowerCase().endsWith('.pdf');
-                  const isExpanded = node.showPreview ?? previewDocIds.has(node.id);
-                  const togglePreview = (e: MouseEvent) => {
-                    e.stopPropagation();
-                    const next = !isExpanded;
-                    setPreviewDocIds((prev) => {
-                      const s = new Set(prev);
-                      if (next) s.add(node.id);
-                      else s.delete(node.id);
-                      return s;
-                    });
-                    const map = yNodes.get(node.id);
-                    if (map) {
-                      map.set('showPreview', next);
-                      if (next && node.h < 260) {
-                        map.set('h', 280);
-                        map.set('w', Math.max(node.w, 340));
-                      }
-                    }
-                  };
+                  const DOC_BASE_WIDTH = 620;
+                  const scale = Math.max(0.2, node.w / DOC_BASE_WIDTH);
 
                   const convertToNote = (e: MouseEvent) => {
                     e.stopPropagation();
@@ -4231,7 +4289,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
                   };
 
                   return (
-                    <div class="node-file-wrapper" onMouseDown={(e) => handleNodePointerDown(node, e as any)}>
+                    <div class="node-file-wrapper miro-document-card" onMouseDown={(e) => handleNodePointerDown(node, e as any)}>
                       <div class="node-file-header" onMouseDown={(e) => handleNodePointerDown(node, e as any)}>
                         <div class="node-file-title-group">
                           <Icon name="file-text" size={16} />
@@ -4240,17 +4298,6 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
                           </span>
                         </div>
                         <div class="node-file-actions" onMouseDown={(e) => e.stopPropagation()}>
-                          {(node.extractedText || isPdf) && (
-                            <button
-                              type="button"
-                              class={`node-file-btn ${isExpanded ? 'active' : ''}`}
-                              onClick={togglePreview}
-                              title={isExpanded ? 'Скрыть содержимое' : 'Читать на доске'}
-                            >
-                              <Icon name="eye" size={12} />
-                              <span>{isExpanded ? 'Скрыть' : 'Читать'}</span>
-                            </button>
-                          )}
                           {node.extractedText && (
                             <button
                               type="button"
@@ -4276,22 +4323,31 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
                         </div>
                       </div>
 
-                      {isExpanded && (
-                        isPdf ? (
-                          <iframe
-                            src={`/api/attachments/${node.fileHash}`}
-                            class="node-file-pdf-iframe"
-                            title={node.fileName || 'PDF'}
-                          />
-                        ) : (
+                      {isPdf ? (
+                        <iframe
+                          src={`/api/attachments/${node.fileHash}`}
+                          class="node-file-pdf-iframe"
+                          title={node.fileName || 'PDF'}
+                        />
+                      ) : (
+                        <div
+                          class="node-doc-page-container scrollable-card-content"
+                          onWheel={(e) => {
+                            if (!e.ctrlKey && !e.metaKey) e.stopPropagation();
+                          }}
+                          onMouseDown={(e) => e.stopPropagation()}
+                        >
                           <div
-                            class="node-file-reader-body scrollable-card-content"
-                            onWheel={(e) => e.stopPropagation()}
-                            onMouseDown={(e) => e.stopPropagation()}
+                            class="node-doc-sheet"
+                            style={{
+                              width: `${DOC_BASE_WIDTH}px`,
+                              transform: `scale(${scale})`,
+                              transformOrigin: 'top left'
+                            }}
                           >
                             {node.extractedText || 'Текст документа извлекается или пуст...'}
                           </div>
-                        )
+                        </div>
                       )}
                     </div>
                   );
@@ -4317,8 +4373,16 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
                     }}
                     onBlur={() => setEditingNodeId(null)}
                     onMouseDown={(e) => {
-                      if (editingNodeId !== node.id) return;
-                      e.stopPropagation();
+                      if (editingNodeId === node.id) e.stopPropagation();
+                    }}
+                    onPointerDown={(e) => {
+                      if (editingNodeId === node.id) e.stopPropagation();
+                    }}
+                    onClick={(e) => {
+                      if (editingNodeId === node.id) e.stopPropagation();
+                    }}
+                    onDblClick={(e) => {
+                      if (editingNodeId === node.id) e.stopPropagation();
                     }}
                     onFocus={() => setSelectedNodeIds(new Set([node.id]))}
                     onInput={(e) => {
@@ -4641,8 +4705,16 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
                   }}
                   onBlur={() => setEditingNodeId(null)}
                   onMouseDown={(e) => {
-                    if (editingNodeId !== node.id) return;
-                    e.stopPropagation();
+                    if (editingNodeId === node.id) e.stopPropagation();
+                  }}
+                  onPointerDown={(e) => {
+                    if (editingNodeId === node.id) e.stopPropagation();
+                  }}
+                  onClick={(e) => {
+                    if (editingNodeId === node.id) e.stopPropagation();
+                  }}
+                  onDblClick={(e) => {
+                    if (editingNodeId === node.id) e.stopPropagation();
                   }}
                   onFocus={() => setSelectedNodeIds(new Set([node.id]))}
                   onInput={(e) => {
@@ -4719,6 +4791,112 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
             </div>
           );
         })}
+
+        {/* Dedicated Pure Vector Ink Layer (Drawings never have selection boxes or resize handles) */}
+        <svg
+          class="miro-ink-layer"
+          style={{
+            position: 'absolute',
+            left: 0,
+            top: 0,
+            width: '100%',
+            height: '100%',
+            overflow: 'visible',
+            pointerEvents: 'none',
+            zIndex: 25
+          }}
+        >
+          {nodesList
+            .filter((n) => !n.deleted && n.type === 'drawing')
+            .map((drawNode) => {
+              const mode =
+                (drawNode as any).drawMode ||
+                (drawNode.opacity && drawNode.opacity < 0.5 ? 'highlighter' : 'pen');
+              const baseWidth = drawNode.strokeWidth || 4;
+              const color = drawNode.color || '#818cf8';
+
+              let sw = baseWidth;
+              let strokeLinecap: 'round' | 'square' = 'round';
+              let opacity = drawNode.opacity ?? 1;
+              let filter: string | undefined = undefined;
+              let mixBlendMode: any = undefined;
+
+              if (mode === 'brush') {
+                sw = Math.round(baseWidth * 1.75);
+                strokeLinecap = 'round';
+                opacity = 0.9;
+                filter = `drop-shadow(0 0 ${Math.max(2, baseWidth * 0.4)}px ${color})`;
+              } else if (mode === 'highlighter') {
+                sw = Math.round(baseWidth * 3.0);
+                strokeLinecap = 'square';
+                opacity = 0.35;
+                mixBlendMode = theme.value === 'dark' ? 'screen' : 'multiply';
+              } else {
+                sw = baseWidth;
+                strokeLinecap = 'round';
+                opacity = 1;
+              }
+
+              return (
+                <g
+                  key={drawNode.id}
+                  transform={`translate(${drawNode.x}, ${drawNode.y})`}
+                  style={{ pointerEvents: 'none' }}
+                >
+                  <path
+                    d={drawNode.svgPath}
+                    fill="none"
+                    stroke={color}
+                    strokeWidth={sw}
+                    strokeLinecap={strokeLinecap}
+                    strokeLinejoin="round"
+                    style={{
+                      stroke: color,
+                      opacity,
+                      filter,
+                      mixBlendMode
+                    }}
+                  />
+                </g>
+              );
+            })}
+
+          {/* Live freehand drawing stroke preview */}
+          {currentStroke && currentStroke.length > 1 && (() => {
+            const mode = drawMode;
+            const baseWidth = drawWidth;
+            const color = drawColor;
+            let sw = baseWidth;
+            let strokeLinecap: 'round' | 'square' = 'round';
+            let opacity = 1;
+            let filter: string | undefined = undefined;
+            let mixBlendMode: any = undefined;
+
+            if (mode === 'brush') {
+              sw = Math.round(baseWidth * 1.75);
+              strokeLinecap = 'round';
+              opacity = 0.9;
+              filter = `drop-shadow(0 0 ${Math.max(2, baseWidth * 0.4)}px ${color})`;
+            } else if (mode === 'highlighter') {
+              sw = Math.round(baseWidth * 3.0);
+              strokeLinecap = 'square';
+              opacity = 0.35;
+              mixBlendMode = theme.value === 'dark' ? 'screen' : 'multiply';
+            }
+
+            return (
+              <path
+                d={pointsToSmoothSvgPath(currentStroke)}
+                stroke={color}
+                style={{ stroke: color, opacity, filter, mixBlendMode }}
+                strokeWidth={sw}
+                fill="none"
+                strokeLinecap={strokeLinecap}
+                strokeLinejoin="round"
+              />
+            );
+          })()}
+        </svg>
 
         {/* Marquee Selection Box */}
         {marqueeBox && (
