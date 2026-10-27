@@ -87,7 +87,8 @@ export function NotesDrawer({
 
   return (
     <div
-      class="notes-slide-drawer liquid-glass-surface"
+      class="notes-slide-drawer miro-notes-drawer liquid-glass-surface"
+      data-testid="notes-slide-drawer"
       onMouseDown={(e) => e.stopPropagation()}
       onClick={(e) => e.stopPropagation()}
     >

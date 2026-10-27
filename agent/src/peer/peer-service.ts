@@ -114,6 +114,8 @@ export class PeerService extends EventEmitter {
       this.discoveryService = new PeerDiscoveryService({
         teamKey: this.config.teamKey,
         wsPort: this.config.peerPort,
+        webPort: this.config.webPort,
+        displayName: this.config.memberName,
         peerId: this.nodeIdentity.peerId,
         bindAddress: host
       });
@@ -483,10 +485,22 @@ export class PeerService extends EventEmitter {
     }
   }
 
+  public getDiscoveredLanRooms() {
+    return this.discoveryService ? this.discoveryService.getDiscoveredRooms() : [];
+  }
+
   public addPeer(rawAddress: string): void {
     let clean = rawAddress.trim();
     if (clean.startsWith('doks://')) {
       clean = clean.slice(7);
+    } else if (clean.startsWith('http://')) {
+      clean = clean.slice(7);
+    } else if (clean.startsWith('https://')) {
+      clean = clean.slice(8);
+    } else if (clean.startsWith('ws://')) {
+      clean = clean.slice(5);
+    } else if (clean.startsWith('wss://')) {
+      clean = clean.slice(6);
     }
 
     let teamKeyFromInvite: string | undefined;
@@ -506,8 +520,13 @@ export class PeerService extends EventEmitter {
       logger.info('[PeerService] Adopted teamKey from invite for peer mesh');
     }
 
-    const addresses = clean.split(',').map((a) => a.trim()).filter(Boolean);
-    for (const address of addresses) {
+    const rawList = clean.split(',').map((a) => a.trim()).filter(Boolean);
+    for (let address of rawList) {
+      // If address is just an IP without port (e.g. 26.153.49.48), default port to peerPort (4747)
+      if (!address.includes(':')) {
+        address = `${address}:${this.config.peerPort || 4747}`;
+      }
+
       if (!this.outboundPeers.has(address)) {
         this.outboundPeers.set(address, {
           address,

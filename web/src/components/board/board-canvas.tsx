@@ -289,6 +289,9 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
   const [isAutoDiagramModalOpen, setIsAutoDiagramModalOpen] = useState(false);
   const [activeColor, setActiveColor] = useState<string>('3');
 
+  // Editing node state (Miro standard: single click drags, double click edits)
+  const [editingNodeId, setEditingNodeId] = useState<string | null>(null);
+
   // Freehand drawing state
   const [drawMode, setDrawMode] = useState<'pen' | 'brush' | 'highlighter'>('pen');
   const [drawWidth, setDrawWidth] = useState<number>(3);
@@ -296,6 +299,26 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
   const [currentStroke, setCurrentStroke] = useState<Point[] | null>(null);
   const currentStrokeRef = useRef<Point[] | null>(null);
   currentStrokeRef.current = currentStroke;
+
+  // Immediate refs to prevent stale closures during drawing and tool manipulation
+  const activeColorRef = useRef<string>(activeColor);
+  activeColorRef.current = activeColor;
+  const drawColorRef = useRef<string>(drawColor);
+  drawColorRef.current = drawColor;
+  const drawWidthRef = useRef<number>(drawWidth);
+  drawWidthRef.current = drawWidth;
+  const drawModeRef = useRef<'pen' | 'brush' | 'highlighter'>(drawMode);
+  drawModeRef.current = drawMode;
+
+  const selectActiveColor = useCallback((color: string) => {
+    activeColorRef.current = color;
+    setActiveColor(color);
+    const hex = CANVAS_COLORS[color] || color;
+    drawColorRef.current = hex;
+    setDrawColor(hex);
+  }, []);
+
+  const [cursorScreenPos, setCursorScreenPos] = useState<{ x: number; y: number } | null>(null);
 
   // Document inline reader expanded state per node
   const [previewDocIds, setPreviewDocIds] = useState<Set<string>>(new Set());
@@ -584,7 +607,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
 
     const um = new Y.UndoManager([yNodes, yEdges], {
       trackedOrigins: new Set([null, undefined, 'user', CANVAS_UNDO_ORIGIN]),
-      captureTimeout: 400
+      captureTimeout: 300
     });
     undoManagerRef.current = um;
 
@@ -794,9 +817,67 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
     }
   };
 
+  // Native non-passive window wheel listener to prevent native browser page zoom hijacking (Ctrl + Wheel)
+  useEffect(() => {
+    const preventBrowserZoom = (e: WheelEvent) => {
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+      }
+    };
+    window.addEventListener('wheel', preventBrowserZoom, { passive: false });
+    return () => window.removeEventListener('wheel', preventBrowserZoom);
+  }, []);
+
+  // Attach canvas container wheel listener with { passive: false } for reliable e.preventDefault()
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => handleWheel(e);
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
+  }, []);
+
   // Keyboard shortcuts (Physical keycode layout-independent)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Browser Zoom Key interception: Ctrl/Cmd + Plus, Minus, Zero
+      if (e.ctrlKey || e.metaKey) {
+        if (e.code === 'Equal' || e.code === 'NumpadAdd' || e.key === '+' || e.key === '=') {
+          e.preventDefault();
+          handleZoomByFactor(1.25);
+          return;
+        }
+        if (e.code === 'Minus' || e.code === 'NumpadSubtract' || e.key === '-') {
+          e.preventDefault();
+          handleZoomByFactor(0.8);
+          return;
+        }
+        if (e.code === 'Digit0' || e.code === 'Numpad0' || e.key === '0') {
+          e.preventDefault();
+          handleResetZoom();
+          return;
+        }
+      }
+
+      // Global Undo / Redo: Executed EVEN IF focus is inside an input/textarea of a card
+      if (matchShortcut(e, 'mod+z')) {
+        e.preventDefault();
+        if (document.activeElement instanceof HTMLElement && isEditableElementFocused()) {
+          document.activeElement.blur();
+        }
+        undoManagerRef.current?.undo();
+        return;
+      }
+      if (matchShortcut(e, 'mod+shift+z') || matchShortcut(e, 'mod+y')) {
+        e.preventDefault();
+        if (document.activeElement instanceof HTMLElement && isEditableElementFocused()) {
+          document.activeElement.blur();
+        }
+        undoManagerRef.current?.redo();
+        return;
+      }
+
+      // For all subsequent single-key hotkeys, ignore if user is typing inside an editable field
       if (isEditableElementFocused()) return;
 
       // Spacebar for Pan
@@ -815,18 +896,6 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
       if (matchShortcut(e, 'mod+p') || matchShortcut(e, 'mod+k')) {
         e.preventDefault();
         isCommandPaletteOpen.value = !isCommandPaletteOpen.value;
-        return;
-      }
-
-      // Undo / Redo
-      if (matchShortcut(e, 'mod+z')) {
-        e.preventDefault();
-        undoManagerRef.current?.undo();
-        return;
-      }
-      if (matchShortcut(e, 'mod+shift+z') || matchShortcut(e, 'mod+y')) {
-        e.preventDefault();
-        undoManagerRef.current?.redo();
         return;
       }
 
@@ -1348,7 +1417,8 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
     items.splice(idx, 1);
     const newText = serializeChecklistItems(items);
     const map = yNodes.get(node.id);
-    if (map) setNodeProperties(map, { text: newText });
+    const calculatedHeight = Math.max(160, 85 + items.length * 36);
+    if (map) setNodeProperties(map, { text: newText, h: calculatedHeight });
   };
 
   const handleAddChecklistItem = (node: BoardNodeData) => {
@@ -1356,7 +1426,8 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
     items.push({ id: `item-${items.length}`, text: 'Новая задача', done: false });
     const newText = serializeChecklistItems(items);
     const map = yNodes.get(node.id);
-    if (map) setNodeProperties(map, { text: newText });
+    const calculatedHeight = Math.max(160, 85 + items.length * 36);
+    if (map) setNodeProperties(map, { text: newText, h: calculatedHeight });
   };
 
   // Table helpers
@@ -1384,14 +1455,16 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
     const cols = table[0]?.length || 3;
     table.push(Array(cols).fill(''));
     const map = yNodes.get(node.id);
-    if (map) setNodeProperties(map, { text: JSON.stringify(table) });
+    const calculatedHeight = Math.max(140, 50 + table.length * 38);
+    if (map) setNodeProperties(map, { text: JSON.stringify(table), h: calculatedHeight });
   };
 
   const handleAddTableCol = (node: BoardNodeData) => {
     const table = parseTableData(node.text);
     for (const row of table) row.push('');
     const map = yNodes.get(node.id);
-    if (map) setNodeProperties(map, { text: JSON.stringify(table) });
+    const calculatedWidth = Math.max(340, (table[0]?.length || 3) * 110);
+    if (map) setNodeProperties(map, { text: JSON.stringify(table), w: calculatedWidth });
   };
 
   const handleDelTableRow = (node: BoardNodeData) => {
@@ -1399,7 +1472,8 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
     if (table.length > 1) {
       table.pop();
       const map = yNodes.get(node.id);
-      if (map) setNodeProperties(map, { text: JSON.stringify(table) });
+      const calculatedHeight = Math.max(140, 50 + table.length * 38);
+      if (map) setNodeProperties(map, { text: JSON.stringify(table), h: calculatedHeight });
     }
   };
 
@@ -1408,7 +1482,8 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
     if (table[0]?.length > 1) {
       for (const row of table) row.pop();
       const map = yNodes.get(node.id);
-      if (map) setNodeProperties(map, { text: JSON.stringify(table) });
+      const calculatedWidth = Math.max(340, (table[0]?.length || 3) * 110);
+      if (map) setNodeProperties(map, { text: JSON.stringify(table), w: calculatedWidth });
     }
   };
 
@@ -1677,6 +1752,11 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
   // Global Pointer Events
   useEffect(() => {
     const handleGlobalPointerMove = (e: PointerEvent) => {
+      if (activeTool === 'draw') {
+        setCursorScreenPos({ x: e.clientX, y: e.clientY });
+      } else {
+        setCursorScreenPos(null);
+      }
       const pos = screenToCanvas(e.clientX, e.clientY);
       lastMouseCanvasPosRef.current = pos;
       awareness.setLocalStateField('cursor', {
@@ -1973,14 +2053,15 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
               w: Math.max(bbox.width, 20),
               h: Math.max(bbox.height, 20),
               svgPath: pathD,
-              color: drawColor,
-              strokeWidth: drawWidth,
-              opacity: drawMode === 'highlighter' ? 0.35 : 1,
+              color: drawColorRef.current,
+              strokeWidth: drawWidthRef.current,
+              opacity: drawModeRef.current === 'highlighter' ? 0.35 : 1,
               z: 25,
               deleted: false,
               locked: false
             });
           }, CANVAS_UNDO_ORIGIN);
+          undoManagerRef.current?.stopCapturing();
         }
       }
 
@@ -2267,7 +2348,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
       return;
     }
 
-    // If any creation tool is active, spawn that node directly over the clicked container (e.g. Frame, Shape)
+    // If any creation tool is active, spawn node inside frame or auto-switch to select on existing node
     if (
       activeTool === 'sticky' ||
       activeTool === 'shape' ||
@@ -2278,16 +2359,20 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
       activeTool === 'code' ||
       activeTool === 'frame'
     ) {
-      const pos = screenToCanvas(e.clientX, e.clientY);
-      if (activeTool === 'sticky') createNodeAt('sticky', pos.x - 100, pos.y - 65, activeColor);
-      else if (activeTool === 'shape') createNodeAt('shape', pos.x - 90, pos.y - 90);
-      else if (activeTool === 'text') createNodeAt('text', pos.x - 110, pos.y - 40);
-      else if (activeTool === 'checklist') createNodeAt('checklist', pos.x - 140, pos.y - 100);
-      else if (activeTool === 'table') createNodeAt('table', pos.x - 170, pos.y - 90);
-      else if (activeTool === 'kanban') createNodeAt('kanban', pos.x - 140, pos.y - 200);
-      else if (activeTool === 'code') createNodeAt('code', pos.x - 180, pos.y - 110);
-      else if (activeTool === 'frame') createNodeAt('frame', pos.x - 210, pos.y - 160);
-      return;
+      if (node.type === 'frame') {
+        const pos = screenToCanvas(e.clientX, e.clientY);
+        if (activeTool === 'sticky') createNodeAt('sticky', pos.x - 100, pos.y - 65, activeColor);
+        else if (activeTool === 'shape') createNodeAt('shape', pos.x - 90, pos.y - 90);
+        else if (activeTool === 'text') createNodeAt('text', pos.x - 110, pos.y - 40);
+        else if (activeTool === 'checklist') createNodeAt('checklist', pos.x - 140, pos.y - 100);
+        else if (activeTool === 'table') createNodeAt('table', pos.x - 170, pos.y - 90);
+        else if (activeTool === 'kanban') createNodeAt('kanban', pos.x - 140, pos.y - 200);
+        else if (activeTool === 'code') createNodeAt('code', pos.x - 180, pos.y - 110);
+        else if (activeTool === 'frame') createNodeAt('frame', pos.x - 210, pos.y - 160);
+        return;
+      }
+      // Clicking an existing card automatically switches to 'select' to drag it
+      setActiveTool('select');
     }
 
     if (activeTool === 'arrow') {
@@ -2484,7 +2569,6 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
     <div
       class={`board-container ${activeTool === 'hand' || isSpacePressed ? 'cursor-grab' : ''} ${gridType === 'lines' ? 'grid-lines' : gridType === 'none' ? 'grid-none' : ''}`}
       ref={containerRef}
-      onWheel={(e) => handleWheel(e as any)}
       onMouseDown={handleBackgroundPointerDown}
       onContextMenu={handleContextMenu}
       onDragOver={(e) => {
@@ -2600,32 +2684,6 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
             <span>Команда</span>
           </button>
         </div>
-
-        <div class="miro-divider" />
-
-        {/* Export / File Dropdown */}
-        <button
-          class="miro-action-btn"
-          onClick={() => {
-            setIsExportMenuOpen(!isExportMenuOpen);
-            setIsBoardsPopoverOpen(false);
-          }}
-          title="Файл, экспорт и резервное копирование"
-        >
-          <Icon name="download" size={14} />
-          <span>Экспорт</span>
-        </button>
-
-        {/* Cross-scope promotion bridge */}
-        <button
-          class="miro-action-btn"
-          data-testid="scope-transfer-btn"
-          onClick={() => handleOpenTransferModal()}
-          title={currentScope.value === 'solo' ? 'Опубликовать доску в Команду' : 'Склонировать доску в Соло'}
-        >
-          <Icon name={currentScope.value === 'solo' ? 'promote' : 'fork'} size={14} />
-          <span>{currentScope.value === 'solo' ? 'В Команду' : 'В Соло'}</span>
-        </button>
 
         {/* Boards & Templates Dropdown Popover */}
         {isBoardsPopoverOpen && (
@@ -2777,7 +2835,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
                       class={`miro-sticky-swatch ${activeColor === key ? 'active' : ''}`}
                       style={{ backgroundColor: hex }}
                       onClick={() => {
-                        setActiveColor(key);
+                        selectActiveColor(key);
                         setActiveTool('sticky');
                         setActiveFlyout('none');
                       }}
@@ -2924,6 +2982,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
             <button
               class={`miro-dock-btn ${activeTool === 'draw' || activeTool === 'eraser' ? 'active' : ''}`}
               data-tool="draw"
+              style={{ position: 'relative' }}
               onClick={() => {
                 setActiveTool('draw');
                 setActiveFlyout(activeFlyout === 'draw' ? 'none' : 'draw');
@@ -2931,6 +2990,20 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
               title="Свободное рисование (P / E)"
             >
               <Icon name={activeTool === 'eraser' ? 'eraser' : 'pen'} size={20} />
+              {activeTool !== 'eraser' && (
+                <span
+                  style={{
+                    position: 'absolute',
+                    bottom: '4px',
+                    right: '4px',
+                    width: '6px',
+                    height: '6px',
+                    borderRadius: '50%',
+                    backgroundColor: drawColor,
+                    border: '1px solid rgba(0,0,0,0.5)'
+                  }}
+                />
+              )}
             </button>
             {activeFlyout === 'draw' && (
               <div class="miro-flyout-menu liquid-glass-surface" style={{ width: '220px' }}>
@@ -2973,7 +3046,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
                       type="button"
                       class={`drawing-color-swatch ${drawColor === col ? 'active' : ''}`}
                       style={{ backgroundColor: col }}
-                      onClick={() => setDrawColor(col)}
+                      onClick={() => selectActiveColor(col)}
                     />
                   ))}
                 </div>
@@ -3265,7 +3338,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
                 type="button"
                 class={`color-dot palette-swatch ${drawColor === c ? 'active' : ''}`}
                 style={{ backgroundColor: c }}
-                onClick={() => setDrawColor(c)}
+                onClick={() => selectActiveColor(c)}
               />
             ))}
           </div>
@@ -3329,7 +3402,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
                 class={`palette-swatch ${activeColor === key ? 'active' : ''}`}
                 style={{ backgroundColor: hex }}
                 onClick={() => {
-                  setActiveColor(key);
+                  selectActiveColor(key);
                   boardDoc.transact(() => {
                     for (const id of selectedNodeIds) {
                       const map = yNodes.get(id);
@@ -3555,6 +3628,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
           {/* Promote / Fork bridge */}
           <button
             class="inspector-btn"
+            data-testid="scope-transfer-btn"
             title={currentScope.value === 'solo' ? 'Опубликовать в Команду' : 'Склонировать в Соло'}
             onClick={() => handleOpenTransferModal()}
           >
@@ -3881,6 +3955,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
             <path
               d={pointsToSmoothSvgPath(currentStroke)}
               stroke={drawColor}
+              style={{ stroke: drawColor }}
               strokeWidth={drawWidth}
               fill="none"
               strokeLinecap="round"
@@ -3930,6 +4005,13 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
                 zIndex: node.z ?? (isFrame ? 1 : isDrawing ? 25 : 10)
               }}
               onMouseDown={(e) => handleNodePointerDown(node, e as any)}
+              onDblClick={() => {
+                setEditingNodeId(node.id);
+                setTimeout(() => {
+                  const ta = document.getElementById(`node-textarea-${node.id}`);
+                  if (ta) (ta as HTMLTextAreaElement).focus();
+                }, 10);
+              }}
             >
               {/* 4 Magnetic Connector Ports (never on drawing nodes) */}
               {!isDrawing && (
@@ -4013,6 +4095,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
                     <path
                       d={node.svgPath}
                       stroke={node.color || '#818cf8'}
+                      style={{ stroke: node.color || '#818cf8' }}
                       strokeWidth={node.strokeWidth || 3}
                       fill="none"
                       strokeLinecap="round"
@@ -4225,14 +4308,17 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
                     class="node-inline-textarea shape-inline-textarea"
                     style={{
                       fontSize: node.fontSize ? `${node.fontSize}px` : undefined,
-                      pointerEvents: 'auto'
+                      pointerEvents: editingNodeId === node.id ? 'auto' : 'none'
                     }}
                     value={node.text}
                     placeholder="Введите текст..."
-                    onWheel={(e) => e.stopPropagation()}
+                    onWheel={(e) => {
+                      if (!e.ctrlKey && !e.metaKey) e.stopPropagation();
+                    }}
+                    onBlur={() => setEditingNodeId(null)}
                     onMouseDown={(e) => {
+                      if (editingNodeId !== node.id) return;
                       e.stopPropagation();
-                      setSelectedNodeIds(new Set([node.id]));
                     }}
                     onFocus={() => setSelectedNodeIds(new Set([node.id]))}
                     onInput={(e) => {
@@ -4261,15 +4347,24 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
                   return (
                     <div
                       class="node-checklist-card"
-                      onMouseDown={(e) => e.stopPropagation()}
-                      onWheel={(e) => e.stopPropagation()}
+                      onClick={() => setSelectedNodeIds(new Set([node.id]))}
+                      onWheel={(e) => {
+                        if (!e.ctrlKey && !e.metaKey) e.stopPropagation();
+                      }}
                     >
-                      <div class="checklist-title-row">
+                      <div
+                        class="card-top-drag-header checklist-title-row"
+                        onMouseDown={(e) => handleNodePointerDown(node, e as any)}
+                      >
+                        <div class="card-drag-grip" title="Перетащить чек-лист">
+                          <Icon name="grip-vertical" size={14} />
+                        </div>
                         <input
                           type="text"
                           class="checklist-title-input"
                           value={node.fileName || 'Чек-лист'}
                           placeholder="Заголовок чек-листа..."
+                          onMouseDown={(e) => e.stopPropagation()}
                           onInput={(e) => {
                             const map = yNodes.get(node.id);
                             if (map) setNodeProperties(map, { fileName: (e.target as HTMLInputElement).value });
@@ -4282,13 +4377,16 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
                           <div class="checklist-progress-fill" style={{ width: `${progressPct}%` }} />
                         </div>
                       </div>
-                      <div class="checklist-items-scroll scrollable-card-content">
+                      <div class="checklist-items-scroll scrollable-card-content" onWheel={(e) => { if (!e.ctrlKey && !e.metaKey) e.stopPropagation(); }}>
                         {items.map((item, idx) => (
                           <div key={item.id} class={`checklist-item-row ${item.done ? 'done' : ''}`}>
                             <button
                               type="button"
                               class={`checklist-checkbox-btn ${item.done ? 'checked' : ''}`}
-                              onClick={() => handleToggleChecklistItem(node, idx)}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleToggleChecklistItem(node, idx);
+                              }}
                             >
                               {item.done && <Icon name="check" size={11} color="#ffffff" />}
                             </button>
@@ -4296,12 +4394,16 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
                               type="text"
                               class={`checklist-item-input ${item.done ? 'done' : ''}`}
                               value={item.text}
+                              onMouseDown={(e) => e.stopPropagation()}
                               onInput={(e) => handleUpdateChecklistText(node, idx, (e.target as HTMLInputElement).value)}
                             />
                             <button
                               type="button"
                               class="checklist-item-del-btn"
-                              onClick={() => handleDeleteChecklistItem(node, idx)}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteChecklistItem(node, idx);
+                              }}
                               title="Удалить пункт"
                             >
                               <Icon name="x" size={12} />
@@ -4312,6 +4414,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
                       <button
                         type="button"
                         class="checklist-add-row-btn"
+                        onMouseDown={(e) => e.stopPropagation()}
                         onClick={() => handleAddChecklistItem(node)}
                       >
                         <Icon name="plus" size={13} />
@@ -4326,16 +4429,27 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
                   return (
                     <div
                       class="node-table-wrapper"
-                      onMouseDown={(e) => e.stopPropagation()}
-                      onWheel={(e) => e.stopPropagation()}
+                      onClick={() => setSelectedNodeIds(new Set([node.id]))}
+                      onWheel={(e) => {
+                        if (!e.ctrlKey && !e.metaKey) e.stopPropagation();
+                      }}
                     >
-                      <div class="node-table-toolbar">
-                        <button type="button" class="table-tool-btn" onClick={() => handleAddTableRow(node)}>+ Строка</button>
-                        <button type="button" class="table-tool-btn" onClick={() => handleDelTableRow(node)}>- Строка</button>
-                        <button type="button" class="table-tool-btn" onClick={() => handleAddTableCol(node)}>+ Столбец</button>
-                        <button type="button" class="table-tool-btn" onClick={() => handleDelTableCol(node)}>- Столбец</button>
+                      <div
+                        class="card-top-drag-header node-table-toolbar"
+                        onMouseDown={(e) => handleNodePointerDown(node, e as any)}
+                      >
+                        <div class="card-drag-grip" title="Перетащить таблицу">
+                          <Icon name="grip-vertical" size={14} />
+                        </div>
+                        <span style={{ fontSize: '12px', fontWeight: 600, color: '#94a3b8', marginRight: 'auto' }}>Таблица</span>
+                        <div class="card-header-actions" onMouseDown={(e) => e.stopPropagation()} style={{ display: 'flex', gap: '4px' }}>
+                          <button type="button" class="table-tool-btn" onClick={() => handleAddTableRow(node)}>+ Строка</button>
+                          <button type="button" class="table-tool-btn" onClick={() => handleDelTableRow(node)}>- Строка</button>
+                          <button type="button" class="table-tool-btn" onClick={() => handleAddTableCol(node)}>+ Столбец</button>
+                          <button type="button" class="table-tool-btn" onClick={() => handleDelTableCol(node)}>- Столбец</button>
+                        </div>
                       </div>
-                      <div class="node-table-grid scrollable-card-content" style={{ gridTemplateColumns: `repeat(${table[0]?.length || 3}, minmax(80px, 1fr))` }}>
+                      <div class="node-table-grid scrollable-card-content" style={{ gridTemplateColumns: `repeat(${table[0]?.length || 3}, minmax(80px, 1fr))` }} onWheel={(e) => { if (!e.ctrlKey && !e.metaKey) e.stopPropagation(); }}>
                         {table.map((row, rIdx) =>
                           row.map((cell, cIdx) => (
                             <div key={`${rIdx}-${cIdx}`} class="node-table-cell">
@@ -4343,6 +4457,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
                                 type="text"
                                 value={cell}
                                 placeholder={rIdx === 0 ? `Колонка ${cIdx + 1}` : ''}
+                                onMouseDown={(e) => e.stopPropagation()}
                                 onInput={(e) => handleUpdateTableCell(node, rIdx, cIdx, (e.target as HTMLInputElement).value)}
                               />
                             </div>
@@ -4358,17 +4473,26 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
                   return (
                     <div
                       class="node-kanban-column"
-                      onMouseDown={(e) => e.stopPropagation()}
-                      onWheel={(e) => e.stopPropagation()}
+                      onClick={() => setSelectedNodeIds(new Set([node.id]))}
+                      onWheel={(e) => {
+                        if (!e.ctrlKey && !e.metaKey) e.stopPropagation();
+                      }}
                     >
-                      <div class="kanban-header-bar">
-                        <div class="kanban-title-group">
+                      <div
+                        class="card-top-drag-header kanban-header-bar"
+                        onMouseDown={(e) => handleNodePointerDown(node, e as any)}
+                      >
+                        <div class="card-drag-grip" title="Перетащить колонку">
+                          <Icon name="grip-vertical" size={14} />
+                        </div>
+                        <div class="kanban-title-group" style={{ flex: 1, minWidth: 0 }}>
                           <span class="kanban-dot" style={{ backgroundColor: nodeColorHex }} />
                           <input
                             type="text"
                             class="kanban-title"
-                            style={{ background: 'transparent', border: 'none', outline: 'none' }}
+                            style={{ background: 'transparent', border: 'none', outline: 'none', width: '100%' }}
                             value={node.text || 'К выполнению'}
+                            onMouseDown={(e) => e.stopPropagation()}
                             onInput={(e) => {
                               const map = yNodes.get(node.id);
                               if (map) setNodeProperties(map, { text: (e.target as HTMLInputElement).value });
@@ -4377,19 +4501,23 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
                         </div>
                         <span class="kanban-count-badge">{cards.length}</span>
                       </div>
-                      <div class="kanban-cards-area scrollable-card-content">
+                      <div class="kanban-cards-area scrollable-card-content" onWheel={(e) => { if (!e.ctrlKey && !e.metaKey) e.stopPropagation(); }}>
                         {cards.map((card, idx) => (
                           <div key={idx} class="checklist-item-row" style={{ background: 'rgba(255,255,255,0.06)', borderRadius: '6px' }}>
                             <input
                               type="text"
                               class="checklist-item-input"
                               value={card}
+                              onMouseDown={(e) => e.stopPropagation()}
                               onInput={(e) => handleUpdateKanbanCard(node, idx, (e.target as HTMLInputElement).value)}
                             />
                             <button
                               type="button"
                               class="checklist-item-del-btn"
-                              onClick={() => handleDeleteKanbanCard(node, idx)}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteKanbanCard(node, idx);
+                              }}
                               title="Удалить карточку"
                             >
                               <Icon name="x" size={12} />
@@ -4400,6 +4528,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
                       <button
                         type="button"
                         class="kanban-add-card-btn"
+                        onMouseDown={(e) => e.stopPropagation()}
                         onClick={() => handleAddKanbanCard(node)}
                       >
                         <Icon name="plus" size={13} />
@@ -4414,45 +4543,58 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
                   return (
                     <div
                       class="node-code-block"
-                      onMouseDown={(e) => e.stopPropagation()}
-                      onWheel={(e) => e.stopPropagation()}
+                      onClick={() => setSelectedNodeIds(new Set([node.id]))}
+                      onWheel={(e) => {
+                        if (!e.ctrlKey && !e.metaKey) e.stopPropagation();
+                      }}
                     >
-                      <div class="code-header-bar">
-                        <select
-                          class="code-lang-selector"
-                          value={lang}
-                          onChange={(e) => {
-                            const map = yNodes.get(node.id);
-                            if (map) map.set('codeLanguage', (e.target as HTMLSelectElement).value);
-                          }}
-                        >
-                          <option value="typescript">TypeScript</option>
-                          <option value="javascript">JavaScript</option>
-                          <option value="python">Python</option>
-                          <option value="sql">SQL</option>
-                          <option value="json">JSON</option>
-                          <option value="html">HTML</option>
-                          <option value="css">CSS</option>
-                          <option value="bash">Bash</option>
-                        </select>
-                        <button
-                          type="button"
-                          class="code-copy-btn"
-                          onClick={() => {
-                            navigator.clipboard.writeText(node.text || '');
-                            showToast('Код скопирован в буфер');
-                          }}
-                          title="Скопировать код"
-                        >
-                          <Icon name="copy" size={12} />
-                          <span>Копировать</span>
-                        </button>
+                      <div
+                        class="card-top-drag-header code-header-bar"
+                        onMouseDown={(e) => handleNodePointerDown(node, e as any)}
+                      >
+                        <div class="card-drag-grip" title="Перетащить блок кода">
+                          <Icon name="grip-vertical" size={14} />
+                        </div>
+                        <div class="card-header-actions" onMouseDown={(e) => e.stopPropagation()} style={{ display: 'flex', alignItems: 'center', gap: '6px', marginLeft: 'auto' }}>
+                          <select
+                            class="code-lang-selector"
+                            value={lang}
+                            onChange={(e) => {
+                              const map = yNodes.get(node.id);
+                              if (map) map.set('codeLanguage', (e.target as HTMLSelectElement).value);
+                            }}
+                          >
+                            <option value="typescript">TypeScript</option>
+                            <option value="javascript">JavaScript</option>
+                            <option value="python">Python</option>
+                            <option value="sql">SQL</option>
+                            <option value="json">JSON</option>
+                            <option value="html">HTML</option>
+                            <option value="css">CSS</option>
+                            <option value="bash">Bash</option>
+                          </select>
+                          <button
+                            type="button"
+                            class="code-copy-btn"
+                            onClick={() => {
+                              navigator.clipboard.writeText(node.text || '');
+                              showToast('Код скопирован в буфер');
+                            }}
+                            title="Скопировать код"
+                          >
+                            <Icon name="copy" size={12} />
+                            <span>Копировать</span>
+                          </button>
+                        </div>
                       </div>
                       <textarea
                         class="code-textarea-editor"
                         value={node.text}
                         placeholder="// Напишите код здесь..."
                         spellcheck={false}
+                        onWheel={(e) => {
+                          if (!e.ctrlKey && !e.metaKey) e.stopPropagation();
+                        }}
                         onInput={(e) => {
                           const map = yNodes.get(node.id);
                           if (map) setNodeProperties(map, { text: (e.target as HTMLTextAreaElement).value });
@@ -4476,7 +4618,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
                   );
                 })()
               ) : node.type === 'image' ? (
-                <div class="node-image-container" onMouseDown={(e) => e.stopPropagation()}>
+                <div class="node-image-container" onMouseDown={(e) => handleNodePointerDown(node, e as any)}>
                   <img
                     src={node.imageUrl || (node.fileHash ? `/api/attachments/${node.fileHash}` : '')}
                     alt={node.fileName || node.text || 'Изображение'}
@@ -4488,13 +4630,19 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
                 <textarea
                   id={`node-textarea-${node.id}`}
                   class="node-inline-textarea"
-                  style={{ fontSize: node.fontSize ? `${node.fontSize}px` : undefined }}
+                  style={{
+                    fontSize: node.fontSize ? `${node.fontSize}px` : undefined,
+                    pointerEvents: editingNodeId === node.id ? 'auto' : 'none'
+                  }}
                   value={node.text}
                   placeholder="Введите текст..."
-                  onWheel={(e) => e.stopPropagation()}
+                  onWheel={(e) => {
+                    if (!e.ctrlKey && !e.metaKey) e.stopPropagation();
+                  }}
+                  onBlur={() => setEditingNodeId(null)}
                   onMouseDown={(e) => {
+                    if (editingNodeId !== node.id) return;
                     e.stopPropagation();
-                    setSelectedNodeIds(new Set([node.id]));
                   }}
                   onFocus={() => setSelectedNodeIds(new Set([node.id]))}
                   onInput={(e) => {
@@ -4871,6 +5019,27 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
           </button>
         </div>
       </div>
+
+      {/* Freehand Brush Preview Cursor */}
+      {activeTool === 'draw' && cursorScreenPos && (
+        <div
+          class="draw-cursor-follower"
+          style={{
+            position: 'fixed',
+            left: `${cursorScreenPos.x}px`,
+            top: `${cursorScreenPos.y}px`,
+            width: `${Math.max(6, drawWidth * viewport.zoom)}px`,
+            height: `${Math.max(6, drawWidth * viewport.zoom)}px`,
+            borderRadius: '50%',
+            border: '1.5px solid rgba(255, 255, 255, 0.9)',
+            backgroundColor: drawColor,
+            boxShadow: '0 0 4px rgba(0,0,0,0.4)',
+            transform: 'translate(-50%, -50%)',
+            pointerEvents: 'none',
+            zIndex: 9999
+          }}
+        />
+      )}
     </div>
   );
 }

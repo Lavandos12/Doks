@@ -6282,6 +6282,83 @@ button.doks-color-dot.active {
   animation: edgeFlow 0.8s linear infinite !important;
 }
 
+/* Universal Sleek Dark Scrollbar */
+*::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.18);
+  border-radius: 4px;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.32);
+}
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+}
+
+/* Dedicated Top Drag Header Bar for Complex Cards (34px) */
+.card-top-drag-header {
+  height: 34px;
+  min-height: 34px;
+  cursor: grab;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 10px;
+  background: rgba(255, 255, 255, 0.05);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px 8px 0 0;
+  user-select: none;
+  gap: 8px;
+}
+.card-top-drag-header:active {
+  cursor: grabbing;
+}
+.card-top-drag-header .grip-icon {
+  color: #94a3b8;
+  display: flex;
+  align-items: center;
+}
+.card-top-drag-header .drag-header-title-input {
+  background: transparent;
+  border: none;
+  color: #f1f5f9;
+  font-size: 13px;
+  font-weight: 600;
+  outline: none;
+  flex: 1;
+  min-width: 0;
+  text-overflow: ellipsis;
+}
+.card-top-drag-header .drag-header-title-input:focus {
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 4px;
+  padding: 1px 4px;
+}
+.card-top-drag-header .drag-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Dynamic auto-height for checklist without ugly white scrollbars */
+.node-checklist-card {
+  height: 100% !important;
+  display: flex !important;
+  flex-direction: column !important;
+}
+.node-checklist-card .checklist-items-scroll {
+  overflow-y: visible !important;
+  max-height: none !important;
+}
+
+
 
 
 

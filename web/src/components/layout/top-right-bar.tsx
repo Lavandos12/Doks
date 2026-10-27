@@ -31,39 +31,16 @@ export function TopRightBar({
       onMouseDown={(e) => e.stopPropagation()}
       onClick={(e) => e.stopPropagation()}
     >
-      {/* Workspace Mode Segmented Pill */}
-      <div class="workspace-mode-segmented-pill" role="tablist" aria-label="Режим рабочей области">
-        <button
-          class={`mode-pill-btn workspace-mode-btn ${workspaceMode.value === 'canvas' ? 'active' : ''}`}
-          data-mode="canvas"
-          onClick={() => setWorkspaceMode('canvas')}
-          title="Холст (Бесконечная доска)"
-        >
-          <Icon name="layout-canvas" size={13} />
-          <span class="mode-label">Холст</span>
-        </button>
-        <button
-          class={`mode-pill-btn workspace-mode-btn ${workspaceMode.value === 'split' ? 'active' : ''}`}
-          data-mode="split"
-          onClick={() => setWorkspaceMode('split')}
-          title="Сплит (Холст + Заметка рядом, Ctrl+\)"
-        >
-          <Icon name="layout-split" size={13} />
-          <span class="mode-label">Сплит</span>
-        </button>
-        <button
-          class={`mode-pill-btn workspace-mode-btn ${isNotesOpen || workspaceMode.value === 'vault' ? 'active' : ''}`}
-          data-mode="vault"
-          onClick={() => {
-            setWorkspaceMode('vault');
-            onToggleNotes();
-          }}
-          title="Заметки (Шторка заметок поверх доски)"
-        >
-          <Icon name="file-text" size={13} />
-          <span class="mode-label">Заметки</span>
-        </button>
-      </div>
+      {/* [ Заметки ] Drawer Toggle Button */}
+      <button
+        class={`miro-action-pill ${isNotesOpen ? 'active' : ''}`}
+        data-testid="notes-drawer-toggle-btn"
+        onClick={onToggleNotes}
+        title="Заметки (Шторка заметок поверх доски)"
+      >
+        <Icon name="file-text" size={14} />
+        <span>Заметки</span>
+      </button>
 
       {/* [ ИИ-Контекст ] */}
       <button

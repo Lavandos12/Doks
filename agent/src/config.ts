@@ -97,7 +97,7 @@ export function loadOrCreateConfig(options: ConfigOptions = {}): AgentConfig {
   const memberColor = existing.memberColor || AUTHOR_COLORS[Math.floor(Math.random() * AUTHOR_COLORS.length)];
   const peerPort = options.peerPort ?? existing.peerPort ?? 4747;
   const webPort = options.webPort ?? existing.webPort ?? 3000;
-  const bindAddress = options.bindAddress ?? existing.bindAddress ?? 'auto';
+  const bindAddress = options.bindAddress ?? existing.bindAddress ?? (process.env.DOKS_HOST || 'auto');
   const peers = options.peers ?? existing.peers ?? [];
 
   const config: AgentConfig = {

@@ -320,7 +320,10 @@ test.describe('F12: Playwright E2E Scenarios for Doks', () => {
     const textarea = page.locator('.node-inline-textarea').first();
     await expect(textarea).toBeVisible();
     await textarea.fill('Приватная идея для переноса');
-    await textarea.click();
+    
+    // Click on node box to select and show context inspector
+    const nodeBox = page.locator('.board-node-box').first();
+    await nodeBox.click();
 
     // Verify "В команду" promotion button is visible in toolbox
     const transferBtn = page.locator('[data-testid="scope-transfer-btn"]');
@@ -400,34 +403,26 @@ test.describe('F12: Playwright E2E Scenarios for Doks', () => {
     expect(stickyNewBox!.x).toBeGreaterThan(stickyInitialBox!.x + 40);
   });
 
-  test('Scenario 10: Workspace Modes switcher (Canvas, Split, Vault)', async ({ page }) => {
+  test('Scenario 10: Single Screen Notes Drawer toggle button opens notes overlay', async ({ page }) => {
     page.on('console', msg => console.log('[Scenario10 Console]', msg.type(), msg.text()));
     page.on('pageerror', err => console.error('[Scenario10 PageError]', err));
     await page.goto(`http://127.0.0.1:${port1}`);
     await openBoard(page);
 
-    // Verify segmented workspace mode switcher
-    const splitBtn = page.locator('.workspace-mode-btn[data-mode="split"]');
-    const vaultBtn = page.locator('.workspace-mode-btn[data-mode="vault"]');
-    const canvasBtn = page.locator('.workspace-mode-btn[data-mode="canvas"]');
+    // Verify single notes drawer toggle button exists in top-right HUD bar
+    const notesBtn = page.locator('[data-testid="notes-drawer-toggle-btn"]');
+    await expect(notesBtn).toBeVisible();
 
-    await expect(canvasBtn).toBeVisible();
-    await expect(splitBtn).toBeVisible();
-    await expect(vaultBtn).toBeVisible();
+    // Click to open Notes Drawer
+    await notesBtn.click();
+    await expect(notesBtn).toHaveClass(/active/);
+    const drawer = page.locator('.miro-notes-drawer');
+    await expect(drawer).toBeVisible();
 
-    // Switch to Split mode
-    await splitBtn.click();
-    await expect(splitBtn).toHaveClass(/active/);
-    await expect(page.locator('.app-split-container')).toBeVisible();
-
-    // Switch to Vault mode
-    await vaultBtn.click();
-    await expect(vaultBtn).toHaveClass(/active/);
-
-    // Switch back to Canvas mode
-    await canvasBtn.click();
-    await expect(canvasBtn).toHaveClass(/active/);
-    await expect(page.locator('.board-container')).toBeVisible();
+    // Click again to close drawer
+    await notesBtn.click();
+    await expect(notesBtn).not.toHaveClass(/active/);
+    await expect(drawer).not.toBeVisible();
   });
 
   test('Scenario 11: Magnetic Port Connection creates persistent SVG edge and inspects label', async ({ page }) => {

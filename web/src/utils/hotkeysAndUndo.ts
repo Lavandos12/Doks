@@ -74,16 +74,32 @@ export function matchShortcut(e: KeyboardEvent, shortcut: string): boolean {
     r: ['KeyR'],
     e: ['KeyE'],
     g: ['KeyG'],
+    h: ['KeyH'],
     k: ['KeyK'],
     p: ['KeyP'],
+    b: ['KeyB'],
+    m: ['KeyM'],
+    w: ['KeyW'],
+    q: ['KeyQ'],
+    u: ['KeyU'],
+    i: ['KeyI'],
+    o: ['KeyO'],
+    j: ['KeyJ'],
     backslash: ['Backslash', 'IntlBackslash'],
     delete: ['Delete'],
     backspace: ['Backspace'],
     escape: ['Escape']
   };
 
-  const expectedCodes = codeMap[key];
-  if (expectedCodes) {
+  // Russian keyboard layout fallback map (Russian standard QWERTY phonetic mapping)
+  const ruKeyMap: Record<string, string> = {
+    q: 'й', w: 'ц', e: 'у', r: 'к', t: 'е', y: 'н', u: 'г', i: 'ш', o: 'щ', p: 'з',
+    a: 'ф', s: 'ы', d: 'в', f: 'а', g: 'п', h: 'р', j: 'о', k: 'л', l: 'д',
+    z: 'я', x: 'ч', c: 'с', v: 'м', b: 'и', n: 'т', m: 'ь'
+  };
+
+  const expectedCodes = codeMap[key] || (key.length === 1 && key >= 'a' && key <= 'z' ? [`Key${key.toUpperCase()}`] : undefined);
+  if (expectedCodes && e.code) {
     if (expectedCodes.includes(e.code)) return true;
   }
 
@@ -91,7 +107,11 @@ export function matchShortcut(e: KeyboardEvent, shortcut: string): boolean {
   if (key === 'delete' && e.key === 'Delete') return true;
   if (key === 'backspace' && e.key === 'Backspace') return true;
   if (key === 'escape' && (e.key === 'Escape' || e.key === 'Esc')) return true;
-  if (e.key && e.key.toLowerCase() === key) return true;
+  if (e.key) {
+    const lk = e.key.toLowerCase();
+    if (lk === key) return true;
+    if (ruKeyMap[key] && lk === ruKeyMap[key]) return true;
+  }
 
   return false;
 }

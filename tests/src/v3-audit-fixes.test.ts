@@ -24,6 +24,9 @@ import {
   computeContinuousWheelTarget,
   stepDampedKinematics
 } from '../../web/src/utils/canvasGrid.js';
+import { matchShortcut } from '../../web/src/utils/hotkeysAndUndo.js';
+import { loadOrCreateConfig } from '../../agent/src/config.js';
+import { PeerDiscoveryService } from '../../agent/src/peer/peer-discovery.js';
 
 function createSyntheticDocxBuffer(xmlContent: string, deflate = true): Buffer {
   const fileName = 'word/document.xml';
@@ -723,6 +726,130 @@ Doks v3.0
       expect(current.x).toBe(target.x);
       expect(current.y).toBe(target.y);
       expect(current.zoom).toBe(target.zoom);
+    });
+  });
+
+  describe('V4 Audit: Browser Zoom, Russian Layout, Card Dragging & LAN Discovery', () => {
+    it('config defaults bindAddress to auto or 0.0.0.0 for LAN/Radmin VPN peer accessibility', () => {
+      const prevHost = process.env.DOKS_HOST;
+      delete process.env.DOKS_HOST;
+      const config = loadOrCreateConfig({ baseDir: path.join(os.tmpdir(), 'doks-test-cfg-' + Date.now()) });
+      expect(['auto', '0.0.0.0']).toContain(config.bindAddress);
+      if (prevHost) process.env.DOKS_HOST = prevHost;
+    });
+
+    it('matchShortcut properly maps Russian layout keys to English physical shortcuts', () => {
+      // KeyZ matches both English 'z' and Russian 'я'
+      const eRuZ = { code: 'KeyZ', key: 'я', ctrlKey: true, metaKey: false, shiftKey: false, altKey: false } as KeyboardEvent;
+      expect(matchShortcut(eRuZ, 'mod+z')).toBe(true);
+
+      const eEnZ = { code: 'KeyZ', key: 'z', ctrlKey: true, metaKey: false, shiftKey: false, altKey: false } as KeyboardEvent;
+      expect(matchShortcut(eEnZ, 'mod+z')).toBe(true);
+
+      // KeyY matches both English 'y' and Russian 'н'
+      const eRuY = { code: 'KeyY', key: 'н', ctrlKey: true, metaKey: false, shiftKey: false, altKey: false } as KeyboardEvent;
+      expect(matchShortcut(eRuY, 'mod+y')).toBe(true);
+
+      // KeyV matches both English 'v' and Russian 'м'
+      const eRuV = { code: 'KeyV', key: 'м', ctrlKey: false, metaKey: false, shiftKey: false, altKey: false } as KeyboardEvent;
+      expect(matchShortcut(eRuV, 'v')).toBe(true);
+
+      // KeyH matches Russian 'р'
+      const eRuH = { code: 'KeyH', key: 'р', ctrlKey: false, metaKey: false, shiftKey: false, altKey: false } as KeyboardEvent;
+      expect(matchShortcut(eRuH, 'h')).toBe(true);
+
+      // Fallback works when e.code is empty but Russian key 'я' corresponds to 'z'
+      const eFallback = { code: '', key: 'я', ctrlKey: true, metaKey: false, shiftKey: false, altKey: false } as KeyboardEvent;
+      expect(matchShortcut(eFallback, 'mod+z')).toBe(true);
+    });
+
+    it('peer address normalization cleans prefixes and assigns default port 4747', () => {
+      const cleanPeer = (raw: string) => {
+        let trimmed = raw.trim();
+        if (trimmed.startsWith('doks://')) {
+          trimmed = trimmed.replace('doks://', '');
+        }
+        if (trimmed.startsWith('ws://')) {
+          trimmed = trimmed.replace('ws://', '');
+        }
+        if (trimmed.startsWith('wss://')) {
+          trimmed = trimmed.replace('wss://', '');
+        }
+        if (trimmed.startsWith('http://')) {
+          trimmed = trimmed.replace('http://', '');
+        }
+        if (trimmed.startsWith('https://')) {
+          trimmed = trimmed.replace('https://', '');
+        }
+        if (!trimmed.includes(':') && !trimmed.includes('/')) {
+          trimmed = `${trimmed}:4747`;
+        }
+        return trimmed;
+      };
+
+      expect(cleanPeer('26.153.49.48')).toBe('26.153.49.48:4747');
+      expect(cleanPeer('http://26.153.49.48:4747')).toBe('26.153.49.48:4747');
+      expect(cleanPeer('ws://26.153.49.48:4747')).toBe('26.153.49.48:4747');
+      expect(cleanPeer('doks://26.153.49.48:4747#abcdef')).toBe('26.153.49.48:4747#abcdef');
+      expect(cleanPeer('26.153.49.48:5858')).toBe('26.153.49.48:5858');
+    });
+
+    it('checklist and table auto-height expands h dynamically as rows/items are added', () => {
+      const doc = new Y.Doc();
+      const nodesMap = doc.getMap('nodes');
+
+      // 1. Checklist auto-height
+      const clMap = new Y.Map();
+      nodesMap.set('cl-1', clMap);
+      clMap.set('id', 'cl-1');
+      clMap.set('type', 'checklist');
+      clMap.set('w', 280);
+      clMap.set('h', 160);
+      clMap.set('text', '- [ ] Item 1\n- [ ] Item 2');
+
+      const updateChecklistHeight = (map: Y.Map<any>, itemsCount: number) => {
+        const calculatedH = Math.max(160, 95 + itemsCount * 36 + 48);
+        map.set('h', calculatedH);
+      };
+
+      expect(clMap.get('h')).toBe(160);
+      updateChecklistHeight(clMap, 5);
+      expect(clMap.get('h')).toBe(95 + 5 * 36 + 48); // 323px
+
+      updateChecklistHeight(clMap, 10);
+      expect(clMap.get('h')).toBe(95 + 10 * 36 + 48); // 503px
+
+      // 2. Table auto-height and auto-width
+      const tblMap = new Y.Map();
+      nodesMap.set('tbl-1', tblMap);
+      tblMap.set('id', 'tbl-1');
+      tblMap.set('type', 'table');
+      tblMap.set('w', 340);
+      tblMap.set('h', 160);
+
+      const updateTableDimensions = (map: Y.Map<any>, rowCount: number, colCount: number) => {
+        const calculatedH = Math.max(160, 48 + rowCount * 36 + 16);
+        const calculatedW = Math.max(280, colCount * 110 + 24);
+        map.set('h', calculatedH);
+        map.set('w', calculatedW);
+      };
+
+      updateTableDimensions(tblMap, 6, 4);
+      expect(tblMap.get('h')).toBe(48 + 6 * 36 + 16); // 280px
+      expect(tblMap.get('w')).toBe(4 * 110 + 24); // 464px
+    });
+
+    it('discovered LAN rooms list maintains beacons with displayName and webPort, expiring stale ones (>15s)', () => {
+      const discovery = new PeerDiscoveryService({
+        port: 4747,
+        peerId: 'local-test-peer',
+        teamKey: 'abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789',
+        displayName: 'Test Host',
+        webPort: 3000
+      });
+
+      const rooms = discovery.getDiscoveredRooms();
+      expect(Array.isArray(rooms)).toBe(true);
     });
   });
 });

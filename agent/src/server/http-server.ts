@@ -283,6 +283,7 @@ export class AgentHttpServer {
         interfaces: networkOverview.interfaces,
         peers: this.peerService.getPeersStatus(),
         connectedCount: this.peerService.getConnectedCount(),
+        discoveredLanRooms: this.peerService.getDiscoveredLanRooms(),
         token: isAuthorized ? this.sessionToken : undefined,
         // B17: Do not expose raw teamKey without session authentication
         teamKey: isAuthorized ? this.config.teamKey : undefined,
@@ -311,7 +312,8 @@ export class AgentHttpServer {
       return {
         ...overview,
         peers: this.peerService.getPeersStatus(),
-        connectedCount: this.peerService.getConnectedCount()
+        connectedCount: this.peerService.getConnectedCount(),
+        discoveredLanRooms: this.peerService.getDiscoveredLanRooms()
       };
     });
 
@@ -377,14 +379,28 @@ export class AgentHttpServer {
       };
     });
 
+    // API: List peers & discovered LAN rooms
+    this.fastify.get('/api/peers', async () => {
+      return {
+        peers: this.peerService.getPeersStatus(),
+        connectedCount: this.peerService.getConnectedCount(),
+        discoveredLanRooms: this.peerService.getDiscoveredLanRooms()
+      };
+    });
+
     // API: Add peer
     this.fastify.post('/api/peers', async (req, reply) => {
-      const body = req.body as { address?: string };
-      if (!body?.address) {
-        return reply.code(400).send({ error: 'address is required' });
+      const body = req.body as { address?: string; peer?: string };
+      const target = body?.address || body?.peer;
+      if (!target) {
+        return reply.code(400).send({ error: 'address or peer is required' });
       }
-      this.peerService.addPeer(body.address);
-      return { success: true, peers: this.peerService.getPeersStatus() };
+      this.peerService.addPeer(target);
+      return {
+        success: true,
+        peers: this.peerService.getPeersStatus(),
+        discoveredLanRooms: this.peerService.getDiscoveredLanRooms()
+      };
     });
 
     // API: Remove peer
@@ -1229,10 +1245,12 @@ export class AgentHttpServer {
   }
 
   public async start(): Promise<void> {
-    const hostToBind = this.config.bindAddress === '0.0.0.0' ? '0.0.0.0' : '127.0.0.1';
+    const hostToBind = (this.config.bindAddress && this.config.bindAddress !== 'auto' && this.config.bindAddress !== '127.0.0.1')
+      ? this.config.bindAddress
+      : (process.env.DOKS_HOST || '0.0.0.0');
     const freePort = await findAvailablePort(
       this.config.webPort,
-      '127.0.0.1'
+      hostToBind
     );
     if (freePort !== this.config.webPort) {
       console.warn(`[HttpServer] Port ${this.config.webPort} is busy, auto-switching to free port ${freePort}`);
