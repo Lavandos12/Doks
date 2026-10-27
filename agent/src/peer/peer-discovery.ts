@@ -111,7 +111,7 @@ export class PeerDiscoveryService extends EventEmitter {
             this.socket?.setBroadcast(true);
           } catch {}
 
-          // Broadcast beacon every 3 seconds (Miro/Minecraft LAN standard)
+          // Broadcast beacon every 3 seconds (UDP LAN standard)
           this.beaconTimer = setInterval(() => {
             this.broadcastBeacon();
           }, 3000);

@@ -40,7 +40,7 @@ export function NetworkPopover({ isOpen, onClose }: NetworkPopoverProps): VNode 
   const [manualPeer, setManualPeer] = useState('');
   const [isConnecting, setIsConnecting] = useState(false);
 
-  // Poll /api/network every 3s while modal is open (Minecraft LAN discovery)
+  // Poll /api/network every 3s while modal is open (UDP LAN discovery)
   useEffect(() => {
     let timer: any = null;
     const fetchInfo = async () => {
@@ -134,7 +134,7 @@ export function NetworkPopover({ isOpen, onClose }: NetworkPopoverProps): VNode 
             <Icon name="globe-mesh" size={20} class="text-accent" />
             <div>
               <h3 class="modal-title" style={{ margin: 0, fontSize: '17px', fontWeight: 600 }}>
-                Сеть Radmin VPN (Как в Minecraft LAN)
+                Сеть Radmin VPN
               </h3>
               <div style={{ fontSize: '11.5px', color: '#94a3b8', marginTop: '2px' }}>
                 Ваш IP в сети: <span style={{ color: '#38bdf8', fontFamily: 'monospace' }}>{effectiveIp}</span> ({radminIp ? 'Radmin VPN активен' : 'Локальная сеть'})
@@ -214,7 +214,7 @@ export function NetworkPopover({ isOpen, onClose }: NetworkPopoverProps): VNode 
             </div>
           </div>
 
-          {/* Способ 2: Автопоиск комнат в Radmin VPN (Как в Minecraft LAN) */}
+          {/* Способ 2: Автопоиск комнат в Radmin VPN */}
           <div style={{
             padding: '14px',
             background: 'rgba(255, 255, 255, 0.03)',
@@ -229,7 +229,7 @@ export function NetworkPopover({ isOpen, onClose }: NetworkPopoverProps): VNode 
                 Способ 2 — Доступные комнаты в сети Radmin VPN
               </span>
               <span style={{ fontSize: '11px', color: '#94a3b8' }}>
-                Minecraft LAN поиск
+                Автопоиск комнат
               </span>
             </div>
 
