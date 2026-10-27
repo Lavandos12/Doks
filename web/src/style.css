@@ -1821,6 +1821,16 @@ input:focus, select:focus, textarea:focus {
   z-index: 40;
 }
 
+.magnetic-port::before {
+  content: '';
+  position: absolute;
+  top: -8px;
+  left: -8px;
+  right: -8px;
+  bottom: -8px;
+  border-radius: 50%;
+}
+
 .board-node-box:hover .magnetic-port,
 .board-node-box.selected .magnetic-port {
   opacity: 1;
@@ -6664,7 +6674,7 @@ button.doks-color-dot.active {
   border: 1px solid rgba(255, 255, 255, 0.1) !important;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4) !important;
   border-radius: 8px !important;
-  overflow: hidden !important;
+  overflow: visible !important;
   padding: 0 !important;
 }
 
@@ -6687,6 +6697,7 @@ button.doks-color-dot.active {
   justify-content: center;
   overflow: hidden;
   user-select: none;
+  border-radius: 7px;
 }
 
 .board-node-box.type-image .node-rendered-img {

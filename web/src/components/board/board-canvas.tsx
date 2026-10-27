@@ -2311,13 +2311,15 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
 
       // Drag arrow connector with magnetic geometric snapping
       if (connectingState) {
-        const boxNodes: BoxNode[] = visibleNodes.map((n) => ({
-          id: n.id,
-          x: n.x,
-          y: n.y,
-          width: n.w,
-          height: n.h
-        }));
+        const boxNodes: BoxNode[] = visibleNodes
+          .filter((n) => !n.deleted && n.type !== 'drawing')
+          .map((n) => ({
+            id: n.id,
+            x: n.x,
+            y: n.y,
+            width: n.w,
+            height: n.h
+          }));
         const snapped = findMagneticTargetPort(boxNodes, connectingState.fromNodeId, pos.x, pos.y, 28);
         setConnectingState((prev) =>
           prev
@@ -2522,8 +2524,8 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
               shapeVariant: fromNode.shapeVariant,
               x: Math.round(newX),
               y: Math.round(newY),
-              w: fromNode.w || 200,
-              h: fromNode.h || 130,
+              w: fromNode.type === 'shape' ? (fromNode.w || 200) : (fromNode.type === 'note' ? (fromNode.w || 280) : 200),
+              h: fromNode.type === 'shape' ? (fromNode.h || 130) : (fromNode.type === 'note' ? (fromNode.h || 200) : 130),
               text: '',
               color: fromNode.color || activeColor,
               z: 10,
@@ -5077,15 +5079,6 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
                     </div>
                   );
                 })()
-              ) : node.type === 'image' ? (
-                <div class="node-image-container" onMouseDown={(e) => handleNodePointerDown(node, e as any)}>
-                  <img
-                    src={node.imageUrl || (node.fileHash ? `/api/attachments/${node.fileHash}` : '')}
-                    alt={node.fileName || node.text || 'Изображение'}
-                    class="node-rendered-img"
-                    style={{ width: '100%', height: '100%', objectFit: 'contain', pointerEvents: 'none' }}
-                  />
-                </div>
               ) : node.type === 'chart' ? (
                 (() => {
                   const chartType = node.chartType || 'pie';

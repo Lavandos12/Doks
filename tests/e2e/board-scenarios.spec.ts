@@ -598,5 +598,39 @@ test.describe('F12: Playwright E2E Scenarios for Doks', () => {
     await expect(imageNode).toHaveClass(/selected/);
     const resizeHandles = imageNode.locator('.resize-handle');
     await expect(resizeHandles).toHaveCount(8);
+
+    // Verify 4 magnetic connector ports exist on image card
+    await expect(imageNode.locator('.port-top')).toBeAttached();
+    await expect(imageNode.locator('.port-right')).toBeAttached();
+    await expect(imageNode.locator('.port-bottom')).toBeAttached();
+    await expect(imageNode.locator('.port-left')).toBeAttached();
+
+    // Add a sticky note to connect with the screenshot
+    await page.click('button[title*="Стикер"]');
+    const boardArea = page.locator('.board-container');
+    await boardArea.click({ position: { x: 780, y: 320 } });
+    const stickyNode = page.locator('.board-node-box.type-sticky').first();
+    await expect(stickyNode).toBeVisible();
+
+    // Hover over image node and verify right port is visible
+    await imageNode.hover();
+    const rightPort = imageNode.locator('.port-right');
+    await expect(rightPort).toBeVisible();
+
+    const rightBox = await rightPort.boundingBox();
+    const stickyBox = await stickyNode.boundingBox();
+    expect(rightBox).not.toBeNull();
+    expect(stickyBox).not.toBeNull();
+
+    // Drag connector arrow from screenshot right port to sticky note
+    await page.mouse.move(rightBox!.x + rightBox!.width / 2, rightBox!.y + rightBox!.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(stickyBox!.x + 15, stickyBox!.y + stickyBox!.height / 2, { steps: 5 });
+    await page.mouse.up();
+
+    // Verify SVG edge path is drawn between screenshot and sticky note
+    const edgePath = page.locator('.canvas-edge-path');
+    await expect(edgePath).toBeAttached({ timeout: 5000 });
+    await expect(edgePath).toHaveAttribute('d', /^M/);
   });
 });
