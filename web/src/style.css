@@ -1821,8 +1821,41 @@ input:focus, select:focus, textarea:focus {
   z-index: 20;
 }
 
-.board-node-box:hover .magnetic-port {
+.board-node-box:hover .magnetic-port,
+.board-node-box.selected .magnetic-port {
   opacity: 1;
+}
+
+/* Card inner textareas: complete removal of browser borders and outlines */
+.canvas-node textarea,
+.canvas-node textarea:focus,
+.canvas-node-editor,
+.canvas-node-editor:focus,
+.board-node-box textarea,
+.board-node-box textarea:focus,
+.board-node-box .node-inline-textarea,
+.board-node-box .node-inline-textarea:focus,
+.board-node-box.selected .node-inline-textarea,
+.board-node-box.selected .node-inline-textarea:focus {
+  background: transparent !important;
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+  resize: none !important;
+}
+
+/* Infinite World-Space Vector Layers (never clipped by window dimensions) */
+.edges-layer,
+.ink-layer,
+.miro-ink-layer,
+.canvas-svg-layer {
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 1px !important;
+  height: 1px !important;
+  overflow: visible !important;
+  pointer-events: none !important;
 }
 
 .port-top {
@@ -6397,6 +6430,27 @@ button.doks-color-dot.active {
 .node-checklist-card .checklist-items-scroll {
   overflow-y: visible !important;
   max-height: none !important;
+}
+
+/* Smart Alignment Guide Styles (Cyan & Magenta Dash, Crosses and Badges) */
+.smart-guide-line {
+  stroke: #06b6d4;
+  stroke-linecap: round;
+  pointer-events: none;
+}
+.smart-guide-marker {
+  stroke: #06b6d4;
+  pointer-events: none;
+}
+.smart-guide-pill {
+  fill: #06b6d4;
+}
+.smart-guide-text {
+  fill: #ffffff;
+  font-size: 11px;
+  font-weight: 600;
+  text-anchor: middle;
+  dominant-baseline: central;
 }
 
 

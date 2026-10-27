@@ -70,6 +70,13 @@ import {
   isEditableElementFocused,
   CANVAS_UNDO_ORIGIN
 } from '../../utils/hotkeysAndUndo.js';
+import {
+  distToSegment,
+  computeSmartAlignment,
+  computeResizeAlignment,
+  type AlignmentGuide,
+  type BoxRect
+} from '../../utils/smartAlignment.js';
 
 export const CANVAS_COLORS: Record<string, string> = {
   '1': '#d97706', // Warm Amber
@@ -96,11 +103,6 @@ interface RemoteCursor {
   y: number;
   name: string;
   color: string;
-}
-
-interface AlignmentGuide {
-  type: 'x' | 'y';
-  pos: number;
 }
 
 interface ContextMenuState {
@@ -298,7 +300,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
     requestAnimationFrame(() => {
       const el = document.getElementById(`node-textarea-${id}`) as HTMLTextAreaElement | HTMLInputElement | null;
       if (el) {
-        el.focus();
+        el.focus({ preventScroll: true });
         if (selectAll) {
           el.select();
         } else {
@@ -316,6 +318,109 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
   const [currentStroke, setCurrentStroke] = useState<Point[] | null>(null);
   const currentStrokeRef = useRef<Point[] | null>(null);
   currentStrokeRef.current = currentStroke;
+
+  // Segment-based hit-testing for eraser tool
+  const isPointHittingDrawing = useCallback((pos: { x: number; y: number }, n: BoardNodeData, erasePad: number): boolean => {
+    if (n.deleted || n.type !== 'drawing') return false;
+    if (
+      pos.x < n.x - erasePad ||
+      pos.x > n.x + n.w + erasePad ||
+      pos.y < n.y - erasePad ||
+      pos.y > n.y + n.h + erasePad
+    ) {
+      return false;
+    }
+    const pts = (n as any).points as Point[] | undefined;
+    if (pts && pts.length > 0) {
+      const threshold = Math.max(14, (n.strokeWidth || 4) / 2 + erasePad);
+      if (pts.length === 1) {
+        return Math.hypot(n.x + pts[0].x - pos.x, n.y + pts[0].y - pos.y) <= threshold;
+      }
+      for (let i = 0; i < pts.length - 1; i++) {
+        const v = { x: n.x + pts[i].x, y: n.y + pts[i].y };
+        const w = { x: n.x + pts[i + 1].x, y: n.y + pts[i + 1].y };
+        if (distToSegment(pos, v, w) <= threshold) {
+          return true;
+        }
+      }
+      return false;
+    }
+    return true;
+  }, []);
+
+  // Pure vector ink stroke renderer (dual-layer brush, chisel highlighter, technical pen)
+  const renderInkStroke = (
+    key: string,
+    d: string,
+    color: string,
+    baseWidth: number,
+    mode: 'pen' | 'brush' | 'highlighter',
+    isDark: boolean
+  ) => {
+    if (mode === 'brush') {
+      const haloWidth = Math.round(baseWidth * 2.4);
+      const coreWidth = Math.max(2, Math.round(baseWidth * 1.45));
+      return (
+        <g key={key}>
+          <path
+            d={d}
+            fill="none"
+            style={{
+              stroke: color,
+              strokeWidth: `${haloWidth}px`,
+              opacity: 0.22,
+              strokeLinecap: 'round',
+              strokeLinejoin: 'round'
+            }}
+          />
+          <path
+            d={d}
+            fill="none"
+            style={{
+              stroke: color,
+              strokeWidth: `${coreWidth}px`,
+              opacity: 0.95,
+              strokeLinecap: 'round',
+              strokeLinejoin: 'round'
+            }}
+          />
+        </g>
+      );
+    }
+    if (mode === 'highlighter') {
+      const sw = Math.round(baseWidth * 3.0);
+      return (
+        <path
+          key={key}
+          d={d}
+          fill="none"
+          style={{
+            stroke: color,
+            strokeWidth: `${sw}px`,
+            opacity: 0.38,
+            strokeLinecap: 'square',
+            strokeLinejoin: 'round',
+            mixBlendMode: isDark ? 'screen' : 'multiply'
+          }}
+        />
+      );
+    }
+    const sw = Math.max(1, baseWidth);
+    return (
+      <path
+        key={key}
+        d={d}
+        fill="none"
+        style={{
+          stroke: color,
+          strokeWidth: `${sw}px`,
+          opacity: 1,
+          strokeLinecap: 'round',
+          strokeLinejoin: 'round'
+        }}
+      />
+    );
+  };
 
   // Immediate refs to prevent stale closures during drawing and tool manipulation
   const activeColorRef = useRef<string>(activeColor);
@@ -375,6 +480,9 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
 
   // Smart Alignment Guides
   const [alignmentGuides, setAlignmentGuides] = useState<AlignmentGuide[]>([]);
+  useEffect(() => {
+    setAlignmentGuides([]);
+  }, [activeTool]);
 
   // Pan state
   const [panState, setPanState] = useState<{
@@ -1670,7 +1778,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
 
     setTimeout(() => {
       const el = document.getElementById(`node-textarea-${newId}`) as HTMLTextAreaElement;
-      el?.focus();
+      el?.focus({ preventScroll: true });
     }, 50);
   };
 
@@ -1797,28 +1905,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
       // Eraser dragging over drawing nodes
       if (activeTool === 'eraser' && (e.buttons === 1 || e.buttons === 2 || isErasing)) {
         const ERASE_PAD = 18 / viewport.zoom;
-        const hitDrawing = nodesList.find((n) => {
-          if (n.deleted || n.type !== 'drawing') return false;
-          if (
-            pos.x < n.x - ERASE_PAD ||
-            pos.x > n.x + n.w + ERASE_PAD ||
-            pos.y < n.y - ERASE_PAD ||
-            pos.y > n.y + n.h + ERASE_PAD
-          ) {
-            return false;
-          }
-          const pts = (n as any).points as Point[] | undefined;
-          if (pts && pts.length > 0) {
-            const sw = (n.strokeWidth || 4) + ERASE_PAD;
-            const swSq = sw * sw;
-            return pts.some((pt) => {
-              const dx = n.x + pt.x - pos.x;
-              const dy = n.y + pt.y - pos.y;
-              return dx * dx + dy * dy <= swSq;
-            });
-          }
-          return true;
-        });
+        const hitDrawing = nodesList.find((n) => isPointHittingDrawing(pos, n, ERASE_PAD));
         if (hitDrawing) {
           deleteSingleNode(hitDrawing.id);
         }
@@ -1851,7 +1938,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
         let dx = (e.clientX - dragState.startX) / viewport.zoom;
         let dy = (e.clientY - dragState.startY) / viewport.zoom;
         const GRID_SIZE = 16;
-        const guides: AlignmentGuide[] = [];
+        let guides: AlignmentGuide[] = [];
 
         // Check alignment against other visible nodes (if single node dragged and not holding Alt)
         if (selectedNodeIds.size === 1 && !e.altKey) {
@@ -1860,44 +1947,27 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
           const activeNode = nodeLookup.get(activeId);
 
           if (activeInitial && activeNode) {
-            let candidateX = activeInitial.x + dx;
-            let candidateY = activeInitial.y + dy;
-            const w = activeNode.w;
-            const h = activeNode.h;
+            const rawBox: BoxRect = {
+              id: activeId,
+              x: activeInitial.x + dx,
+              y: activeInitial.y + dy,
+              w: activeNode.w,
+              h: activeNode.h
+            };
+            const snapThreshold = 6 / viewport.zoom;
+            const candidates: BoxRect[] = visibleNodes
+              .filter((n) => {
+                if (n.id === activeId || n.deleted || n.type === 'drawing') return false;
+                if (selectedNodeIds.has(n.id)) return false;
+                if (Math.abs(n.x - rawBox.x) > 3000 || Math.abs(n.y - rawBox.y) > 3000) return false;
+                return true;
+              })
+              .map((n) => ({ id: n.id, x: n.x, y: n.y, w: n.w, h: n.h }));
 
-            for (const other of visibleNodes) {
-              if (other.id === activeId || other.deleted) continue;
-
-              // Check X alignments (left, center, right)
-              const checkX = [
-                { my: candidateX, other: other.x, snap: other.x },
-                { my: candidateX + w / 2, other: other.x + other.w / 2, snap: other.x + other.w / 2 - w / 2 },
-                { my: candidateX + w, other: other.x + other.w, snap: other.x + other.w - w }
-              ];
-              for (const c of checkX) {
-                if (Math.abs(c.my - c.other) < 6) {
-                  candidateX = c.snap;
-                  dx = candidateX - activeInitial.x;
-                  guides.push({ type: 'x', pos: c.other });
-                  break;
-                }
-              }
-
-              // Check Y alignments (top, center, bottom)
-              const checkY = [
-                { my: candidateY, other: other.y, snap: other.y },
-                { my: candidateY + h / 2, other: other.y + other.h / 2, snap: other.y + other.h / 2 - h / 2 },
-                { my: candidateY + h, other: other.y + other.h, snap: other.y + other.h - h }
-              ];
-              for (const c of checkY) {
-                if (Math.abs(c.my - c.other) < 6) {
-                  candidateY = c.snap;
-                  dy = candidateY - activeInitial.y;
-                  guides.push({ type: 'y', pos: c.other });
-                  break;
-                }
-              }
-            }
+            const snapRes = computeSmartAlignment(rawBox, candidates, snapThreshold);
+            dx = snapRes.snappedX - activeInitial.x;
+            dy = snapRes.snappedY - activeInitial.y;
+            guides = snapRes.guides;
           }
         }
         setAlignmentGuides(guides);
@@ -1913,7 +1983,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
         setDragDelta({ dx, dy });
       }
 
-      // 8-Point Resizing
+      // 8-Point Resizing with Smart Alignment Guides
       if (resizeState) {
         const dx = (e.clientX - resizeState.startX) / viewport.zoom;
         const dy = (e.clientY - resizeState.startY) / viewport.zoom;
@@ -1927,19 +1997,44 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
           let newY = startYPos;
 
           if (handle.includes('e')) {
-            newW = Math.max(80, Math.round(startW + dx));
+            newW = Math.max(80, startW + dx);
           }
           if (handle.includes('w')) {
-            newW = Math.max(80, Math.round(startW - dx));
+            newW = Math.max(80, startW - dx);
             newX = startXPos + (startW - newW);
           }
           if (handle.includes('s')) {
-            newH = Math.max(48, Math.round(startH + dy));
+            newH = Math.max(48, startH + dy);
           }
           if (handle.includes('n')) {
-            newH = Math.max(48, Math.round(startH - dy));
+            newH = Math.max(48, startH - dy);
             newY = startYPos + (startH - newH);
           }
+
+          let guides: AlignmentGuide[] = [];
+          if (!e.altKey) {
+            const snapThreshold = 6 / viewport.zoom;
+            const candidates: BoxRect[] = visibleNodes
+              .filter((n) => {
+                if (n.id === resizeState.nodeId || n.deleted || n.type === 'drawing') return false;
+                if (Math.abs(n.x - newX) > 3000 || Math.abs(n.y - newY) > 3000) return false;
+                return true;
+              })
+              .map((n) => ({ id: n.id, x: n.x, y: n.y, w: n.w, h: n.h }));
+
+            const snapRes = computeResizeAlignment(
+              { id: resizeState.nodeId, x: newX, y: newY, w: newW, h: newH },
+              handle,
+              candidates,
+              snapThreshold
+            );
+            newX = snapRes.x;
+            newY = snapRes.y;
+            newW = snapRes.w;
+            newH = snapRes.h;
+            guides = snapRes.guides;
+          }
+          setAlignmentGuides(guides);
 
           boardDoc.transact(() => {
             nodeMap.set('x', Math.round(newX));
@@ -2206,7 +2301,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
           setSelectedNodeIds(new Set([newId]));
           setActiveTool('select');
           setTimeout(() => {
-            document.getElementById(`node-textarea-${newId}`)?.focus();
+            document.getElementById(`node-textarea-${newId}`)?.focus({ preventScroll: true });
           }, 50);
           return;
         }
@@ -2285,15 +2380,21 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
       }
     };
 
+    const handleBlur = () => {
+      setAlignmentGuides([]);
+    };
+
     window.addEventListener('pointermove', handleGlobalPointerMove);
     window.addEventListener('pointerup', handleGlobalPointerUp);
     window.addEventListener('mousemove', handleGlobalPointerMove as any);
     window.addEventListener('mouseup', handleGlobalPointerUp as any);
+    window.addEventListener('blur', handleBlur);
     return () => {
       window.removeEventListener('pointermove', handleGlobalPointerMove);
       window.removeEventListener('pointerup', handleGlobalPointerUp);
       window.removeEventListener('mousemove', handleGlobalPointerMove as any);
       window.removeEventListener('mouseup', handleGlobalPointerUp as any);
+      window.removeEventListener('blur', handleBlur);
     };
   }, [panState, dragState, resizeState, marqueeBox, connectingState, viewport, nodesList, visibleNodes]);
 
@@ -2331,28 +2432,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
       if (activeTool === 'eraser') {
         const p = screenToCanvas(e.clientX, e.clientY);
         const ERASE_PAD = 18 / viewport.zoom;
-        const hitDrawing = nodesList.find((n) => {
-          if (n.deleted || n.type !== 'drawing') return false;
-          if (
-            p.x < n.x - ERASE_PAD ||
-            p.x > n.x + n.w + ERASE_PAD ||
-            p.y < n.y - ERASE_PAD ||
-            p.y > n.y + n.h + ERASE_PAD
-          ) {
-            return false;
-          }
-          const pts = (n as any).points as Point[] | undefined;
-          if (pts && pts.length > 0) {
-            const sw = (n.strokeWidth || 4) + ERASE_PAD;
-            const swSq = sw * sw;
-            return pts.some((pt) => {
-              const dx = n.x + pt.x - p.x;
-              const dy = n.y + pt.y - p.y;
-              return dx * dx + dy * dy <= swSq;
-            });
-          }
-          return true;
-        });
+        const hitDrawing = nodesList.find((n) => isPointHittingDrawing(p, n, ERASE_PAD));
         if (hitDrawing) {
           deleteSingleNode(hitDrawing.id);
         }
@@ -2429,28 +2509,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
       setIsErasing(true);
       const pos = screenToCanvas(e.clientX, e.clientY);
       const ERASE_PAD = 18 / viewport.zoom;
-      const hitDrawing = nodesList.find((n) => {
-        if (n.deleted || n.type !== 'drawing') return false;
-        if (
-          pos.x < n.x - ERASE_PAD ||
-          pos.x > n.x + n.w + ERASE_PAD ||
-          pos.y < n.y - ERASE_PAD ||
-          pos.y > n.y + n.h + ERASE_PAD
-        ) {
-          return false;
-        }
-        const pts = (n as any).points as Point[] | undefined;
-        if (pts && pts.length > 0) {
-          const sw = (n.strokeWidth || 4) + ERASE_PAD;
-          const swSq = sw * sw;
-          return pts.some((pt) => {
-            const dx = n.x + pt.x - pos.x;
-            const dy = n.y + pt.y - pos.y;
-            return dx * dx + dy * dy <= swSq;
-          });
-        }
-        return true;
-      });
+      const hitDrawing = nodesList.find((n) => isPointHittingDrawing(pos, n, ERASE_PAD));
       if (hitDrawing) {
         deleteSingleNode(hitDrawing.id);
       } else if (!node.locked) {
@@ -2644,7 +2703,9 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
   }, [selectedNodeIds, nodeLookup, viewport]);
 
   const fitToContent = () => {
-    if (visibleNodes.length === 0) {
+    const targetNodes = visibleNodes.filter((n) => !n.deleted && n.type !== 'drawing');
+    const nodesForFit = targetNodes.length > 0 ? targetNodes : visibleNodes.filter((n) => !n.deleted);
+    if (nodesForFit.length === 0) {
       animateToViewport({ x: 80, y: 80, zoom: 1 }, false);
       return;
     }
@@ -2652,7 +2713,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
     let minY = Infinity;
     let maxX = -Infinity;
     let maxY = -Infinity;
-    for (const n of visibleNodes) {
+    for (const n of nodesForFit) {
       minX = Math.min(minX, n.x);
       minY = Math.min(minY, n.y);
       maxX = Math.max(maxX, n.x + n.w);
@@ -2680,6 +2741,10 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
     <div
       class={`board-container ${activeTool === 'hand' || isSpacePressed ? 'cursor-grab' : ''} ${gridType === 'lines' ? 'grid-lines' : gridType === 'none' ? 'grid-none' : ''}`}
       ref={containerRef}
+      onScroll={(e) => {
+        if (e.currentTarget.scrollTop !== 0) e.currentTarget.scrollTop = 0;
+        if (e.currentTarget.scrollLeft !== 0) e.currentTarget.scrollLeft = 0;
+      }}
       onMouseDown={handleBackgroundPointerDown}
       onContextMenu={handleContextMenu}
       onDragOver={(e) => {
@@ -3491,17 +3556,21 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
       )}
 
       {/* 2. Floating Context Inspector Bar */}
-      {selectionBounds && selectedNodeIds.size > 0 && (
-        <div
-          class="floating-inspector-bar liquid-glass-surface"
-          style={{
-            left: `${selectionBounds.x + selectionBounds.width / 2}px`,
-            top: `${selectionBounds.y - 24}px`,
-            transform: 'translate(-50%, -100%)'
-          }}
-          onMouseDown={(e) => e.stopPropagation()}
-          onClick={(e) => e.stopPropagation()}
-        >
+      {selectionBounds && selectedNodeIds.size > 0 && (() => {
+        const isToolbarFlipped = selectionBounds.y - 54 < 80;
+        return (
+          <div
+            class="floating-inspector-bar liquid-glass-surface"
+            style={{
+              left: `${selectionBounds.x + selectionBounds.width / 2}px`,
+              top: isToolbarFlipped
+                ? `${selectionBounds.y + selectionBounds.height + 14}px`
+                : `${selectionBounds.y - 14}px`,
+              transform: isToolbarFlipped ? 'translate(-50%, 0)' : 'translate(-50%, -100%)'
+            }}
+            onMouseDown={(e) => e.stopPropagation()}
+            onClick={(e) => e.stopPropagation()}
+          >
           {/* Color Palette (6 muted colors) */}
           <div class="inspector-palette">
             {Object.entries(CANVAS_COLORS).filter(([k]) => k !== 'default').map(([key, hex]) => (
@@ -3764,7 +3833,8 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
             <Icon name="trash" size={15} />
           </button>
         </div>
-      )}
+        );
+      })()}
 
       {/* Dynamic Infinite Adaptive LOD Canvas Grid Layer (Miro-Grade Smooth Two-Octave Cross-Fade) */}
       {gridType !== 'none' && (() => {
@@ -3776,10 +3846,10 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
           <svg
             class="canvas-grid-svg-layer"
             style={{
-              position: 'absolute',
+              position: 'fixed',
               inset: 0,
-              width: '100%',
-              height: '100%',
+              width: '100vw',
+              height: '100vh',
               pointerEvents: 'none',
               zIndex: 0
             }}
@@ -3979,32 +4049,44 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
             </marker>
           </defs>
 
-          {/* Alignment snap lines */}
-          {alignmentGuides.map((g, i) => (
-            g.type === 'x' ? (
-              <line
-                key={`gx-${i}`}
-                x1={g.pos}
-                y1={-10000}
-                x2={g.pos}
-                y2={10000}
-                stroke="#38bdf8"
-                strokeWidth="1"
-                strokeDasharray="3 3"
-              />
-            ) : (
-              <line
-                key={`gy-${i}`}
-                x1={-10000}
-                y1={g.pos}
-                x2={10000}
-                y2={g.pos}
-                stroke="#38bdf8"
-                strokeWidth="1"
-                strokeDasharray="3 3"
-              />
-            )
-          ))}
+          {/* Smart Alignment Snap Lines & Markers */}
+          {alignmentGuides.map((g, i) => {
+            const isVert = g.type === 'vertical';
+            return (
+              <g key={`guide-${i}`} class="smart-guide-group">
+                {/* Finite dashed line segment */}
+                <line
+                  class="smart-guide-line"
+                  x1={isVert ? g.pos : g.start}
+                  y1={isVert ? g.start : g.pos}
+                  x2={isVert ? g.pos : g.end}
+                  y2={isVert ? g.end : g.pos}
+                />
+                {/* Cross / tick markers at snap intersections */}
+                {g.snapPoints.map((pt, pi) => (
+                  <g key={`pt-${pi}`} class="smart-guide-marker">
+                    <line x1={pt.x - 4} y1={pt.y} x2={pt.x + 4} y2={pt.y} />
+                    <line x1={pt.x} y1={pt.y - 4} x2={pt.x} y2={pt.y + 4} />
+                  </g>
+                ))}
+                {/* Distance pill badge when spacing matches */}
+                {g.distanceLabel && (
+                  <g class="smart-guide-badge" transform={`translate(${g.distanceLabel.x}, ${g.distanceLabel.y})`}>
+                    <rect
+                      class="smart-guide-pill"
+                      x="-20"
+                      y="-10"
+                      width="40"
+                      height="20"
+                    />
+                    <text class="smart-guide-text">
+                      {g.distanceLabel.text}
+                    </text>
+                  </g>
+                )}
+              </g>
+            );
+          })}
 
           {/* Live edge reconnection dragging line */}
           {reconnectEdgeState && (
@@ -4388,7 +4470,15 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
                     onInput={(e) => {
                       const map = yNodes.get(node.id);
                       if (map) {
-                        setNodeProperties(map, { text: (e.target as HTMLTextAreaElement).value });
+                        const target = e.target as HTMLTextAreaElement;
+                        const scrollH = target.scrollHeight;
+                        const paddingExtra = 36;
+                        const newH = Math.max(node.h, scrollH + paddingExtra);
+                        const updates: Partial<BoardNodeData> = { text: target.value };
+                        if (newH > node.h) {
+                          updates.h = Math.round(newH);
+                        }
+                        setNodeProperties(map, updates);
                       }
                     }}
                     onKeyDown={(e) => {
@@ -4396,7 +4486,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
                         e.preventDefault();
                         chainNextSticky(node, 'right');
                       }
-                      if (e.key === 'Enter' && (e.shiftKey || e.ctrlKey)) {
+                      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
                         e.preventDefault();
                         chainNextSticky(node, 'down');
                       }
@@ -4720,7 +4810,15 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
                   onInput={(e) => {
                     const map = yNodes.get(node.id);
                     if (map) {
-                      setNodeProperties(map, { text: (e.target as HTMLTextAreaElement).value });
+                      const target = e.target as HTMLTextAreaElement;
+                      const scrollH = target.scrollHeight;
+                      const paddingExtra = 36;
+                      const newH = Math.max(node.h, scrollH + paddingExtra);
+                      const updates: Partial<BoardNodeData> = { text: target.value };
+                      if (newH > node.h) {
+                        updates.h = Math.round(newH);
+                      }
+                      setNodeProperties(map, updates);
                     }
                   }}
                   onKeyDown={(e) => {
@@ -4728,7 +4826,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
                       e.preventDefault();
                       chainNextSticky(node, 'right');
                     }
-                    if (e.key === 'Enter' && (e.shiftKey || e.ctrlKey)) {
+                    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
                       e.preventDefault();
                       chainNextSticky(node, 'down');
                     }
@@ -4815,87 +4913,37 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
               const baseWidth = drawNode.strokeWidth || 4;
               const color = drawNode.color || '#818cf8';
 
-              let sw = baseWidth;
-              let strokeLinecap: 'round' | 'square' = 'round';
-              let opacity = drawNode.opacity ?? 1;
-              let filter: string | undefined = undefined;
-              let mixBlendMode: any = undefined;
-
-              if (mode === 'brush') {
-                sw = Math.round(baseWidth * 1.75);
-                strokeLinecap = 'round';
-                opacity = 0.9;
-                filter = `drop-shadow(0 0 ${Math.max(2, baseWidth * 0.4)}px ${color})`;
-              } else if (mode === 'highlighter') {
-                sw = Math.round(baseWidth * 3.0);
-                strokeLinecap = 'square';
-                opacity = 0.35;
-                mixBlendMode = theme.value === 'dark' ? 'screen' : 'multiply';
-              } else {
-                sw = baseWidth;
-                strokeLinecap = 'round';
-                opacity = 1;
-              }
-
               return (
                 <g
                   key={drawNode.id}
                   transform={`translate(${drawNode.x}, ${drawNode.y})`}
                   style={{ pointerEvents: 'none' }}
                 >
-                  <path
-                    d={drawNode.svgPath}
-                    fill="none"
-                    stroke={color}
-                    strokeWidth={sw}
-                    strokeLinecap={strokeLinecap}
-                    strokeLinejoin="round"
-                    style={{
-                      stroke: color,
-                      opacity,
-                      filter,
-                      mixBlendMode
-                    }}
-                  />
+                  {renderInkStroke(
+                    drawNode.id,
+                    drawNode.svgPath || '',
+                    color,
+                    baseWidth,
+                    mode,
+                    isDarkTheme
+                  )}
                 </g>
               );
             })}
 
           {/* Live freehand drawing stroke preview */}
-          {currentStroke && currentStroke.length > 1 && (() => {
-            const mode = drawMode;
-            const baseWidth = drawWidth;
-            const color = drawColor;
-            let sw = baseWidth;
-            let strokeLinecap: 'round' | 'square' = 'round';
-            let opacity = 1;
-            let filter: string | undefined = undefined;
-            let mixBlendMode: any = undefined;
-
-            if (mode === 'brush') {
-              sw = Math.round(baseWidth * 1.75);
-              strokeLinecap = 'round';
-              opacity = 0.9;
-              filter = `drop-shadow(0 0 ${Math.max(2, baseWidth * 0.4)}px ${color})`;
-            } else if (mode === 'highlighter') {
-              sw = Math.round(baseWidth * 3.0);
-              strokeLinecap = 'square';
-              opacity = 0.35;
-              mixBlendMode = theme.value === 'dark' ? 'screen' : 'multiply';
-            }
-
-            return (
-              <path
-                d={pointsToSmoothSvgPath(currentStroke)}
-                stroke={color}
-                style={{ stroke: color, opacity, filter, mixBlendMode }}
-                strokeWidth={sw}
-                fill="none"
-                strokeLinecap={strokeLinecap}
-                strokeLinejoin="round"
-              />
-            );
-          })()}
+          {currentStroke && currentStroke.length > 1 && (
+            <g style={{ pointerEvents: 'none' }}>
+              {renderInkStroke(
+                'live-preview-stroke',
+                pointsToSmoothSvgPath(currentStroke),
+                drawColor,
+                drawWidth,
+                drawMode,
+                isDarkTheme
+              )}
+            </g>
+          )}
         </svg>
 
         {/* Marquee Selection Box */}
