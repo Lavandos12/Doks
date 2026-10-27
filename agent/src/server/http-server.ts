@@ -40,6 +40,7 @@ import { DocManager } from '../storage/doc-manager.js';
 import { PeerService } from '../peer/peer-service.js';
 import { AttachmentManager } from '../storage/attachments.js';
 import { extractTextFromDocxBuffer } from '../storage/docx-extractor.js';
+import { extractTextFromPdfBuffer } from '../storage/pdf-extractor.js';
 import { generateSessionToken } from '../security.js';
 import {
   findAvailablePort,
@@ -717,6 +718,8 @@ export class AgentHttpServer {
           const lowerName = (att.fileName || '').toLowerCase();
           if (lowerName.endsWith('.docx')) {
             text = extractTextFromDocxBuffer(buf);
+          } else if (lowerName.endsWith('.pdf') || att.mimeType === 'application/pdf') {
+            text = extractTextFromPdfBuffer(buf);
           } else if (
             lowerName.endsWith('.txt') ||
             lowerName.endsWith('.md') ||
@@ -754,12 +757,55 @@ export class AgentHttpServer {
         return reply.code(400).send({ error: 'Invalid attachment hash format' });
       }
 
-      const att = this.attachmentManager.getAttachment(hash);
+      let att = this.attachmentManager.getAttachment(hash);
       if (!att || !fs.existsSync(att.filePath)) {
-        return reply.code(404).send({ error: 'Attachment not found' });
+        // Multi-User P2P Attachment Auto-Fetch on Cache Miss
+        const originQuery = (req.query as { origin?: string })?.origin;
+        const candidateOrigins: string[] = [];
+        if (originQuery && originQuery.startsWith('http')) {
+          candidateOrigins.push(originQuery.replace(/\/$/, ''));
+        }
+        if (this.peerService) {
+          for (const p of this.peerService.getPeersStatus()) {
+            if (p.connected && p.address) {
+              const host = p.address.split(':')[0];
+              const httpPort = this.config.webPort || 4747;
+              candidateOrigins.push(`http://${host}:${httpPort}`);
+            }
+          }
+        }
+
+        let fetched = false;
+        for (const candidate of candidateOrigins) {
+          try {
+            const controller = new AbortController();
+            const timer = setTimeout(() => controller.abort(), 3500);
+            const res = await fetch(`${candidate}/api/attachments/${hash}`, { signal: controller.signal });
+            clearTimeout(timer);
+            if (res.ok) {
+              const arrayBuf = await res.arrayBuffer();
+              const buf = Buffer.from(arrayBuf);
+              const contentDisp = res.headers.get('content-disposition') || '';
+              const matchName = contentDisp.match(/filename="?([^";]+)"?/);
+              const fetchedName = matchName ? decodeURIComponent(matchName[1]) : `${hash.slice(0, 8)}.bin`;
+              this.attachmentManager.saveAttachment(buf, fetchedName);
+              att = this.attachmentManager.getAttachment(hash);
+              if (att && fs.existsSync(att.filePath)) {
+                fetched = true;
+                break;
+              }
+            }
+          } catch {}
+        }
+
+        if (!fetched || !att || !fs.existsSync(att.filePath)) {
+          return reply.code(404).send({ error: 'Attachment not found' });
+        }
       }
 
-      // Security headers for attachments
+      // CORS & Security headers for attachments
+      reply.header('Access-Control-Allow-Origin', '*');
+      reply.header('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
       reply.header('X-Content-Type-Options', 'nosniff');
       reply.header('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; sandbox");
 

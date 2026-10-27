@@ -104,7 +104,10 @@ export type IconName =
   | 'table'
   | 'kanban'
   | 'code'
-  | 'checklist';
+  | 'checklist'
+  | 'chart'
+  | 'bar-chart'
+  | 'pie-chart';
 
 export function Icon({
   name,
@@ -719,6 +722,22 @@ export function Icon({
             <polyline points="4 6 5 7 8 4" />
             <polyline points="4 12 5 13 8 10" />
             <polyline points="4 18 5 19 8 16" />
+          </>
+        );
+      case 'chart':
+      case 'bar-chart':
+        return (
+          <>
+            <line x1="18" y1="20" x2="18" y2="10" />
+            <line x1="12" y1="20" x2="12" y2="4" />
+            <line x1="6" y1="20" x2="6" y2="14" />
+          </>
+        );
+      case 'pie-chart':
+        return (
+          <>
+            <path d="M21.21 15.89A10 10 0 1 1 8 2.83" />
+            <path d="M22 12A10 10 0 0 0 12 2v10z" />
           </>
         );
       default:

@@ -45,7 +45,12 @@ import { NotePickerModal } from './note-picker-modal.js';
 import { BoardMinimap } from './board-minimap.js';
 import { TransferModal } from './transfer-modal.js';
 import { AutoDiagramModal } from './auto-diagram-modal.js';
-import { pointsToSmoothSvgPath, computeBoundingBox, type Point } from '../../utils/strokeSmoother.js';
+import {
+  pointsToSmoothSvgPath,
+  buildCalligraphicBrushPath,
+  computeBoundingBox,
+  type Point
+} from '../../utils/strokeSmoother.js';
 import { computeAutoLayout, type GeneratedDiagramNode, type GeneratedDiagramEdge } from '../../utils/diagramGenerator.js';
 import {
   computeContinuousGrid,
@@ -88,7 +93,7 @@ export const CANVAS_COLORS: Record<string, string> = {
   default: '#d97706'
 };
 
-export type CanvasTool = 'select' | 'hand' | 'sticky' | 'text' | 'note' | 'frame' | 'arrow' | 'shape' | 'draw' | 'eraser' | 'checklist' | 'table' | 'kanban' | 'code' | 'image' | 'widgets';
+export type CanvasTool = 'select' | 'hand' | 'sticky' | 'text' | 'note' | 'frame' | 'arrow' | 'shape' | 'draw' | 'eraser' | 'checklist' | 'table' | 'kanban' | 'code' | 'image' | 'widgets' | 'chart';
 type ResizeHandle = 'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w';
 
 interface BoardCanvasProps {
@@ -348,16 +353,45 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
     return true;
   }, []);
 
-  // Pure vector ink stroke renderer (dual-layer brush, chisel highlighter, technical pen)
+  // Pure vector ink stroke renderer (calligraphic tapered polygon brush, chisel highlighter, technical pen)
   const renderInkStroke = (
     key: string,
     d: string,
     color: string,
     baseWidth: number,
     mode: 'pen' | 'brush' | 'highlighter',
-    isDark: boolean
+    isDark: boolean,
+    points?: Point[]
   ) => {
     if (mode === 'brush') {
+      const brushD = points && points.length > 1 ? buildCalligraphicBrushPath(points, baseWidth) : null;
+      if (brushD) {
+        return (
+          <g key={key}>
+            {/* Subtle soft outer glow */}
+            <path
+              d={d}
+              fill="none"
+              style={{
+                stroke: color,
+                strokeWidth: `${Math.round(baseWidth * 0.6)}px`,
+                opacity: 0.22,
+                strokeLinecap: 'round',
+                strokeLinejoin: 'round'
+              }}
+            />
+            {/* Dynamic calligraphic tapered polygon */}
+            <path
+              d={brushD}
+              fill={color}
+              stroke="none"
+              style={{
+                opacity: 0.95
+              }}
+            />
+          </g>
+        );
+      }
       const haloWidth = Math.round(baseWidth * 2.4);
       const coreWidth = Math.max(2, Math.round(baseWidth * 1.45));
       return (
@@ -397,8 +431,8 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
           style={{
             stroke: color,
             strokeWidth: `${sw}px`,
-            opacity: 0.38,
-            strokeLinecap: 'square',
+            opacity: 0.35,
+            strokeLinecap: 'butt',
             strokeLinejoin: 'round',
             mixBlendMode: isDark ? 'screen' : 'multiply'
           }}
@@ -421,6 +455,21 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
       />
     );
   };
+
+  // Measure actual text height without 100% container inflation to prevent runaway auto-growth
+  const measureAndAutoGrowTextarea = useCallback((el: HTMLTextAreaElement, currentH: number, isSticky: boolean): number | null => {
+    const prevHeight = el.style.height;
+    el.style.height = '0px';
+    const actualTextHeight = el.scrollHeight;
+    el.style.height = prevHeight || '100%';
+
+    const chromePadding = isSticky ? 64 : 28;
+    const neededHeight = actualTextHeight + chromePadding;
+    if (neededHeight > currentH + 4) {
+      return Math.ceil(neededHeight);
+    }
+    return null;
+  }, []);
 
   // Immediate refs to prevent stale closures during drawing and tool manipulation
   const activeColorRef = useRef<string>(activeColor);
@@ -780,7 +829,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
       if (
         node.fileHash &&
         !node.extractedText &&
-        (node.fileName || '').match(/\.(docx|txt|md|csv|json|js|ts|py|html|css)$/i)
+        (node.fileName || '').match(/\.(docx|txt|md|csv|json|js|ts|py|html|css|pdf)$/i)
       ) {
         fetch(`/api/attachments/${node.fileHash}/content`)
           .then((res) => (res.ok ? res.json() : null))
@@ -1096,6 +1145,11 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
         if (e.code === 'KeyF') setActiveTool('frame');
         if (e.code === 'KeyC' || e.code === 'KeyL') setActiveTool('arrow');
         if (e.code === 'KeyR') setActiveTool('shape');
+        if (e.code === 'KeyD') {
+          const cx = (window.innerWidth / 2 - viewport.x) / viewport.zoom;
+          const cy = (window.innerHeight / 2 - viewport.y) / viewport.zoom;
+          createNodeAt('chart', cx - 190, cy - 180);
+        }
         if (e.code === 'KeyI') fileAttachmentInputRef.current?.click();
 
         // Mindmap Quick-Branching (Tab on selected node)
@@ -1419,6 +1473,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
     const isKanban = type === 'kanban';
     const isCode = type === 'code';
     const isImage = type === 'image';
+    const isChart = type === 'chart';
 
     let defaultText = initialText;
     if (!defaultText) {
@@ -1428,6 +1483,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
       else if (isTable) defaultText = JSON.stringify([['Заголовок 1', 'Заголовок 2', 'Заголовок 3'], ['', '', ''], ['', '', '']]);
       else if (isKanban) defaultText = 'К выполнению';
       else if (isCode) defaultText = '// Напишите код здесь...\nfunction main() {\n  return 42;\n}';
+      else if (isChart) defaultText = 'Диаграмма долей';
       else defaultText = type === 'text' ? 'Текст' : '';
     }
 
@@ -1440,6 +1496,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
     else if (isKanban) { defaultW = 280; defaultH = 420; }
     else if (isCode) { defaultW = 360; defaultH = 220; }
     else if (isImage) { defaultW = 320; defaultH = 240; }
+    else if (isChart) { defaultW = 380; defaultH = 360; }
 
     boardDoc.transact(() => {
       yNodes.set(id, nodeMap);
@@ -1459,7 +1516,14 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
         locked: false,
         fileHash: fileHash || undefined,
         codeLanguage: isCode ? 'typescript' : undefined,
-        shapeVariant: type === 'shape' ? selectedShapeVariant : undefined
+        shapeVariant: type === 'shape' ? selectedShapeVariant : undefined,
+        chartType: isChart ? 'pie' : undefined,
+        chartData: isChart
+          ? [
+              { id: '1', label: 'Категория А', value: 75, color: '#6366f1' },
+              { id: '2', label: 'Категория Б', value: 25, color: '#10b981' }
+            ]
+          : undefined
       });
     }, 'user');
 
@@ -1659,6 +1723,18 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
       const isPdf = (data.mimeType || '').includes('pdf') || file.name.toLowerCase().endsWith('.pdf');
       const hasTextPreview = Boolean(data.extractedText);
 
+      let fileDataUrl: string | undefined;
+      if (file.size <= 4 * 1024 * 1024) {
+        try {
+          fileDataUrl = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result as string);
+            reader.onerror = reject;
+            reader.readAsDataURL(file);
+          });
+        } catch {}
+      }
+
       boardDoc.transact(() => {
         yNodes.set(id, nodeMap);
         setNodeProperties(nodeMap, {
@@ -1672,6 +1748,8 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
           fileHash: data.hash,
           fileName: data.fileName,
           extractedText: data.extractedText,
+          fileDataUrl,
+          uploaderOrigin: window.location.origin,
           showPreview: hasTextPreview || isPdf,
           author: currentScope.value === 'team' ? (agentStatus.value?.memberName || '') : '',
           done: false,
@@ -2745,6 +2823,8 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
         if (e.currentTarget.scrollTop !== 0) e.currentTarget.scrollTop = 0;
         if (e.currentTarget.scrollLeft !== 0) e.currentTarget.scrollLeft = 0;
       }}
+      onPointerLeave={() => setCursorScreenPos(null)}
+      onMouseLeave={() => setCursorScreenPos(null)}
       onMouseDown={handleBackgroundPointerDown}
       onContextMenu={handleContextMenu}
       onDragOver={(e) => {
@@ -3329,6 +3409,20 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
                   <Icon name="code" size={16} />
                   <span>Блок кода</span>
                 </button>
+                <button
+                  type="button"
+                  class="miro-flyout-item-btn"
+                  style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 10px', background: 'transparent', border: 'none', color: '#f1f5f9', fontSize: '13px', cursor: 'pointer', borderRadius: '6px', textAlign: 'left' }}
+                  onClick={() => {
+                    const cx = (window.innerWidth / 2 - viewport.x) / viewport.zoom;
+                    const cy = (window.innerHeight / 2 - viewport.y) / viewport.zoom;
+                    createNodeAt('chart', cx - 190, cy - 180);
+                    setActiveFlyout('none');
+                  }}
+                >
+                  <Icon name="chart" size={16} />
+                  <span>Диаграмма долей (D)</span>
+                </button>
               </div>
             )}
           </div>
@@ -3676,34 +3770,6 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
               XL
             </button>
           </div>
-
-          {/* Checkbox toggle for stickies */}
-          {(() => {
-            const hasSticky = Array.from(selectedNodeIds).some((id) => nodeLookup.get(id)?.type === 'sticky');
-            if (!hasSticky) return null;
-            return (
-              <button
-                class="inspector-btn"
-                title="Добавить / убрать чекбокс задачи"
-                onClick={() => {
-                  boardDoc.transact(() => {
-                    for (const id of selectedNodeIds) {
-                      const node = nodeLookup.get(id);
-                      if (node?.type === 'sticky') {
-                        const map = yNodes.get(id);
-                        if (map) {
-                          const currentVal = map.get('hasCheckbox');
-                          map.set('hasCheckbox', !currentVal);
-                        }
-                      }
-                    }
-                  }, 'user');
-                }}
-              >
-                <Icon name="check-square" size={15} />
-              </button>
-            );
-          })()}
 
           <div class="inspector-divider" />
 
@@ -4332,7 +4398,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
                     return (
                       <div class="node-image-container" onMouseDown={(e) => e.stopPropagation()}>
                         <img
-                          src={`/api/attachments/${node.fileHash}`}
+                          src={node.fileDataUrl || `/api/attachments/${node.fileHash}`}
                           alt={node.fileName || node.text}
                           class="node-rendered-img"
                         />
@@ -4342,14 +4408,14 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
                   if (isAud) {
                     return (
                       <div class="node-media-container" onMouseDown={(e) => e.stopPropagation()}>
-                        <audio controls src={`/api/attachments/${node.fileHash}`} style={{ width: '100%' }} />
+                        <audio controls src={node.fileDataUrl || `/api/attachments/${node.fileHash}`} style={{ width: '100%' }} />
                       </div>
                     );
                   }
                   if (isVid) {
                     return (
                       <div class="node-media-container" onMouseDown={(e) => e.stopPropagation()}>
-                        <video controls src={`/api/attachments/${node.fileHash}`} style={{ width: '100%', maxHeight: '100%' }} />
+                        <video controls src={node.fileDataUrl || `/api/attachments/${node.fileHash}`} style={{ width: '100%', maxHeight: '100%' }} />
                       </div>
                     );
                   }
@@ -4392,7 +4458,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
                             </button>
                           )}
                           <a
-                            href={`/api/attachments/${node.fileHash}`}
+                            href={node.fileDataUrl || `/api/attachments/${node.fileHash}`}
                             download={node.fileName || 'file'}
                             class="node-file-btn"
                             target="_blank"
@@ -4406,11 +4472,32 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
                       </div>
 
                       {isPdf ? (
-                        <iframe
-                          src={`/api/attachments/${node.fileHash}`}
-                          class="node-file-pdf-iframe"
-                          title={node.fileName || 'PDF'}
-                        />
+                        node.fileDataUrl || node.fileHash ? (
+                          <iframe
+                            src={node.fileDataUrl || `/api/attachments/${node.fileHash}`}
+                            class="node-file-pdf-iframe"
+                            title={node.fileName || 'PDF'}
+                          />
+                        ) : (
+                          <div
+                            class="node-doc-page-container scrollable-card-content"
+                            onWheel={(e) => {
+                              if (!e.ctrlKey && !e.metaKey) e.stopPropagation();
+                            }}
+                            onMouseDown={(e) => e.stopPropagation()}
+                          >
+                            <div
+                              class="node-doc-sheet"
+                              style={{
+                                width: `${DOC_BASE_WIDTH}px`,
+                                transform: `scale(${scale})`,
+                                transformOrigin: 'top left'
+                              }}
+                            >
+                              {node.extractedText || 'Текст PDF документа извлекается...'}
+                            </div>
+                          </div>
+                        )
                       ) : (
                         <div
                           class="node-doc-page-container scrollable-card-content"
@@ -4471,12 +4558,10 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
                       const map = yNodes.get(node.id);
                       if (map) {
                         const target = e.target as HTMLTextAreaElement;
-                        const scrollH = target.scrollHeight;
-                        const paddingExtra = 36;
-                        const newH = Math.max(node.h, scrollH + paddingExtra);
+                        const newH = measureAndAutoGrowTextarea(target, node.h, false);
                         const updates: Partial<BoardNodeData> = { text: target.value };
-                        if (newH > node.h) {
-                          updates.h = Math.round(newH);
+                        if (newH !== null) {
+                          updates.h = newH;
                         }
                         setNodeProperties(map, updates);
                       }
@@ -4780,6 +4865,265 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
                     style={{ width: '100%', height: '100%', objectFit: 'contain', pointerEvents: 'none' }}
                   />
                 </div>
+              ) : node.type === 'chart' ? (
+                (() => {
+                  const chartType = node.chartType || 'pie';
+                  const data = (node.chartData && node.chartData.length > 0)
+                    ? node.chartData
+                    : [
+                        { id: '1', label: 'Категория А', value: 75, color: '#6366f1' },
+                        { id: '2', label: 'Категория Б', value: 25, color: '#10b981' }
+                      ];
+                  const total = data.reduce((sum, d) => sum + (Math.max(0, Number(d.value)) || 0), 0) || 1;
+                  const palette = ['#6366f1', '#10b981', '#f59e0b', '#ec4899', '#3b82f6', '#8b5cf6', '#06b6d4', '#f97316'];
+
+                  const updateData = (newData: typeof data) => {
+                    const map = yNodes.get(node.id);
+                    if (map) setNodeProperties(map, { chartData: newData });
+                  };
+
+                  const setChartMode = (mode: 'pie' | 'donut' | 'square' | 'bar') => {
+                    const map = yNodes.get(node.id);
+                    if (map) setNodeProperties(map, { chartType: mode });
+                  };
+
+                  return (
+                    <div
+                      class="node-chart-card"
+                      onClick={() => setSelectedNodeIds(new Set([node.id]))}
+                      onWheel={(e) => {
+                        if (!e.ctrlKey && !e.metaKey) e.stopPropagation();
+                      }}
+                    >
+                      <div
+                        class="card-top-drag-header chart-header"
+                        onMouseDown={(e) => handleNodePointerDown(node, e as any)}
+                      >
+                        <div class="card-drag-grip" title="Перетащить диаграмму">
+                          <Icon name="grip-vertical" size={14} />
+                        </div>
+                        <input
+                          class="chart-title-input"
+                          value={node.text || 'Диаграмма долей'}
+                          placeholder="Название диаграммы"
+                          onMouseDown={(e) => e.stopPropagation()}
+                          onInput={(e) => {
+                            const map = yNodes.get(node.id);
+                            if (map) setNodeProperties(map, { text: (e.target as HTMLInputElement).value });
+                          }}
+                        />
+                        <div class="chart-mode-pill-group" onMouseDown={(e) => e.stopPropagation()}>
+                          <button
+                            type="button"
+                            class={`chart-mode-btn ${chartType === 'pie' ? 'active' : ''}`}
+                            onClick={() => setChartMode('pie')}
+                            title="Круговая"
+                          >
+                            Круг
+                          </button>
+                          <button
+                            type="button"
+                            class={`chart-mode-btn ${chartType === 'donut' ? 'active' : ''}`}
+                            onClick={() => setChartMode('donut')}
+                            title="Кольцевая"
+                          >
+                            Кольцо
+                          </button>
+                          <button
+                            type="button"
+                            class={`chart-mode-btn ${chartType === 'square' ? 'active' : ''}`}
+                            onClick={() => setChartMode('square')}
+                            title="100% блок"
+                          >
+                            Блок
+                          </button>
+                          <button
+                            type="button"
+                            class={`chart-mode-btn ${chartType === 'bar' ? 'active' : ''}`}
+                            onClick={() => setChartMode('bar')}
+                            title="Столбцы"
+                          >
+                            Столбцы
+                          </button>
+                        </div>
+                      </div>
+
+                      <div class="chart-visual-area">
+                        {chartType === 'pie' || chartType === 'donut' ? (
+                          <svg viewBox="0 0 160 160" width="130" height="130">
+                            {(() => {
+                              const cx = 80;
+                              const cy = 80;
+                              const r = 68;
+                              const rIn = chartType === 'donut' ? 42 : 0;
+                              let startAngle = -Math.PI / 2;
+
+                              const validSegments = data.filter((d) => (Number(d.value) || 0) > 0);
+                              if (validSegments.length <= 1) {
+                                const onlyItem = validSegments[0] || data[0];
+                                if (chartType === 'pie') {
+                                  return <circle cx={cx} cy={cy} r={r} fill={onlyItem.color} />;
+                                }
+                                return (
+                                  <circle
+                                    cx={cx}
+                                    cy={cy}
+                                    r={(r + rIn) / 2}
+                                    stroke={onlyItem.color}
+                                    strokeWidth={r - rIn}
+                                    fill="none"
+                                  />
+                                );
+                              }
+
+                              return data.map((seg) => {
+                                const val = Math.max(0, Number(seg.value) || 0);
+                                if (val <= 0) return null;
+                                const fraction = val / total;
+                                const angle = fraction * 2 * Math.PI;
+                                const endAngle = startAngle + angle;
+                                const largeArc = angle > Math.PI ? 1 : 0;
+
+                                const x0 = cx + r * Math.cos(startAngle);
+                                const y0 = cy + r * Math.sin(startAngle);
+                                const x1 = cx + r * Math.cos(endAngle);
+                                const y1 = cy + r * Math.sin(endAngle);
+
+                                let dPath = '';
+                                if (chartType === 'pie') {
+                                  dPath = `M ${cx} ${cy} L ${x0.toFixed(2)} ${y0.toFixed(2)} A ${r} ${r} 0 ${largeArc} 1 ${x1.toFixed(2)} ${y1.toFixed(2)} Z`;
+                                } else {
+                                  const x0In = cx + rIn * Math.cos(startAngle);
+                                  const y0In = cy + rIn * Math.sin(startAngle);
+                                  const x1In = cx + rIn * Math.cos(endAngle);
+                                  const y1In = cy + rIn * Math.sin(endAngle);
+                                  dPath = `M ${x0.toFixed(2)} ${y0.toFixed(2)} A ${r} ${r} 0 ${largeArc} 1 ${x1.toFixed(2)} ${y1.toFixed(2)} L ${x1In.toFixed(2)} ${y1In.toFixed(2)} A ${rIn} ${rIn} 0 ${largeArc} 0 ${x0In.toFixed(2)} ${y0In.toFixed(2)} Z`;
+                                }
+
+                                startAngle = endAngle;
+                                return <path key={seg.id} d={dPath} fill={seg.color} />;
+                              });
+                            })()}
+                          </svg>
+                        ) : chartType === 'square' ? (
+                          <div style={{ width: '100%', padding: '0 8px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                            <div style={{ width: '100%', height: '32px', display: 'flex', borderRadius: '6px', overflow: 'hidden', boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.4)' }}>
+                              {data.map((seg) => {
+                                const val = Math.max(0, Number(seg.value) || 0);
+                                const pct = Math.round((val / total) * 100);
+                                return (
+                                  <div
+                                    key={seg.id}
+                                    style={{
+                                      flex: val || 1,
+                                      background: seg.color,
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                      color: '#fff',
+                                      fontSize: '11px',
+                                      fontWeight: 'bold',
+                                      minWidth: '4px'
+                                    }}
+                                    title={`${seg.label}: ${pct}%`}
+                                  >
+                                    {pct >= 10 ? `${pct}%` : ''}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ) : (
+                          <div style={{ width: '100%', height: '110px', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', gap: '14px', padding: '0 12px 6px' }}>
+                            {data.map((seg) => {
+                              const val = Math.max(0, Number(seg.value) || 0);
+                              const pct = Math.round((val / total) * 100);
+                              const barHeight = Math.max(6, Math.round((val / total) * 90));
+                              return (
+                                <div key={seg.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flex: 1, maxWidth: '48px', height: '100%', justifyContent: 'flex-end', gap: '4px' }}>
+                                  <span style={{ fontSize: '10px', color: '#94a3b8', fontWeight: 600 }}>{pct}%</span>
+                                  <div style={{ width: '100%', height: `${barHeight}px`, background: seg.color, borderRadius: '4px 4px 0 0' }} />
+                                  <span style={{ fontSize: '10px', color: '#cbd5e1', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%' }} title={seg.label}>{seg.label}</span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+
+                      <div class="chart-data-editor" onMouseDown={(e) => e.stopPropagation()}>
+                        {data.map((seg) => {
+                          const val = Math.max(0, Number(seg.value) || 0);
+                          const pct = Math.round((val / total) * 100);
+                          return (
+                            <div key={seg.id} class="chart-data-row">
+                              <div
+                                class="chart-color-dot"
+                                style={{ background: seg.color }}
+                                title="Сменить цвет"
+                                onClick={() => {
+                                  const colorIdx = palette.indexOf(seg.color);
+                                  const nextColor = palette[(colorIdx + 1) % palette.length];
+                                  const updated = data.map((d) => (d.id === seg.id ? { ...d, color: nextColor } : d));
+                                  updateData(updated);
+                                }}
+                              />
+                              <input
+                                class="chart-row-input label"
+                                value={seg.label}
+                                placeholder="Категория"
+                                onInput={(e) => {
+                                  const newLabel = (e.target as HTMLInputElement).value;
+                                  const updated = data.map((d) => (d.id === seg.id ? { ...d, label: newLabel } : d));
+                                  updateData(updated);
+                                }}
+                              />
+                              <input
+                                class="chart-row-input val"
+                                type="number"
+                                min="0"
+                                value={seg.value}
+                                onInput={(e) => {
+                                  const newVal = Number((e.target as HTMLInputElement).value) || 0;
+                                  const updated = data.map((d) => (d.id === seg.id ? { ...d, value: newVal } : d));
+                                  updateData(updated);
+                                }}
+                              />
+                              <span class="chart-pct-badge">{pct}%</span>
+                              <button
+                                type="button"
+                                class="chart-del-btn"
+                                title="Удалить сектор"
+                                disabled={data.length <= 1}
+                                style={{ opacity: data.length <= 1 ? 0.3 : 1 }}
+                                onClick={() => {
+                                  if (data.length <= 1) return;
+                                  const updated = data.filter((d) => d.id !== seg.id);
+                                  updateData(updated);
+                                }}
+                              >
+                                &times;
+                              </button>
+                            </div>
+                          );
+                        })}
+                        <button
+                          type="button"
+                          class="chart-add-row-btn"
+                          onClick={() => {
+                            const newId = String(Date.now());
+                            const nextColor = palette[data.length % palette.length];
+                            const updated = [...data, { id: newId, label: `Сектор ${data.length + 1}`, value: 10, color: nextColor }];
+                            updateData(updated);
+                          }}
+                        >
+                          <Icon name="plus" size={12} />
+                          <span>Добавить сектор</span>
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })()
               ) : (
                 <textarea
                   id={`node-textarea-${node.id}`}
@@ -4811,12 +5155,10 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
                     const map = yNodes.get(node.id);
                     if (map) {
                       const target = e.target as HTMLTextAreaElement;
-                      const scrollH = target.scrollHeight;
-                      const paddingExtra = 36;
-                      const newH = Math.max(node.h, scrollH + paddingExtra);
+                      const newH = measureAndAutoGrowTextarea(target, node.h, true);
                       const updates: Partial<BoardNodeData> = { text: target.value };
-                      if (newH > node.h) {
-                        updates.h = Math.round(newH);
+                      if (newH !== null) {
+                        updates.h = newH;
                       }
                       setNodeProperties(map, updates);
                     }
@@ -4925,7 +5267,8 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
                     color,
                     baseWidth,
                     mode,
-                    isDarkTheme
+                    isDarkTheme,
+                    (drawNode as any).points
                   )}
                 </g>
               );
@@ -4940,7 +5283,8 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
                 drawColor,
                 drawWidth,
                 drawMode,
-                isDarkTheme
+                isDarkTheme,
+                currentStroke
               )}
             </g>
           )}
@@ -5247,7 +5591,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
       </div>
 
       {/* Freehand Brush Preview Cursor */}
-      {activeTool === 'draw' && cursorScreenPos && (
+      {activeTool === 'draw' && cursorScreenPos && cursorScreenPos.x > 0 && cursorScreenPos.y > 0 && (
         <div
           class="draw-cursor-follower"
           style={{

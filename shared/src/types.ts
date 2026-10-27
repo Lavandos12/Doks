@@ -58,7 +58,8 @@ export type BoardNodeType =
   | 'checklist'
   | 'table'
   | 'kanban'
-  | 'code';
+  | 'code'
+  | 'chart';
 
 export interface AttachmentMeta {
   hash: string;
@@ -87,12 +88,17 @@ export interface BoardNodeData {
   noteId?: string;
   fileHash?: string;
   fileName?: string;
+  fileDataUrl?: string;
+  uploaderOrigin?: string;
+  pagePreviews?: string[];
   url?: string;
   z: number;
   locked?: boolean;
   fontSize?: number;
   hasCheckbox?: boolean;
   shapeVariant?: 'rectangle' | 'rounded' | 'diamond' | 'pill' | 'circle' | 'triangle' | 'parallelogram' | 'cylinder' | 'hexagon';
+  chartType?: 'pie' | 'donut' | 'square' | 'bar';
+  chartData?: Array<{ id: string; label: string; value: number; color: string }>;
   svgPath?: string;
   points?: Array<{ x: number; y: number }>;
   strokeWidth?: number;

@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { extractTextFromDocxBuffer } from './docx-extractor.js';
+import { extractTextFromPdfBuffer } from './pdf-extractor.js';
 
 export interface AttachmentInfo {
   hash: string;
@@ -150,11 +151,13 @@ export class AttachmentManager {
       } catch {}
     }
 
-    // 3.5 Extract text for .docx, .txt, .md, code files
+    // 3.5 Extract text for .docx, .pdf, .txt, .md, code files
     let extractedText: string | undefined = undefined;
     const lowerName = candidateName.toLowerCase();
     if (lowerName.endsWith('.docx')) {
       extractedText = extractTextFromDocxBuffer(buffer);
+    } else if (lowerName.endsWith('.pdf')) {
+      extractedText = extractTextFromPdfBuffer(buffer);
     } else if (
       lowerName.endsWith('.txt') ||
       lowerName.endsWith('.md') ||

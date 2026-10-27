@@ -1807,23 +1807,29 @@ input:focus, select:focus, textarea:focus {
   font-weight: 500;
 }
 
-/* 4 Magnetic Connection Ports */
+/* 4 Magnetic Connection Ports (Miro / FigJam standard: 22px outside node border) */
 .magnetic-port {
   position: absolute;
-  width: 10px;
-  height: 10px;
+  width: 14px;
+  height: 14px;
   border-radius: 50%;
-  background-color: var(--accent);
-  border: 2px solid #fff;
+  background: #1e1b4b;
+  border: 2px solid #818cf8;
   opacity: 0;
-  transition: opacity 0.15s;
+  transition: opacity 0.15s ease, transform 0.15s ease, background 0.15s ease;
   cursor: crosshair;
-  z-index: 20;
+  z-index: 40;
 }
 
 .board-node-box:hover .magnetic-port,
 .board-node-box.selected .magnetic-port {
   opacity: 1;
+}
+
+.magnetic-port:hover {
+  transform: scale(1.25);
+  background: #312e81;
+  border-color: #a5b4fc;
 }
 
 /* Card inner textareas: complete removal of browser borders and outlines */
@@ -1859,23 +1865,43 @@ input:focus, select:focus, textarea:focus {
 }
 
 .port-top {
-  top: -6px;
-  left: calc(50% - 5px);
+  top: -22px;
+  left: 50%;
+  transform: translateX(-50%);
 }
 
 .port-right {
-  top: calc(50% - 5px);
-  right: -6px;
+  top: 50%;
+  right: -22px;
+  transform: translateY(-50%);
 }
 
 .port-bottom {
-  bottom: -6px;
-  left: calc(50% - 5px);
+  bottom: -22px;
+  left: 50%;
+  transform: translateX(-50%);
 }
 
 .port-left {
-  top: calc(50% - 5px);
-  left: -6px;
+  top: 50%;
+  left: -22px;
+  transform: translateY(-50%);
+}
+
+.port-top:hover {
+  transform: translateX(-50%) scale(1.25);
+}
+
+.port-right:hover {
+  transform: translateY(-50%) scale(1.25);
+}
+
+.port-bottom:hover {
+  transform: translateX(-50%) scale(1.25);
+}
+
+.port-left:hover {
+  transform: translateY(-50%) scale(1.25);
 }
 
 /* Node Header / Stripe */
@@ -3201,39 +3227,221 @@ input:focus, select:focus, textarea:focus {
   background-color: #f8fafc !important;
 }
 
-/* 8-Point Resize Handles */
+/* 8-Point Resize Handles (Strictly on Corners & Borders) */
 .node-resize-handles-layer {
   position: absolute;
-  inset: -4px;
+  inset: 0;
   pointer-events: none;
   z-index: 10;
 }
 
 .resize-handle {
   position: absolute;
-  width: 9px;
-  height: 9px;
   background: #ffffff;
-  border: 1.5px solid #090a0c;
-  border-radius: 2px;
+  border: 1.5px solid #6366f1;
   pointer-events: auto;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
-  transition: transform 0.1s ease;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+  transition: transform 0.1s ease, background 0.1s ease;
 }
 
 .resize-handle:hover {
-  transform: scale(1.3);
   background: #38bdf8;
+  border-color: #0284c7;
 }
 
-.resize-handle.handle-nw { top: -4px; left: -4px; cursor: nwse-resize; }
-.resize-handle.handle-n  { top: -4px; left: calc(50% - 4.5px); cursor: ns-resize; }
-.resize-handle.handle-ne { top: -4px; right: -4px; cursor: nesw-resize; }
-.resize-handle.handle-e  { top: calc(50% - 4.5px); right: -4px; cursor: ew-resize; }
-.resize-handle.handle-se { bottom: -4px; right: -4px; cursor: nwse-resize; }
-.resize-handle.handle-s  { bottom: -4px; left: calc(50% - 4.5px); cursor: ns-resize; }
-.resize-handle.handle-sw { bottom: -4px; left: -4px; cursor: nesw-resize; }
-.resize-handle.handle-w  { top: calc(50% - 4.5px); left: -4px; cursor: ew-resize; }
+/* Corner Handles: 10px white squares at -5px */
+.resize-handle.handle-nw { top: -5px; left: -5px; width: 10px; height: 10px; border-radius: 2px; cursor: nwse-resize; }
+.resize-handle.handle-ne { top: -5px; right: -5px; width: 10px; height: 10px; border-radius: 2px; cursor: nesw-resize; }
+.resize-handle.handle-se { bottom: -5px; right: -5px; width: 10px; height: 10px; border-radius: 2px; cursor: nwse-resize; }
+.resize-handle.handle-sw { bottom: -5px; left: -5px; width: 10px; height: 10px; border-radius: 2px; cursor: nesw-resize; }
+
+/* Edge Bars: sleek pill bars sitting directly on the border (-3px) */
+.resize-handle.handle-n  { top: -3px; left: calc(50% - 12px); width: 24px; height: 6px; border-radius: 3px; cursor: ns-resize; }
+.resize-handle.handle-s  { bottom: -3px; left: calc(50% - 12px); width: 24px; height: 6px; border-radius: 3px; cursor: ns-resize; }
+.resize-handle.handle-e  { top: calc(50% - 12px); right: -3px; width: 6px; height: 24px; border-radius: 3px; cursor: ew-resize; }
+.resize-handle.handle-w  { top: calc(50% - 12px); left: -3px; width: 6px; height: 24px; border-radius: 3px; cursor: ew-resize; }
+
+/* Dock Submenus & Flyouts */
+.dock-submenu,
+.miro-flyout-panel {
+  position: absolute !important;
+  left: calc(100% + 12px) !important;
+  bottom: 0 !important;
+  min-width: 210px !important;
+  background: rgba(15, 18, 28, 0.96) !important;
+  backdrop-filter: blur(16px) !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  border-radius: 12px !important;
+  padding: 6px !important;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55) !important;
+  z-index: 500 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 4px !important;
+}
+
+.left-dock,
+.miro-dock {
+  width: 52px !important;
+  flex-shrink: 0 !important;
+}
+
+/* Interactive Percentage Data Chart Widget */
+.node-chart-card {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: rgba(18, 21, 31, 0.94);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  user-select: none;
+}
+
+.chart-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  gap: 8px;
+}
+
+.chart-title-input {
+  background: transparent;
+  border: none;
+  outline: none;
+  color: #f1f5f9;
+  font-size: 13px;
+  font-weight: 600;
+  flex: 1;
+}
+
+.chart-mode-pill-group {
+  display: flex;
+  background: rgba(0, 0, 0, 0.35);
+  border-radius: 6px;
+  padding: 2px;
+  gap: 2px;
+}
+
+.chart-mode-btn {
+  background: transparent;
+  border: none;
+  outline: none;
+  color: #94a3b8;
+  font-size: 11px;
+  padding: 3px 7px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.chart-mode-btn:hover {
+  color: #f8fafc;
+}
+
+.chart-mode-btn.active {
+  background: rgba(99, 102, 241, 0.85);
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.chart-visual-area {
+  flex: 1;
+  min-height: 140px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px;
+}
+
+.chart-data-editor {
+  padding: 8px 12px 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.chart-data-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.chart-color-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.chart-row-input {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  padding: 2px 6px;
+  color: #f1f5f9;
+  font-size: 11px;
+  outline: none;
+}
+
+.chart-row-input.label {
+  flex: 1;
+}
+
+.chart-row-input.val {
+  width: 52px;
+  text-align: right;
+}
+
+.chart-pct-badge {
+  font-size: 11px;
+  font-weight: 600;
+  color: #818cf8;
+  width: 38px;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.chart-del-btn {
+  background: transparent;
+  border: none;
+  color: #64748b;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 0 4px;
+  line-height: 1;
+}
+
+.chart-del-btn:hover {
+  color: #f43f5e;
+}
+
+.chart-add-row-btn {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px dashed rgba(255, 255, 255, 0.2);
+  border-radius: 6px;
+  color: #94a3b8;
+  font-size: 11px;
+  padding: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  text-align: center;
+}
+
+.chart-add-row-btn:hover {
+  background: rgba(99, 102, 241, 0.15);
+  border-color: #818cf8;
+  color: #c7d2fe;
+}
 
 /* Floating Context Inspector Bar */
 .floating-inspector-bar {
