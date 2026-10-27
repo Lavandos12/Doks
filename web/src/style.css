@@ -1961,6 +1961,9 @@ input:focus, select:focus, textarea:focus {
 
 .node-inline-textarea {
   flex: 1;
+  width: 100%;
+  max-height: 100%;
+  box-sizing: border-box;
   background: transparent;
   border: none;
   color: var(--text-primary);
@@ -1971,6 +1974,9 @@ input:focus, select:focus, textarea:focus {
   font-size: 0.9rem;
   line-height: 1.4;
   cursor: text;
+  overflow-y: auto;
+  word-break: break-word;
+  overflow-wrap: break-word;
 }
 
 .type-text .node-inline-textarea {
@@ -6152,33 +6158,6 @@ button.doks-color-dot.active {
 .canvas-node-drawing path {
   pointer-events: stroke !important;
   cursor: pointer;
-}
-
-/* Reaction Pill on Sticky Notes */
-.node-reaction-pill {
-  position: absolute;
-  bottom: 8px;
-  left: 8px;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 2px 7px;
-  border-radius: 12px;
-  background: rgba(0, 0, 0, 0.25);
-  backdrop-filter: blur(8px);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  color: #ffffff;
-  font-size: 11px;
-  font-weight: 500;
-  cursor: pointer;
-  user-select: none;
-  transition: transform 0.12s ease, background 0.15s ease;
-  z-index: 10;
-}
-
-.node-reaction-pill:hover {
-  transform: scale(1.1);
-  background: rgba(0, 0, 0, 0.45);
 }
 
 /* Interactive Checklist Card */

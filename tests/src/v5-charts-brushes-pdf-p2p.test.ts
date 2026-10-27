@@ -53,40 +53,54 @@ describe('V5 Calligraphic Brushes, Textarea Stability, 22px Ports, Percentage Ch
     });
   });
 
-  // 2. Textarea runaway auto-growth fix
-  describe('Issue 2: Textarea Runaway Auto-Growth Prevention', () => {
-    // Simulates the algorithm implemented in measureAndAutoGrowTextarea
-    const simulateMeasureAndAutoGrow = (
-      contentLineCount: number,
-      lineHeight: number,
-      currentH: number,
-      isSticky: boolean
-    ): number | null => {
-      // With el.style.height = '0px', scrollHeight reflects actual text content height
-      const actualTextHeight = contentLineCount * lineHeight;
-      const chromePadding = isSticky ? 64 : 28;
-      const neededHeight = actualTextHeight + chromePadding;
-      if (neededHeight > currentH + 4) {
-        return Math.ceil(neededHeight);
-      }
-      return null;
-    };
+  // 2. Card height stability & Complete removal of Like button
+  describe('Issue 2: Card Height Stability on Input & Removal of Like Button', () => {
+    it('preserves exact node height when typing single characters or strings (zero vertical runaway)', () => {
+      const yDoc = new Y.Doc();
+      const nodeMap = yDoc.getMap('sticky-node-1');
+      const initialH = 140;
 
-    it('does not grow node height on single-line typing (no runaway expansion)', () => {
-      const currentH = 140;
-      const lineHeight = 20;
-      // 1 line typed (e.g. 18 characters)
-      const newHeight = simulateMeasureAndAutoGrow(1, lineHeight, currentH, true);
-      // Content height (20) + padding (64) = 84px < 140px -> returns null (remains at 140px)
-      expect(newHeight).toBeNull();
+      setNodeProperties(nodeMap, {
+        id: 'sticky-1',
+        type: 'sticky',
+        x: 100,
+        y: 100,
+        w: 200,
+        h: initialH,
+        text: ''
+      });
+
+      // Typing single character 'a'
+      setNodeProperties(nodeMap, { text: 'a' });
+      expect(nodeMap.get('h')).toBe(initialH);
+      expect(nodeMap.get('text')?.toString()).toBe('a');
+
+      // Typing 'aaaa' (as seen in user screenshot)
+      setNodeProperties(nodeMap, { text: 'aaaa' });
+      expect(nodeMap.get('h')).toBe(initialH);
+      expect(nodeMap.get('text')?.toString()).toBe('aaaa');
+
+      // Typing multi-line text
+      setNodeProperties(nodeMap, { text: 'line 1\nline 2\nline 3' });
+      expect(nodeMap.get('h')).toBe(initialH);
+      expect(nodeMap.get('text')?.toString()).toBe('line 1\nline 2\nline 3');
     });
 
-    it('expands node height cleanly only when text actually overflows container', () => {
-      const currentH = 140;
-      const lineHeight = 20;
-      // 10 lines typed: 200px + 64px = 264px > 140px
-      const newHeight = simulateMeasureAndAutoGrow(10, lineHeight, currentH, true);
-      expect(newHeight).toBe(264);
+    it('confirms sticky card does not attach reaction pill or like counter by default', () => {
+      const yDoc = new Y.Doc();
+      const nodeMap = yDoc.getMap('sticky-node-2');
+
+      setNodeProperties(nodeMap, {
+        id: 'sticky-2',
+        type: 'sticky',
+        x: 200,
+        y: 200,
+        w: 200,
+        h: 140,
+        text: 'Clean card without likes'
+      });
+
+      expect(nodeMap.get('reactions')).toBeUndefined();
     });
   });
 

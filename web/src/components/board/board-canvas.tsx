@@ -456,21 +456,6 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
     );
   };
 
-  // Measure actual text height without 100% container inflation to prevent runaway auto-growth
-  const measureAndAutoGrowTextarea = useCallback((el: HTMLTextAreaElement, currentH: number, isSticky: boolean): number | null => {
-    const prevHeight = el.style.height;
-    el.style.height = '0px';
-    const actualTextHeight = el.scrollHeight;
-    el.style.height = prevHeight || '100%';
-
-    const chromePadding = isSticky ? 64 : 28;
-    const neededHeight = actualTextHeight + chromePadding;
-    if (neededHeight > currentH + 4) {
-      return Math.ceil(neededHeight);
-    }
-    return null;
-  }, []);
-
   // Immediate refs to prevent stale closures during drawing and tool manipulation
   const activeColorRef = useRef<string>(activeColor);
   activeColorRef.current = activeColor;
@@ -4558,12 +4543,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
                       const map = yNodes.get(node.id);
                       if (map) {
                         const target = e.target as HTMLTextAreaElement;
-                        const newH = measureAndAutoGrowTextarea(target, node.h, false);
-                        const updates: Partial<BoardNodeData> = { text: target.value };
-                        if (newH !== null) {
-                          updates.h = newH;
-                        }
-                        setNodeProperties(map, updates);
+                        setNodeProperties(map, { text: target.value });
                       }
                     }}
                     onKeyDown={(e) => {
@@ -5155,12 +5135,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
                     const map = yNodes.get(node.id);
                     if (map) {
                       const target = e.target as HTMLTextAreaElement;
-                      const newH = measureAndAutoGrowTextarea(target, node.h, true);
-                      const updates: Partial<BoardNodeData> = { text: target.value };
-                      if (newH !== null) {
-                        updates.h = newH;
-                      }
-                      setNodeProperties(map, updates);
+                      setNodeProperties(map, { text: target.value });
                     }
                   }}
                   onKeyDown={(e) => {
@@ -5174,27 +5149,6 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
                     }
                   }}
                 />
-              )}
-
-              {/* Sticky Reaction Pill */}
-              {node.type === 'sticky' && (
-                <div
-                  class="node-reaction-pill"
-                  title="Поставить реакцию"
-                  onMouseDown={(e) => e.stopPropagation()}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    const map = yNodes.get(node.id);
-                    if (map) {
-                      const reactions = (map.get('reactions') as any) || {};
-                      const count = (reactions.thumbsUp || 0) + 1;
-                      map.set('reactions', { ...reactions, thumbsUp: count });
-                    }
-                  }}
-                >
-                  <Icon name="thumbs-up" size={12} />
-                  <span class="reaction-count">{node.reactions?.thumbsUp || 0}</span>
-                </div>
               )}
 
               {/* Author micro-badge in Team Scope (never show debug 'Tester') */}
