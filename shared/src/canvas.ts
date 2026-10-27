@@ -42,6 +42,21 @@ export interface JSONCanvasNode {
     originId?: string;
     promotedAt?: number;
     promotedBy?: string;
+    svgPath?: string;
+    points?: Array<{ x: number; y: number }>;
+    strokeWidth?: number;
+    drawMode?: 'pen' | 'brush' | 'highlighter';
+    opacity?: number;
+    chartType?: 'pie' | 'donut' | 'square' | 'bar';
+    chartData?: Array<{ id: string; label: string; value: number; color: string }>;
+    description?: string;
+    codeLanguage?: string;
+    extractedText?: string;
+    showPreview?: boolean;
+    imageUrl?: string;
+    fileDataUrl?: string;
+    uploaderOrigin?: string;
+    reactions?: { thumbsUp?: number };
   };
 }
 
@@ -139,7 +154,22 @@ export function boardToJSONCanvas(
         scope: n.scope,
         originId: n.originId,
         promotedAt: n.promotedAt,
-        promotedBy: n.promotedBy
+        promotedBy: n.promotedBy,
+        svgPath: n.svgPath,
+        points: n.points,
+        strokeWidth: n.strokeWidth,
+        drawMode: n.drawMode,
+        opacity: n.opacity,
+        chartType: n.chartType,
+        chartData: n.chartData,
+        description: n.description,
+        codeLanguage: n.codeLanguage,
+        extractedText: n.extractedText,
+        showPreview: n.showPreview,
+        imageUrl: n.imageUrl,
+        fileDataUrl: n.fileDataUrl,
+        uploaderOrigin: n.uploaderOrigin,
+        reactions: n.reactions
       }
     };
 
@@ -241,7 +271,22 @@ export function jsonCanvasToBoard(data: JSONCanvasData): {
       scope: custom.scope as any,
       originId: custom.originId,
       promotedAt: custom.promotedAt,
-      promotedBy: custom.promotedBy
+      promotedBy: custom.promotedBy,
+      svgPath: custom.svgPath,
+      points: custom.points,
+      strokeWidth: custom.strokeWidth,
+      drawMode: custom.drawMode,
+      opacity: custom.opacity,
+      chartType: custom.chartType,
+      chartData: custom.chartData,
+      description: custom.description,
+      codeLanguage: custom.codeLanguage,
+      extractedText: custom.extractedText,
+      showPreview: custom.showPreview,
+      imageUrl: custom.imageUrl,
+      fileDataUrl: custom.fileDataUrl,
+      uploaderOrigin: custom.uploaderOrigin,
+      reactions: custom.reactions
     });
   }
 

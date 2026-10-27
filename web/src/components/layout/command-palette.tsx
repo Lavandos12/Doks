@@ -18,8 +18,10 @@ import {
   setScope,
   currentScope,
   setWorkspaceMode,
-  workspaceMode
+  workspaceMode,
+  yjsClient
 } from '../../state/app-state.js';
+import { getScopedBoardDocName, getBoardMaps, nodeMapToData } from '@doks/shared';
 import { Icon, type IconName } from '../../ui/icons.js';
 
 interface PaletteItem {
@@ -179,7 +181,7 @@ export function CommandPalette() {
         subtitle: 'Список пиров и подключений',
         icon: 'wifi',
         action: () => {
-          currentView.value = 'network';
+          window.dispatchEvent(new CustomEvent('doks:open-network'));
           close();
         }
       },
@@ -273,7 +275,33 @@ export function CommandPalette() {
           openTab('board', b.id, b.title);
           close();
         }
-      }))
+      })),
+      ...(() => {
+        const activeTab = openTabs.value.find((t) => t.id === activeTabId.value);
+        if (activeTab?.type !== 'board') return [];
+        const cardItems: PaletteItem[] = [];
+        try {
+          const bDoc = yjsClient.getOrCreateDoc(getScopedBoardDocName(currentScope.value, activeTab.id));
+          const { nodes: yNodes } = getBoardMaps(bDoc);
+          yNodes.forEach((nodeMap, nId) => {
+            const data = nodeMapToData(nId, nodeMap);
+            if (!data.deleted && data.text && data.text.trim()) {
+              const preview = data.text.replace(/\r?\n/g, ' ').trim();
+              cardItems.push({
+                id: `card-${data.id}`,
+                title: preview.length > 50 ? preview.slice(0, 50) + '...' : preview,
+                subtitle: `Карточка на доске (${data.type})`,
+                icon: 'file-text' as IconName,
+                action: () => {
+                  window.dispatchEvent(new CustomEvent('doks-focus-node', { detail: { nodeId: data.id } }));
+                  close();
+                }
+              });
+            }
+          });
+        } catch {}
+        return cardItems;
+      })()
     ];
   }
 

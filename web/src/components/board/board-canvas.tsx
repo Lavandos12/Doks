@@ -12,7 +12,8 @@ import {
   getScopedNoteDocName,
   type BoardNodeData,
   type BoardEdgeData,
-  type BoardNodeType
+  type BoardNodeType,
+  boardToJSONCanvas
 } from '@doks/shared';
 import { yjsClient, agentStatus } from '../../state/yjs-client.js';
 import {
@@ -480,10 +481,8 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
   const [activeFlyout, setActiveFlyout] = useState<'none' | 'sticky' | 'shape' | 'arrow' | 'draw' | 'widgets'>('none');
   const [isBoardsPopoverOpen, setIsBoardsPopoverOpen] = useState(false);
   const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
-  const [isNotesDrawerOpen, setIsNotesDrawerOpen] = useState(false);
-  const [selectedDrawerNoteId, setSelectedDrawerNoteId] = useState<string | null>(null);
   const [isNetworkPopoverOpen, setIsNetworkPopoverOpen] = useState(false);
-  const [selectedShapeVariant, setSelectedShapeVariant] = useState<'rectangle' | 'rounded' | 'circle' | 'diamond' | 'parallelogram' | 'cylinder' | 'hexagon'>('rectangle');
+  const [selectedShapeVariant, setSelectedShapeVariant] = useState<'rectangle' | 'rounded' | 'circle' | 'diamond' | 'triangle' | 'parallelogram' | 'cylinder' | 'hexagon'>('rectangle');
   const [defaultLineStyle, setDefaultLineStyle] = useState<{ curveType: 'bezier' | 'orthogonal' | 'straight'; style: 'solid' | 'dashed'; color: string }>({
     curveType: 'bezier',
     style: 'solid',
@@ -588,9 +587,63 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
   const [transferNodeIds, setTransferNodeIds] = useState<string[]>([]);
 
   const handleOpenTransferModal = (ids?: string[]) => {
-    const targetIds = ids && ids.length > 0 ? ids : Array.from(selectedNodeIds);
+    let targetIds = ids && ids.length > 0 ? ids : Array.from(selectedNodeIds);
+    if (targetIds.length === 0) {
+      targetIds = nodesList.filter((n) => !n.deleted).map((n) => n.id);
+    }
     setTransferNodeIds(targetIds);
     setIsTransferModalOpen(true);
+  };
+
+  const handleExportJsonCanvas = () => {
+    setIsExportMenuOpen(false);
+    const nodes = nodesList.filter((n) => !n.deleted);
+    const edges = edgesList.filter((e) => !e.deleted);
+    const jsonCanvas = boardToJSONCanvas(nodes, edges);
+    const blob = new Blob([JSON.stringify(jsonCanvas, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${currentBoardMeta?.title || 'board'}.canvas`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showToast('Файл .canvas скачан');
+  };
+
+  const handleExportSvg = () => {
+    setIsExportMenuOpen(false);
+    const targetNodes = nodesList.filter((n) => !n.deleted && n.type !== 'drawing');
+    const allValid = targetNodes.length > 0 ? targetNodes : nodesList.filter((n) => !n.deleted);
+    if (allValid.length === 0) {
+      showToast('На доске нет объектов для экспорта');
+      return;
+    }
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const n of allValid) {
+      minX = Math.min(minX, n.x);
+      minY = Math.min(minY, n.y);
+      maxX = Math.max(maxX, n.x + n.w);
+      maxY = Math.max(maxY, n.y + n.h);
+    }
+    const pad = 40;
+    const w = Math.max(200, maxX - minX + pad * 2);
+    const h = Math.max(200, maxY - minY + pad * 2);
+    const svgContent = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${minX - pad} ${minY - pad} ${w} ${h}" width="${w}" height="${h}" style="background:#090a0f;">
+      <style>text { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }</style>
+      ${allValid.map((n) => `<rect x="${n.x}" y="${n.y}" width="${n.w}" height="${n.h}" rx="8" fill="#181b24" stroke="${CANVAS_COLORS[n.color || ''] || '#6366f1'}" stroke-width="2" /><text x="${n.x + 12}" y="${n.y + 24}" fill="#f1f5f9" font-size="14">${(n.text || '').replace(/[<>&]/g, '')}</text>`).join('\n')}
+    </svg>`;
+    const blob = new Blob([svgContent], { type: 'image/svg+xml;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${currentBoardMeta?.title || 'board'}.svg`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showToast('SVG экспортирован');
   };
 
   // Hidden attachment file input
@@ -1116,7 +1169,8 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
 
       // Tool switches using physical hardware e.code
       if (!e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey) {
-        if (e.code === 'KeyV' || e.code === 'KeyS') setActiveTool('select');
+        if (e.code === 'KeyV') setActiveTool('select');
+        if (e.code === 'KeyS') setActiveTool('sticky');
         if (e.code === 'KeyH') setActiveTool('hand');
         if (e.code === 'KeyT') setActiveTool('text');
         if (e.code === 'KeyP') setActiveTool('draw');
@@ -1130,12 +1184,12 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
         if (e.code === 'KeyF') setActiveTool('frame');
         if (e.code === 'KeyC' || e.code === 'KeyL') setActiveTool('arrow');
         if (e.code === 'KeyR') setActiveTool('shape');
-        if (e.code === 'KeyD') {
-          const cx = (window.innerWidth / 2 - viewport.x) / viewport.zoom;
-          const cy = (window.innerHeight / 2 - viewport.y) / viewport.zoom;
-          createNodeAt('chart', cx - 190, cy - 180);
-        }
-        if (e.code === 'KeyI') fileAttachmentInputRef.current?.click();
+        if (e.code === 'KeyK') setActiveTool('checklist');
+        if (e.code === 'KeyG') setActiveTool('table');
+        if (e.code === 'KeyB') setActiveTool('kanban');
+        if (e.code === 'KeyD') setActiveTool('chart');
+        if (e.code === 'KeyM') setIsAutoDiagramModalOpen(true);
+        if (e.code === 'KeyI' || e.code === 'KeyU') fileAttachmentInputRef.current?.click();
 
         // Mindmap Quick-Branching (Tab on selected node)
         if (e.code === 'Tab' && selectedNodeIds.size === 1) {
@@ -1514,6 +1568,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
 
     // Auto-return to Select tool and focus new node for instant text editing
     setActiveTool('select');
+    setActiveFlyout('none');
     startEditingNode(id, true);
   };
 
@@ -1789,15 +1844,41 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
       }
     };
 
+    const handleFocusNode = (e: any) => {
+      const nodeId = e.detail?.nodeId;
+      if (!nodeId) return;
+      const target = nodeLookup.get(nodeId);
+      if (target) {
+        setSelectedNodeIds(new Set([nodeId]));
+        const availW = containerSize.width || window.innerWidth;
+        const availH = containerSize.height || window.innerHeight;
+        const cx = target.x + target.w / 2;
+        const cy = target.y + target.h / 2;
+        animateToViewport({
+          x: availW / 2 - cx * viewport.zoom,
+          y: availH / 2 - cy * viewport.zoom,
+          zoom: Math.max(0.8, viewport.zoom)
+        }, false);
+      }
+    };
+
+    const handleOpenNetwork = () => {
+      setIsNetworkPopoverOpen(true);
+    };
+
     window.addEventListener('doks:drop-note', handleDropNoteEvent);
+    window.addEventListener('doks-focus-node', handleFocusNode);
+    window.addEventListener('doks:open-network', handleOpenNetwork);
     window.addEventListener('paste', handleWindowPaste);
     return () => {
       window.removeEventListener('doks:drop-note', handleDropNoteEvent);
+      window.removeEventListener('doks-focus-node', handleFocusNode);
+      window.removeEventListener('doks:open-network', handleOpenNetwork);
       window.removeEventListener('paste', handleWindowPaste);
     };
-  }, [boardDoc, yNodes, viewport]);
+  }, [boardDoc, yNodes, viewport, nodeLookup, containerSize]);
 
-  // Sticky Chaining: create next sticky on Tab or Shift+Enter
+  // Sticky / Node Chaining: create next node on Tab or Shift+Enter
   const chainNextSticky = (sourceNode: BoardNodeData, direction: 'right' | 'down') => {
     const spacing = 24;
     const newX = direction === 'right' ? sourceNode.x + sourceNode.w + spacing : sourceNode.x;
@@ -1810,7 +1891,8 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
       yNodes.set(newId, nodeMap);
       setNodeProperties(nodeMap, {
         id: newId,
-        type: 'sticky',
+        type: sourceNode.type === 'shape' ? 'shape' : sourceNode.type === 'note' ? 'note' : 'sticky',
+        shapeVariant: sourceNode.shapeVariant,
         x: Math.round(newX),
         y: Math.round(newY),
         w: sourceNode.w,
@@ -1838,11 +1920,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
 
     setSelectedNodeIds(new Set([newId]));
     setActiveTool('select');
-
-    setTimeout(() => {
-      const el = document.getElementById(`node-textarea-${newId}`) as HTMLTextAreaElement;
-      el?.focus({ preventScroll: true });
-    }, 50);
+    startEditingNode(newId, true);
   };
 
   // Topological 1-Click Auto-Layout
@@ -1976,6 +2054,8 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
 
       // Live edge reconnection handle drag
       if (reconnectEdgeStateRef.current) {
+        const edge = yEdges.get(reconnectEdgeStateRef.current.edgeId);
+        const oppositeNodeId = reconnectEdgeStateRef.current.which === 'from' ? (edge?.to || '') : (edge?.from || '');
         const boxNodes: BoxNode[] = visibleNodes.map((n) => ({
           id: n.id,
           x: n.x,
@@ -1983,7 +2063,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
           width: n.w,
           height: n.h
         }));
-        const snapped = findMagneticTargetPort(boxNodes, '', pos.x, pos.y, 28);
+        const snapped = findMagneticTargetPort(boxNodes, oppositeNodeId, pos.x, pos.y, 28);
         setReconnectEdgeState((prev) =>
           prev
             ? {
@@ -2035,7 +2115,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
         }
         setAlignmentGuides(guides);
 
-        if (guides.length === 0 && !e.altKey) {
+        if (snapToGrid && guides.length === 0 && !e.altKey) {
           dx = Math.round(dx / GRID_SIZE) * GRID_SIZE;
           dy = Math.round(dy / GRID_SIZE) * GRID_SIZE;
         } else {
@@ -2265,6 +2345,8 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
         reconnectEdgeStateRef.current = null;
         setReconnectEdgeState(null);
         const pos = screenToCanvas(e.clientX, e.clientY);
+        const existing = yEdges.get(recState.edgeId);
+        const oppositeNodeId = recState.which === 'from' ? (existing?.to || '') : (existing?.from || '');
         const boxNodes: BoxNode[] = visibleNodes.map((n) => ({
           id: n.id,
           x: n.x,
@@ -2272,9 +2354,8 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
           width: n.w,
           height: n.h
         }));
-        const target = recState.snappedTarget || findMagneticTargetPort(boxNodes, '', pos.x, pos.y, 28);
+        const target = recState.snappedTarget || findMagneticTargetPort(boxNodes, oppositeNodeId, pos.x, pos.y, 28);
         if (target) {
-          const existing = yEdges.get(recState.edgeId);
           if (existing) {
             boardDoc.transact(() => {
               if (recState.which === 'from') {
@@ -2334,13 +2415,14 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
             yNodes.set(newId, nodeMap);
             setNodeProperties(nodeMap, {
               id: newId,
-              type: 'sticky',
+              type: fromNode.type === 'shape' ? 'shape' : fromNode.type === 'note' ? 'note' : 'sticky',
+              shapeVariant: fromNode.shapeVariant,
               x: Math.round(newX),
               y: Math.round(newY),
-              w: 200,
-              h: 130,
+              w: fromNode.w || 200,
+              h: fromNode.h || 130,
               text: '',
-              color: activeColor,
+              color: fromNode.color || activeColor,
               z: 10,
               deleted: false,
               locked: false
@@ -2363,9 +2445,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
 
           setSelectedNodeIds(new Set([newId]));
           setActiveTool('select');
-          setTimeout(() => {
-            document.getElementById(`node-textarea-${newId}`)?.focus({ preventScroll: true });
-          }, 50);
+          startEditingNode(newId, true);
           return;
         }
 
@@ -2534,6 +2614,10 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
         createNodeAt('code', pos.x - 180, pos.y - 110);
         return;
       }
+      if (activeTool === 'chart') {
+        createNodeAt('chart', pos.x - 140, pos.y - 140);
+        return;
+      }
 
       // Marquee selection in select mode
       if (activeTool === 'select') {
@@ -2567,6 +2651,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
     e.stopPropagation();
     setContextMenu(null);
     setQuickConnect(null);
+    setActiveFlyout('none');
 
     if (activeTool === 'eraser') {
       setIsErasing(true);
@@ -2590,6 +2675,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
       activeTool === 'table' ||
       activeTool === 'kanban' ||
       activeTool === 'code' ||
+      activeTool === 'chart' ||
       activeTool === 'frame'
     ) {
       if (node.type === 'frame') {
@@ -2601,6 +2687,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
         else if (activeTool === 'table') createNodeAt('table', pos.x - 170, pos.y - 90);
         else if (activeTool === 'kanban') createNodeAt('kanban', pos.x - 140, pos.y - 200);
         else if (activeTool === 'code') createNodeAt('code', pos.x - 180, pos.y - 110);
+        else if (activeTool === 'chart') createNodeAt('chart', pos.x - 140, pos.y - 140);
         else if (activeTool === 'frame') createNodeAt('frame', pos.x - 210, pos.y - 160);
         return;
       }
@@ -2971,6 +3058,17 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
               <Icon name="sparkles" size={13} />
               <span>Заполнить шаблоном задач</span>
             </button>
+            <button
+              class="miro-template-btn"
+              onClick={() => {
+                handleOpenTransferModal();
+                setIsBoardsPopoverOpen(false);
+              }}
+              title="Перенести карточки между пространствами"
+            >
+              <Icon name="share" size={13} />
+              <span>Перенос карточек в другое пространство...</span>
+            </button>
           </div>
         )}
 
@@ -2988,19 +3086,24 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
               <span>Экспорт для ИИ...</span>
             </button>
             <div class="miro-popover-divider" />
-            <a
+            <button
               class="miro-menu-item"
-              href={`/api/export/board/${boardId}`}
-              download={`${currentBoardMeta?.title || 'board'}.canvas`}
-              onClick={() => setIsExportMenuOpen(false)}
+              onClick={handleExportJsonCanvas}
             >
               <Icon name="download" size={14} />
               <span>Скачать .canvas (Obsidian)</span>
-            </a>
+            </button>
+            <button
+              class="miro-menu-item"
+              onClick={handleExportSvg}
+            >
+              <Icon name="image" size={14} />
+              <span>Экспорт в SVG (.svg)</span>
+            </button>
             <a
               class="miro-menu-item"
-              href="/api/export/vault"
-              download="doks-vault.zip"
+              href={`/api/export/vault?scope=${encodeURIComponent(currentScope.value)}`}
+              download={`doks-${currentScope.value}-vault.zip`}
               onClick={() => setIsExportMenuOpen(false)}
             >
               <Icon name="archive" size={14} />
@@ -3139,6 +3242,14 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
                   >
                     <div class="shape-preview diamond-preview" />
                     <span>Ромб</span>
+                  </button>
+                  <button
+                    class={`miro-shape-pick-btn ${selectedShapeVariant === 'triangle' ? 'active' : ''}`}
+                    onClick={() => { setSelectedShapeVariant('triangle'); setActiveTool('shape'); setActiveFlyout('none'); }}
+                    title="Треугольник"
+                  >
+                    <div class="shape-preview triangle-preview" />
+                    <span>Треугольник</span>
                   </button>
                   <button
                     class={`miro-shape-pick-btn ${selectedShapeVariant === 'parallelogram' ? 'active' : ''}`}
@@ -3466,69 +3577,6 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
         </div>
       </div>
 
-      {/* =========================================================================
-          RIGHT SLIDE-OVER NOTES DRAWER
-          ========================================================================= */}
-      {isNotesDrawerOpen && (
-        <div
-          class="miro-notes-drawer liquid-glass-surface"
-          onMouseDown={(e) => e.stopPropagation()}
-          onClick={(e) => e.stopPropagation()}
-        >
-          <div class="miro-notes-drawer-header">
-            <div class="miro-drawer-title-group">
-              <Icon name="file-text" size={16} />
-              <span class="miro-drawer-title">Заметки базы знаний</span>
-            </div>
-            <div class="miro-drawer-actions">
-              <button
-                class="btn-primary-xs"
-                onClick={() => {
-                  const newId = createNote('Новая заметка', null);
-                  setSelectedDrawerNoteId(newId);
-                }}
-                title="Создать новую заметку"
-              >
-                <Icon name="plus" size={13} />
-                <span>Новая</span>
-              </button>
-              <button
-                class="miro-close-btn"
-                onClick={() => setIsNotesDrawerOpen(false)}
-                title="Закрыть шторку"
-              >
-                <Icon name="x" size={16} />
-              </button>
-            </div>
-          </div>
-          <div class="miro-drawer-note-select">
-            <select
-              value={selectedDrawerNoteId || (notes.value.find((n) => !n.deleted)?.id || '')}
-              onChange={(e) => setSelectedDrawerNoteId((e.target as HTMLSelectElement).value)}
-            >
-              {notes.value.filter((n) => !n.deleted).map((n) => (
-                <option key={n.id} value={n.id}>{n.title || 'Без названия'}</option>
-              ))}
-            </select>
-          </div>
-          <div class="miro-drawer-content">
-            {(selectedDrawerNoteId || notes.value.find((n) => !n.deleted)?.id) ? (
-              <NoteEditor
-                key={selectedDrawerNoteId || notes.value.find((n) => !n.deleted)!.id}
-                noteId={selectedDrawerNoteId || notes.value.find((n) => !n.deleted)!.id}
-              />
-            ) : (
-              <div class="miro-empty-notes">
-                <p>В хранилище пока нет заметок</p>
-                <button class="btn-primary-sm" onClick={() => createNote('Первая заметка', null)}>
-                  Создать первую заметку
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
       {/* Freehand Drawing Sub-Bar */}
       {activeTool === 'draw' && (
         <div
@@ -3842,6 +3890,62 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
                   }}
                 >
                   <Icon name="circle" size={14} />
+                </button>
+                <button
+                  class="inspector-btn"
+                  title="Форма: Треугольник"
+                  onClick={() => {
+                    boardDoc.transact(() => {
+                      for (const id of selectedNodeIds) {
+                        const map = yNodes.get(id);
+                        if (map) map.set('shapeVariant', 'triangle');
+                      }
+                    }, CANVAS_UNDO_ORIGIN);
+                  }}
+                >
+                  <Icon name="triangle" size={14} />
+                </button>
+                <button
+                  class="inspector-btn"
+                  title="Форма: Параллелограмм"
+                  onClick={() => {
+                    boardDoc.transact(() => {
+                      for (const id of selectedNodeIds) {
+                        const map = yNodes.get(id);
+                        if (map) map.set('shapeVariant', 'parallelogram');
+                      }
+                    }, CANVAS_UNDO_ORIGIN);
+                  }}
+                >
+                  <Icon name="parallelogram" size={14} />
+                </button>
+                <button
+                  class="inspector-btn"
+                  title="Форма: Цилиндр (База данных)"
+                  onClick={() => {
+                    boardDoc.transact(() => {
+                      for (const id of selectedNodeIds) {
+                        const map = yNodes.get(id);
+                        if (map) map.set('shapeVariant', 'cylinder');
+                      }
+                    }, CANVAS_UNDO_ORIGIN);
+                  }}
+                >
+                  <Icon name="cylinder" size={14} />
+                </button>
+                <button
+                  class="inspector-btn"
+                  title="Форма: Шестиугольник"
+                  onClick={() => {
+                    boardDoc.transact(() => {
+                      for (const id of selectedNodeIds) {
+                        const map = yNodes.get(id);
+                        if (map) map.set('shapeVariant', 'hexagon');
+                      }
+                    }, CANVAS_UNDO_ORIGIN);
+                  }}
+                >
+                  <Icon name="hexagon" size={14} />
                 </button>
               </>
             );
@@ -4224,10 +4328,21 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
         {visibleNodes.filter((n) => n.type !== 'drawing').map((rawNode) => {
           const node = nodeLookup.get(rawNode.id) || rawNode;
           const isSelected = selectedNodeIds.has(node.id);
-          const nodeColorHex = CANVAS_COLORS[node.color || ''] || CANVAS_COLORS.default;
+          const rawColor = node.color || '';
+          const nodeColorHex = CANVAS_COLORS[rawColor] || (rawColor.startsWith('#') ? rawColor : CANVAS_COLORS.default);
           const isFrame = node.type === 'frame';
           const isNote = node.type === 'note';
+          const isSticky = node.type === 'sticky';
           const shapeClass = node.type === 'shape' && node.shapeVariant ? `shape-variant-${node.shapeVariant}` : '';
+
+          const stickyBg = isSticky && nodeColorHex !== CANVAS_COLORS.default ? `${nodeColorHex}26` : undefined;
+          const borderColor = isFrame
+            ? 'rgba(255, 255, 255, 0.15)'
+            : node.type === 'text'
+            ? 'transparent'
+            : isSticky && nodeColorHex !== CANVAS_COLORS.default
+            ? `${nodeColorHex}80`
+            : nodeColorHex;
 
           return (
             <div
@@ -4239,7 +4354,8 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
                 top: `${node.y}px`,
                 width: `${node.w}px`,
                 height: `${node.h}px`,
-                borderColor: isFrame ? 'rgba(255, 255, 255, 0.15)' : node.type === 'text' ? 'transparent' : nodeColorHex,
+                backgroundColor: stickyBg || undefined,
+                borderColor,
                 zIndex: node.z ?? (isFrame ? 1 : 10)
               }}
               onMouseDown={(e) => handleNodePointerDown(node, e as any)}
@@ -4507,8 +4623,33 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
                   );
                 })()
               ) : isFrame ? (
-                <div class="frame-label-area">
-                  <span class="frame-label-text">{node.text}</span>
+                <div class="frame-label-area" onDblClick={(e) => { e.stopPropagation(); startEditingNode(node.id, false); }}>
+                  {editingNodeId === node.id ? (
+                    <input
+                      type="text"
+                      class="frame-label-input"
+                      value={node.text}
+                      autoFocus
+                      placeholder="Название фрейма..."
+                      onBlur={() => setEditingNodeId(null)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === 'Escape') {
+                          e.preventDefault();
+                          setEditingNodeId(null);
+                        }
+                      }}
+                      onInput={(e) => {
+                        const map = yNodes.get(node.id);
+                        if (map) {
+                          setNodeProperties(map, { text: (e.target as HTMLInputElement).value });
+                        }
+                      }}
+                      onClick={(e) => e.stopPropagation()}
+                      onMouseDown={(e) => e.stopPropagation()}
+                    />
+                  ) : (
+                    <span class="frame-label-text">{node.text || 'Рамка'}</span>
+                  )}
                 </div>
               ) : node.type === 'shape' ? (
                 <div style={{ position: 'relative', width: '100%', height: '100%', pointerEvents: 'none' }}>
@@ -5095,6 +5236,13 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
                             const nextColor = palette[data.length % palette.length];
                             const updated = [...data, { id: newId, label: `Сектор ${data.length + 1}`, value: 10, color: nextColor }];
                             updateData(updated);
+                            const map = yNodes.get(node.id);
+                            if (map) {
+                              const minRequiredH = 260 + updated.length * 36;
+                              if (node.h < minRequiredH) {
+                                map.set('h', minRequiredH);
+                              }
+                            }
                           }}
                         >
                           <Icon name="plus" size={12} />

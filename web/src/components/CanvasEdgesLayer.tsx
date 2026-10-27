@@ -1,6 +1,6 @@
 import { h, Fragment, FunctionComponent } from 'preact';
 import { useState } from 'preact/hooks';
-import { PortSide, getPortCoordinates, getPortAngle, computeArrowheadPolygon } from '../utils/connectorGeometry.js';
+import { PortSide, getPortCoordinates, getPortAngle, computeArrowheadPolygon, getEdgeEndpointAngles } from '../utils/connectorGeometry.js';
 import { buildEdgeSvgPath, EdgeCurveType } from '../utils/edgePaths.js';
 
 export interface CanvasEdgeModel {
@@ -150,8 +150,15 @@ export const CanvasEdgesLayer: FunctionComponent<Props> = ({
               : undefined;
 
           const dir = edge.direction || 'forward';
-          const endAngle = getPortAngle(side2);
-          const startAngle = getPortAngle(side1);
+          const { startAngle, endAngle } = getEdgeEndpointAngles(
+            p1.x,
+            p1.y,
+            side1,
+            p2.x,
+            p2.y,
+            side2,
+            curveType as any
+          );
 
           return (
             <g key={edge.id} className={isSelected ? 'doks-edge-group canvas-edge-group is-selected' : 'doks-edge-group canvas-edge-group'}>

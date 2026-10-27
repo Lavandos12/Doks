@@ -8,6 +8,11 @@ import {
   getEntityIdFromDocName,
   getNoteDocName,
   getBoardDocName,
+  getScopedIndexDocName,
+  getScopedNoteDocName,
+  getScopedBoardDocName,
+  parseScopedDocName,
+  type WorkspaceScope,
   getIndexMaps,
   getBoardMaps,
   nodeMapToData,
@@ -125,9 +130,11 @@ export class FileMirror {
   /**
    * Resolves folder path relative to vault root.
    */
-  private resolveFolderPath(folderId: string | null): { absDir: string; relDir: string } {
-    if (!folderId) return { absDir: this.vaultPath, relDir: '' };
-    const indexDoc = this.docManager.getOrCreateDoc(DOC_INDEX);
+  private resolveFolderPath(folderId: string | null, scope: WorkspaceScope = 'team'): { absDir: string; relDir: string } {
+    const baseVault = scope === 'solo' ? path.join(this.vaultPath, 'solo') : this.vaultPath;
+    const baseRel = scope === 'solo' ? 'solo' : '';
+    if (!folderId) return { absDir: baseVault, relDir: baseRel };
+    const indexDoc = this.docManager.getOrCreateDoc(getScopedIndexDocName(scope));
     const { folders } = getIndexMaps(indexDoc);
 
     const parts: string[] = [];
@@ -145,7 +152,7 @@ export class FileMirror {
       }
     }
 
-    const relDir = path.join(...parts);
+    const relDir = baseRel ? path.join(baseRel, ...parts) : path.join(...parts);
     return {
       absDir: path.join(this.vaultPath, relDir),
       relDir
@@ -197,12 +204,13 @@ export class FileMirror {
 
   public flushDoc(docName: string): void {
     try {
-      if (docName === DOC_INDEX) {
+      const { scope, entityName } = parseScopedDocName(docName);
+      if (entityName === DOC_INDEX || docName === DOC_INDEX) {
         this.flushAll();
         return;
       }
 
-      const indexDoc = this.docManager.getOrCreateDoc(DOC_INDEX);
+      const indexDoc = this.docManager.getOrCreateDoc(getScopedIndexDocName(scope));
       const { notes, boards } = getIndexMaps(indexDoc);
 
       if (isNoteDoc(docName)) {
@@ -217,7 +225,7 @@ export class FileMirror {
           return;
         }
 
-        const { absDir, relDir } = this.resolveFolderPath(meta.folder || null);
+        const { absDir, relDir } = this.resolveFolderPath(meta.folder || null, scope);
         let baseFileName = sanitizeFileName(meta.title || noteId);
 
         // Check for collision with other active notes in the same folder
@@ -278,8 +286,9 @@ export class FileMirror {
 
         const baseFileName = sanitizeFileName(meta.title || boardId);
         const fileName = `${baseFileName}.canvas`;
-        const targetAbsPath = path.join(this.boardsPath, fileName);
-        const newRelPath = path.join('boards', fileName);
+        const boardsAbsDir = scope === 'solo' ? path.join(this.vaultPath, 'solo', 'boards') : this.boardsPath;
+        const targetAbsPath = path.join(boardsAbsDir, fileName);
+        const newRelPath = scope === 'solo' ? path.join('solo', 'boards', fileName) : path.join('boards', fileName);
 
         if (oldRelPath && oldRelPath !== newRelPath) {
           this.safelyDeleteOldFile(oldRelPath);
@@ -318,16 +327,18 @@ export class FileMirror {
       this.flushDoc(docName);
     }
 
-    const indexDoc = this.docManager.getOrCreateDoc(DOC_INDEX);
-    const { notes, boards } = getIndexMaps(indexDoc);
+    for (const scope of ['solo', 'team'] as WorkspaceScope[]) {
+      const indexDoc = this.docManager.getOrCreateDoc(getScopedIndexDocName(scope));
+      const { notes, boards } = getIndexMaps(indexDoc);
 
-    notes.forEach((_, noteId) => {
-      this.flushDoc(getNoteDocName(noteId));
-    });
+      notes.forEach((_, noteId) => {
+        this.flushDoc(getScopedNoteDocName(scope, noteId));
+      });
 
-    boards.forEach((_, boardId) => {
-      this.flushDoc(getBoardDocName(boardId));
-    });
+      boards.forEach((_, boardId) => {
+        this.flushDoc(getScopedBoardDocName(scope, boardId));
+      });
+    }
   }
 
   public destroy(): void {

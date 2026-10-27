@@ -7,8 +7,9 @@ import { markdown } from '@codemirror/lang-markdown';
 import { autocompletion } from '@codemirror/autocomplete';
 import { oneDark } from '@codemirror/theme-one-dark';
 import { yCollab } from 'y-codemirror.next';
-import { getNoteDocName, getScopedBoardDocName } from '@doks/shared';
+import { getScopedNoteDocName, getScopedBoardDocName } from '@doks/shared';
 import { yjsClient } from '../../state/yjs-client.js';
+import { api } from '../../api/client.js';
 import {
   notes,
   openTab,
@@ -16,7 +17,9 @@ import {
   theme,
   selectedBoardId,
   currentScope,
-  ensureSplitTabs
+  ensureSplitTabs,
+  isSplitView,
+  splitTabId
 } from '../../state/app-state.js';
 import {
   wikilinksCompletionSource,
@@ -68,7 +71,7 @@ export function NoteEditor({ noteId }: NoteEditorProps) {
   const currentNote = notes.value.find((n) => n.id === noteId);
   const title = currentNote?.title || 'Без названия';
 
-  const docName = getNoteDocName(noteId);
+  const docName = getScopedNoteDocName(currentScope.value, noteId);
   const yDoc = yjsClient.getOrCreateDoc(docName);
   const yText = yDoc.getText('text');
 
@@ -162,7 +165,7 @@ export function NoteEditor({ noteId }: NoteEditorProps) {
       const allNotesWithText = notes.value
         .filter((n) => !n.deleted)
         .map((n) => {
-          const doc = yjsClient.getOrCreateDoc(getNoteDocName(n.id));
+          const doc = yjsClient.getOrCreateDoc(getScopedNoteDocName(currentScope.value, n.id));
           return { id: n.id, title: n.title, text: doc.getText('text').toString() };
         });
       setBacklinks(findBacklinks(title, allNotesWithText));
@@ -233,7 +236,7 @@ export function NoteEditor({ noteId }: NoteEditorProps) {
   const handleUploadFileToNote = async (file: File) => {
     try {
       const buffer = await file.arrayBuffer();
-      const res = await fetch('/api/attachments', {
+      const res = await api.fetch('/api/attachments', {
         method: 'POST',
         headers: {
           'Content-Type': file.type || 'application/octet-stream',
@@ -295,6 +298,21 @@ export function NoteEditor({ noteId }: NoteEditorProps) {
           />
 
           <div class="note-toolbar-actions">
+            {/* Close Split Button when in Split View */}
+            {isSplitView.value && (
+              <button
+                class="note-action-btn close-split-btn"
+                onClick={() => {
+                  isSplitView.value = false;
+                  splitTabId.value = null;
+                }}
+                title="Закрыть режим разделенного экрана"
+              >
+                <Icon name="x" size={14} />
+                <span>Закрыть сплит</span>
+              </button>
+            )}
+
             {/* Live Preview Toggle (Ctrl+E) */}
             <button
               class={`note-action-btn ${editorMode === 'preview' ? 'active' : ''}`}

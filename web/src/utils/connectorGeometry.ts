@@ -193,6 +193,92 @@ export function getPortAngle(side: PortSide): number {
 }
 
 /**
+ * Computes the exact tangent angles for edge start and end arrows,
+ * pointing smoothly along the incoming trajectory for straight, bezier, and orthogonal curves.
+ */
+export function getEdgeEndpointAngles(
+  x1: number,
+  y1: number,
+  side1: PortSide,
+  x2: number,
+  y2: number,
+  side2: PortSide,
+  curveType: 'bezier' | 'orthogonal' | 'straight' = 'bezier'
+): { startAngle: number; endAngle: number } {
+  if (curveType === 'straight') {
+    const angle = Math.atan2(y2 - y1, x2 - x1);
+    return {
+      startAngle: Math.atan2(y1 - y2, x1 - x2),
+      endAngle: angle
+    };
+  }
+
+  if (curveType === 'orthogonal') {
+    let lastDx = 0;
+    let lastDy = 0;
+    let firstDx = 0;
+    let firstDy = 0;
+
+    if (side1 === 'right' || side1 === 'left') {
+      const midX = (x1 + x2) / 2;
+      lastDx = x2 - midX;
+      lastDy = 0;
+      firstDx = midX - x1;
+      firstDy = 0;
+    } else {
+      const midY = (y1 + y2) / 2;
+      lastDx = 0;
+      lastDy = y2 - midY;
+      firstDx = 0;
+      firstDy = midY - y1;
+    }
+
+    const endAngle = Math.hypot(lastDx, lastDy) > 0.001 ? Math.atan2(lastDy, lastDx) : getPortAngle(side2);
+    const startAngle = Math.hypot(firstDx, firstDy) > 0.001 ? Math.atan2(-firstDy, -firstDx) : getPortAngle(side1);
+    return { startAngle, endAngle };
+  }
+
+  // Bezier curve evaluation
+  const dist = Math.hypot(x2 - x1, y2 - y1);
+  const offset = Math.min(Math.max(dist * 0.4, 40), 180);
+
+  const dirVector = (s: PortSide) => {
+    if (s === 'top') return { dx: 0, dy: -1 };
+    if (s === 'right') return { dx: 1, dy: 0 };
+    if (s === 'bottom') return { dx: 0, dy: 1 };
+    return { dx: -1, dy: 0 };
+  };
+
+  const d1 = dirVector(side1);
+  const d2 = dirVector(side2);
+
+  const cx1 = x1 + d1.dx * offset;
+  const cy1 = y1 + d1.dy * offset;
+  const cx2 = x2 + d2.dx * offset;
+  const cy2 = y2 + d2.dy * offset;
+
+  // Tangent at p2 is vector approaching p2 from cx2 (or cx1)
+  let endDx = x2 - cx2;
+  let endDy = y2 - cy2;
+  if (Math.hypot(endDx, endDy) < 0.001) {
+    endDx = x2 - cx1;
+    endDy = y2 - cy1;
+  }
+  const endAngle = Math.hypot(endDx, endDy) > 0.001 ? Math.atan2(endDy, endDx) : getPortAngle(side2);
+
+  // Tangent at p1 pointing backwards into p1 is vector from cx1 (or cx2) to p1
+  let startDx = x1 - cx1;
+  let startDy = y1 - cy1;
+  if (Math.hypot(startDx, startDy) < 0.001) {
+    startDx = x1 - cx2;
+    startDy = y1 - cy2;
+  }
+  const startAngle = Math.hypot(startDx, startDy) > 0.001 ? Math.atan2(startDy, startDx) : getPortAngle(side1);
+
+  return { startAngle, endAngle };
+}
+
+/**
  * Computes triangle polygon points for an arrowhead pointing towards (tipX, tipY) at given angle.
  */
 export function computeArrowheadPolygon(

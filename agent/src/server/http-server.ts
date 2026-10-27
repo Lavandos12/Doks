@@ -143,9 +143,13 @@ export class AgentHttpServer {
     }
 
     // Global security headers on all responses
-    this.fastify.addHook('onSend', async (_req, reply) => {
+    this.fastify.addHook('onSend', async (req, reply) => {
       reply.header('Referrer-Policy', 'no-referrer');
-      reply.header('X-Frame-Options', 'DENY');
+      if (req.url.startsWith('/api/attachments/')) {
+        reply.header('X-Frame-Options', 'SAMEORIGIN');
+      } else {
+        reply.header('X-Frame-Options', 'DENY');
+      }
       if (!reply.hasHeader('Content-Security-Policy')) {
         reply.header(
           'Content-Security-Policy',
@@ -217,8 +221,9 @@ export class AgentHttpServer {
       // Check route authentication
       const urlPath = req.url.split('?')[0];
       const isApiOrWs = urlPath.startsWith('/api') || urlPath.startsWith('/ws');
+      const isAttachmentGet = req.method === 'GET' && urlPath.startsWith('/api/attachments/');
 
-      if (isApiOrWs) {
+      if (isApiOrWs && !isAttachmentGet) {
         if (!this.isValidSession(req)) {
           reply.code(401).send({ error: 'Unauthorized: Valid doks_session cookie required' });
           return;
@@ -769,8 +774,10 @@ export class AgentHttpServer {
           for (const p of this.peerService.getPeersStatus()) {
             if (p.connected && p.address) {
               const host = p.address.split(':')[0];
-              const httpPort = this.config.webPort || 4747;
+              const httpPort = (p as any).webPort || this.config.webPort || 4747;
               candidateOrigins.push(`http://${host}:${httpPort}`);
+              if (httpPort !== 3000) candidateOrigins.push(`http://${host}:3000`);
+              if (httpPort !== 4747) candidateOrigins.push(`http://${host}:4747`);
             }
           }
         }
@@ -807,7 +814,11 @@ export class AgentHttpServer {
       reply.header('Access-Control-Allow-Origin', '*');
       reply.header('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
       reply.header('X-Content-Type-Options', 'nosniff');
-      reply.header('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; sandbox");
+      if (att.mimeType === 'application/pdf') {
+        reply.header('Content-Security-Policy', "default-src 'self' blob: data:; style-src 'unsafe-inline';");
+      } else {
+        reply.header('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; sandbox");
+      }
 
       // Whitelisted inline safe types: png, jpg, webp, gif, pdf, audio/*, video/* (never SVG, HTML, or JS inline)
       const ext = path.extname(att.fileName || '').toLowerCase();
@@ -884,6 +895,7 @@ export class AgentHttpServer {
       let fileName = 'imported-note.md';
       let content = '';
       let asBoard = false;
+      const scope = ((req.query as any)?.scope === 'solo' ? 'solo' : 'team') as WorkspaceScope;
 
       const customName = req.headers['x-file-name'] as string;
       if (customName) {
@@ -897,15 +909,10 @@ export class AgentHttpServer {
       if (Buffer.isBuffer(req.body)) {
         const ext = path.extname(fileName).toLowerCase();
         if (ext === '.docx') {
-          const tempPath = path.join(os.tmpdir(), `doks-import-${Date.now()}.docx`);
-          fs.writeFileSync(tempPath, req.body);
           try {
-            const xml = execSync(`tar -xf "${tempPath}" -O word/document.xml`, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
-            content = docxXmlToMarkdown(xml);
-          } catch (e) {
-            content = req.body.toString('utf8');
-          } finally {
-            if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
+            content = extractTextFromDocxBuffer(req.body);
+          } catch {
+            content = '';
           }
         } else {
           content = req.body.toString('utf8');
@@ -919,7 +926,7 @@ export class AgentHttpServer {
 
       const ext = path.extname(fileName).toLowerCase();
       const baseName = path.basename(fileName, ext);
-      const indexDoc = this.docManager.getOrCreateDoc(DOC_INDEX);
+      const indexDoc = this.docManager.getOrCreateDoc(getScopedIndexDocName(scope));
       const { notes, boards } = getIndexMaps(indexDoc);
 
       if (ext === '.csv' || ext === '.tsv') {
@@ -933,7 +940,7 @@ export class AgentHttpServer {
             updatedAt: Date.now(),
             deleted: false
           });
-          const boardDoc = this.docManager.getOrCreateDoc(getBoardDocName(boardId));
+          const boardDoc = this.docManager.getOrCreateDoc(getScopedBoardDocName(scope, boardId));
           const { nodes } = getBoardMaps(boardDoc);
           const lines = content.split(/\r?\n/).filter((l) => l.trim().length > 0);
           lines.slice(0, 100).forEach((line, i) => {
@@ -965,7 +972,7 @@ export class AgentHttpServer {
             updatedAt: Date.now(),
             deleted: false
           });
-          const noteDoc = this.docManager.getOrCreateDoc(getNoteDocName(noteId));
+          const noteDoc = this.docManager.getOrCreateDoc(getScopedNoteDocName(scope, noteId));
           getNoteText(noteDoc).insert(0, md);
           return { success: true, created: 1, skipped: 0, errors: [], type: 'note', id: noteId };
         }
@@ -980,7 +987,7 @@ export class AgentHttpServer {
           updatedAt: Date.now(),
           deleted: false
         });
-        const noteDoc = this.docManager.getOrCreateDoc(getNoteDocName(noteId));
+        const noteDoc = this.docManager.getOrCreateDoc(getScopedNoteDocName(scope, noteId));
         getNoteText(noteDoc).insert(0, md);
         return { success: true, created: 1, skipped: 0, errors: [], type: 'note', id: noteId };
       } else if (ext === '.canvas') {
@@ -995,7 +1002,7 @@ export class AgentHttpServer {
             updatedAt: Date.now(),
             deleted: false
           });
-          const boardDoc = this.docManager.getOrCreateDoc(getBoardDocName(boardId));
+          const boardDoc = this.docManager.getOrCreateDoc(getScopedBoardDocName(scope, boardId));
           const { nodes, edges } = getBoardMaps(boardDoc);
           if (Array.isArray(canvasData.nodes)) {
             for (const n of canvasData.nodes) {
@@ -1042,7 +1049,7 @@ export class AgentHttpServer {
           updatedAt: Date.now(),
           deleted: false
         });
-        const noteDoc = this.docManager.getOrCreateDoc(getNoteDocName(noteId));
+        const noteDoc = this.docManager.getOrCreateDoc(getScopedNoteDocName(scope, noteId));
         getNoteText(noteDoc).insert(0, content);
         return { success: true, created: 1, skipped: 0, errors: [], type: 'note', id: noteId };
       }

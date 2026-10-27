@@ -9,6 +9,10 @@ import {
   getIndexMaps,
   getNoteDocName,
   getBoardDocName,
+  getScopedIndexDocName,
+  getScopedNoteDocName,
+  getScopedBoardDocName,
+  type WorkspaceScope,
   getBoardMaps,
   jsonCanvasToBoard,
   setNodeProperties,
@@ -118,7 +122,10 @@ export class FileWatcher {
       };
       const mime = mimeMap[ext] || 'application/octet-stream';
 
-      const indexDoc = this.docManager.getOrCreateDoc(DOC_INDEX);
+      const rel = path.relative(this.vaultPath, filePath);
+      const isSolo = rel === 'solo' || rel.startsWith('solo' + path.sep) || rel.startsWith('solo/');
+      const scope: WorkspaceScope = isSolo ? 'solo' : 'team';
+      const indexDoc = this.docManager.getOrCreateDoc(getScopedIndexDocName(scope));
       const { attachments } = getIndexMaps(indexDoc);
       const existing = attachments.get(hash);
       if (!existing || existing.deleted) {
@@ -148,8 +155,11 @@ export class FileWatcher {
     const idMatch = yamlBlock.match(/id:\s*([a-zA-Z0-9_-]+)/);
     if (!idMatch) return;
 
+    const rel = path.relative(this.vaultPath, filePath);
+    const isSolo = rel === 'solo' || rel.startsWith('solo' + path.sep) || rel.startsWith('solo/');
+    const scope: WorkspaceScope = isSolo ? 'solo' : 'team';
     const noteId = idMatch[1];
-    const docName = getNoteDocName(noteId);
+    const docName = getScopedNoteDocName(scope, noteId);
     const noteDoc = this.docManager.getOrCreateDoc(docName);
     const yText = noteDoc.getText('text');
 
@@ -180,9 +190,13 @@ export class FileWatcher {
       const data: JSONCanvasData = JSON.parse(rawContent);
       const { nodes, edges } = jsonCanvasToBoard(data);
 
+      const rel = path.relative(this.vaultPath, filePath);
+      const isSolo = rel === 'solo' || rel.startsWith('solo' + path.sep) || rel.startsWith('solo/');
+      const scope: WorkspaceScope = isSolo ? 'solo' : 'team';
+
       const fileName = path.basename(filePath, '.canvas');
       // Look up boardId from index doc or match by title
-      const indexDoc = this.docManager.getOrCreateDoc(DOC_INDEX);
+      const indexDoc = this.docManager.getOrCreateDoc(getScopedIndexDocName(scope));
       const boardsMap = indexDoc.getMap<any>('boards');
 
       let boardId: string | undefined;
@@ -194,7 +208,7 @@ export class FileWatcher {
 
       if (!boardId) return;
 
-      const boardDoc = this.docManager.getOrCreateDoc(getBoardDocName(boardId));
+      const boardDoc = this.docManager.getOrCreateDoc(getScopedBoardDocName(scope, boardId));
       const { nodes: yNodes, edges: yEdges } = getBoardMaps(boardDoc);
 
       boardDoc.transact(() => {

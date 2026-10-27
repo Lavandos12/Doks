@@ -151,7 +151,17 @@ export function nodeMapToData(id: string, map: Y.Map<any>): BoardNodeData {
     scope: map.get('scope') || undefined,
     originId: map.get('originId') || undefined,
     promotedAt: map.get('promotedAt') || undefined,
-    promotedBy: map.get('promotedBy') || undefined
+    promotedBy: map.get('promotedBy') || undefined,
+    chartType: map.get('chartType') || undefined,
+    chartData: map.get('chartData') || undefined,
+    points: map.get('points') || undefined,
+    drawMode: map.get('drawMode') || undefined,
+    description: map.get('description') || undefined,
+    codeLanguage: map.get('codeLanguage') || undefined,
+    fileDataUrl: map.get('fileDataUrl') || undefined,
+    uploaderOrigin: map.get('uploaderOrigin') || undefined,
+    imageUrl: map.get('imageUrl') || undefined,
+    reactions: map.get('reactions') || undefined
   };
 }
 

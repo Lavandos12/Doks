@@ -87,7 +87,7 @@ export class PeerDiscoveryService extends EventEmitter {
                 host,
                 wsPort: data.wsPort,
                 webPort: data.webPort || 3000,
-                inviteUri: `doks://${host}:${data.wsPort}#${data.teamKey || ''}`,
+                inviteUri: `doks://${host}:${data.wsPort}#${data.workspaceHash || ''}`,
                 lastSeen: Date.now()
               };
               this.discoveredRooms.set(data.peerId, room);
@@ -149,8 +149,7 @@ export class PeerDiscoveryService extends EventEmitter {
       wsPort: this.wsPort,
       webPort: this.webPort,
       displayName: this.displayName,
-      peerId: this.peerId,
-      teamKey: this.teamKey
+      peerId: this.peerId
     });
 
     const buffer = Buffer.from(beacon, 'utf8');

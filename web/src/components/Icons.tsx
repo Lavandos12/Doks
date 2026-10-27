@@ -90,6 +90,10 @@ export type IconName =
   | 'square'
   | 'circle'
   | 'diamond'
+  | 'triangle'
+  | 'parallelogram'
+  | 'cylinder'
+  | 'hexagon'
   | 'share'
   | 'settings'
   | 'menu'
@@ -168,6 +172,19 @@ export function Icon({
         return <circle cx="12" cy="12" r="10" />;
       case 'diamond':
         return <polygon points="12 2 22 12 12 22 2 12" />;
+      case 'triangle':
+        return <polygon points="12 3 22 21 2 21" />;
+      case 'parallelogram':
+        return <polygon points="6 4 21 4 18 20 3 20" />;
+      case 'cylinder':
+        return (
+          <>
+            <path d="M4 6a8 3 0 0 1 16 0v12a8 3 0 0 1-16 0z" fill="none" />
+            <path d="M4 6a8 3 0 0 0 16 0" fill="none" />
+          </>
+        );
+      case 'hexagon':
+        return <polygon points="12 2 21 7 21 17 12 22 3 17 3 7" />;
       case 'arrow':
       case 'arrow-right':
         return (

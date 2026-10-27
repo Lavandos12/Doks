@@ -254,6 +254,78 @@ export function computeSmartAlignment(
         }
       }
     }
+    // Check vertical equal gap
+    const sortedV = [...candidates, { ...rawBox, x: snappedX, y: snappedY }].sort((a, b) => a.y - b.y);
+    for (let i = 0; i < sortedV.length - 1; i++) {
+      for (let j = i + 1; j < sortedV.length; j++) {
+        if (j === i + 1 && j + 1 < sortedV.length) {
+          const b1 = sortedV[i];
+          const b2 = sortedV[j];
+          const b3 = sortedV[j + 1];
+
+          const gap1 = b2.y - (b1.y + b1.h);
+          const gap2 = b3.y - (b2.y + b2.h);
+
+          if (gap1 > 0 || gap2 > 0) {
+            if (b3.id === rawBox.id && gap1 > 0) {
+              const diff = gap2 - gap1;
+              if (Math.abs(diff) <= snapThreshold * 1.5) {
+                snappedY = b2.y + b2.h + gap1;
+                guides.push({
+                  type: 'horizontal',
+                  pos: snappedY + rawBox.h / 2,
+                  start: Math.min(b1.x, b2.x, b3.x) - 8,
+                  end: Math.max(b1.x + b1.w, b2.x + b2.w, b3.x + b3.w) + 8,
+                  snapPoints: [{ x: b3.x + b3.w / 2, y: snappedY + rawBox.h / 2 }],
+                  distanceLabel: {
+                    x: b3.x - 18,
+                    y: snappedY + rawBox.h / 2,
+                    text: `${Math.round(gap1)} px`
+                  }
+                });
+                break;
+              }
+            } else if (b2.id === rawBox.id && gap1 > 0 && gap2 > 0) {
+              if (Math.abs(gap1 - gap2) <= snapThreshold * 1.5) {
+                const avgGap = (gap1 + gap2) / 2;
+                snappedY = b1.y + b1.h + avgGap;
+                guides.push({
+                  type: 'horizontal',
+                  pos: snappedY + rawBox.h / 2,
+                  start: Math.min(b1.x, b2.x, b3.x) - 8,
+                  end: Math.max(b1.x + b1.w, b2.x + b2.w, b3.x + b3.w) + 8,
+                  snapPoints: [{ x: b2.x + b2.w / 2, y: snappedY + rawBox.h / 2 }],
+                  distanceLabel: {
+                    x: b2.x - 18,
+                    y: snappedY + rawBox.h / 2,
+                    text: `${Math.round(avgGap)} px`
+                  }
+                });
+                break;
+              }
+            } else if (b1.id === rawBox.id && gap2 > 0) {
+              const diff = gap1 - gap2;
+              if (Math.abs(diff) <= snapThreshold * 1.5) {
+                snappedY = b2.y - rawBox.h - gap2;
+                guides.push({
+                  type: 'horizontal',
+                  pos: snappedY + rawBox.h / 2,
+                  start: Math.min(b1.x, b2.x, b3.x) - 8,
+                  end: Math.max(b1.x + b1.w, b2.x + b2.w, b3.x + b3.w) + 8,
+                  snapPoints: [{ x: b1.x + b1.w / 2, y: snappedY + rawBox.h / 2 }],
+                  distanceLabel: {
+                    x: b1.x - 18,
+                    y: snappedY + rawBox.h / 2,
+                    text: `${Math.round(gap2)} px`
+                  }
+                });
+                break;
+              }
+            }
+          }
+        }
+      }
+    }
   }
 
   return { snappedX, snappedY, guides };

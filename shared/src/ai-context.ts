@@ -8,6 +8,7 @@ import {
   getBoardDocName,
   getScopedIndexDocName,
   getScopedBoardDocName,
+  getScopedNoteDocName,
   getNoteText,
   nodeMapToData
 } from './schema.js';
@@ -244,8 +245,16 @@ export function generateAiContext(
       const meta = notes.get(nId);
       if (!meta || meta.deleted) continue;
 
-      const noteDoc = docManager.getOrCreateDoc(getNoteDocName(nId));
-      const content = getNoteText(noteDoc).toString();
+      let noteDoc = docManager.getOrCreateDoc(getScopedNoteDocName(wsScope, nId));
+      let content = getNoteText(noteDoc).toString();
+      if (!content && wsScope !== 'team') {
+        const fallbackDoc = docManager.getOrCreateDoc(getNoteDocName(nId));
+        const fallbackContent = getNoteText(fallbackDoc).toString();
+        if (fallbackContent) {
+          noteDoc = fallbackDoc;
+          content = fallbackContent;
+        }
+      }
 
       // Privacy check
       if (content.includes('#private')) continue;
@@ -275,9 +284,23 @@ export function generateAiContext(
     } else if (n.type === 'sticky') {
       openTasks.push({
         shortId: idToShort.get(n.id)!,
-        text: n.text.replace(/\r?\n/g, ' '),
+        text: (n.text || '').replace(/\r?\n/g, ' '),
         author: getAuthor(n.author)
       });
+    } else if (n.type === 'checklist' && n.text) {
+      const items = n.text.split(/\r?\n/);
+      for (const item of items) {
+        const trimmed = item.trim();
+        if (!trimmed) continue;
+        const unchecked = trimmed.match(/^-\s*\[ \]\s*(.+)$/);
+        if (unchecked) {
+          openTasks.push({
+            shortId: idToShort.get(n.id)!,
+            text: unchecked[1],
+            author: getAuthor(n.author)
+          });
+        }
+      }
     }
   });
 
@@ -338,11 +361,37 @@ export function generateAiContext(
   // 3. Структура и содержимое по рамкам
   const formatNode = (n: BoardNodeData) => {
     const sid = idToShort.get(n.id)!;
-    const typeLabel = n.type === 'sticky' ? 'стикер' : n.type === 'note' ? 'заметка' : n.type === 'frame' ? 'рамка' : n.type;
+    const typeLabel =
+      n.type === 'sticky' ? 'стикер' :
+      n.type === 'note' ? 'заметка' :
+      n.type === 'frame' ? 'рамка' :
+      n.type === 'checklist' ? 'чеклист' :
+      n.type === 'table' ? 'таблица' :
+      n.type === 'kanban' ? 'канбан' :
+      n.type === 'chart' ? 'диаграмма' :
+      n.type === 'code' ? 'код' :
+      n.type === 'file' ? 'файл' :
+      n.type === 'drawing' ? 'рисунок' :
+      n.type === 'shape' ? 'фигура' : n.type;
     const colorLabel = resolveColorName(n.color);
     const authorLabel = `автор: ${getAuthor(n.author)}`;
     const statusLabel = n.done ? '[x]' : '[ ]';
-    const textLabel = n.text.replace(/\r?\n/g, ' ');
+    let textLabel = (n.text || '').replace(/\r?\n/g, ' ');
+
+    if (n.type === 'chart' && n.chartData) {
+      try {
+        const parsed = typeof n.chartData === 'string' ? JSON.parse(n.chartData) : n.chartData;
+        if (Array.isArray(parsed)) {
+          const items = parsed.map((item: any) => `${item.label || 'Без назв.'}: ${item.value || 0}%`).join(', ');
+          textLabel = `${n.chartType || 'pie'}: [${items}] ${textLabel}`.trim();
+        }
+      } catch {}
+    } else if (n.type === 'code') {
+      textLabel = `[${n.codeLanguage || 'text'}] ${textLabel}`.trim();
+    } else if (n.type === 'kanban' && n.description) {
+      textLabel = `${textLabel} (${n.description})`.trim();
+    }
+
     return `- ${sid} | ${typeLabel} | ${colorLabel} | ${authorLabel} | ${statusLabel} | ${textLabel}`;
   };
 

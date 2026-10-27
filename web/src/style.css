@@ -1959,6 +1959,19 @@ input:focus, select:focus, textarea:focus {
   color: var(--text-primary);
 }
 
+.frame-label-input {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid var(--accent, #38bdf8);
+  border-radius: 4px;
+  padding: 2px 6px;
+  outline: none;
+  font-family: inherit;
+  width: 90%;
+}
+
 .node-inline-textarea {
   flex: 1;
   width: 100%;
@@ -5495,7 +5508,7 @@ button.doks-color-dot.active {
 
 /* --- Island 1: Top-Left Floating Miro Board Bar --- */
 .miro-board-bar {
-  position: fixed;
+  position: absolute;
   top: 14px;
   left: 16px;
   z-index: 100;
@@ -5737,7 +5750,7 @@ button.doks-color-dot.active {
 
 /* --- Island 2: Left-Center Vertical Miro Creation Dock --- */
 .miro-creation-dock-container {
-  position: fixed;
+  position: absolute;
   left: 16px;
   top: 50%;
   transform: translateY(-50%);
@@ -5971,7 +5984,7 @@ button.doks-color-dot.active {
 
 /* --- Island 3: Top-Right Floating Notes & Collaboration Bar --- */
 .miro-actions-bar {
-  position: fixed;
+  position: absolute;
   top: 14px;
   right: 16px;
   z-index: 300;

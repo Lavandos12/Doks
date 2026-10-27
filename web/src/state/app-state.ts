@@ -20,6 +20,7 @@ import {
 export { getScopedNoteDocName } from '@doks/shared';
 import { yjsClient, agentStatus, connectionState } from './yjs-client.js';
 export { yjsClient, agentStatus, connectionState } from './yjs-client.js';
+import { api } from '../api/client.js';
 import { NotesSearchIndex } from '../search/indexer.js';
 import { showToast } from '../ui/toast.js';
 
@@ -538,12 +539,7 @@ export function deleteFolder(id: string): void {
  * Cross-Scope Bridge: Transfer nodes and linked notes between Solo and Team
  */
 export async function transferNodesAcrossScopes(req: BridgeTransferRequest): Promise<BridgeTransferResponse> {
-  const res = await fetch('/api/bridge/transfer', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(req)
-  });
-  const data: BridgeTransferResponse = await res.json();
+  const data = await api.transferNodes(req);
   if (data.success && req.toScope) {
     setScope(req.toScope);
     openTab('board', req.targetBoardId);

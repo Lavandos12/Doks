@@ -3,10 +3,13 @@ import { useState, useEffect } from 'preact/hooks';
 import {
   notes,
   createNote,
+  renameNote,
+  deleteNote,
   currentScope,
   yjsClient,
   getScopedNoteDocName
 } from '../../state/app-state.js';
+import { MarkdownPreview } from '../notes/markdown-preview.js';
 import { Icon } from '../../ui/icons.js';
 import { showToast } from '../../ui/toast.js';
 
@@ -30,6 +33,7 @@ export function NotesDrawer({
   const [searchQuery, setSearchQuery] = useState('');
   const [noteTitle, setNoteTitle] = useState('');
   const [noteText, setNoteText] = useState('');
+  const [previewMode, setPreviewMode] = useState(false);
 
   // If selectedId changed or list changed, sync current note data
   useEffect(() => {
@@ -56,7 +60,18 @@ export function NotesDrawer({
   const handleCreateNew = () => {
     const newId = createNote('Новая заметка');
     setSelectedId(newId);
+    setPreviewMode(false);
     showToast('Создана новая заметка');
+  };
+
+  const handleDeleteNote = () => {
+    if (!selectedId) return;
+    if (confirm(`Удалить заметку "${noteTitle || 'Без названия'}"?`)) {
+      deleteNote(selectedId);
+      showToast('Заметка удалена');
+      const remaining = activeNotes.filter((n) => n.id !== selectedId);
+      setSelectedId(remaining[0]?.id || '');
+    }
   };
 
   const handleTextChange = (newVal: string) => {
@@ -99,6 +114,24 @@ export function NotesDrawer({
           <span>Заметки ({currentScope.value === 'solo' ? 'Соло' : 'Команда'})</span>
         </div>
         <div class="notes-drawer-actions">
+          {selectedId && (
+            <>
+              <button
+                class={`btn-ghost-xs ${previewMode ? 'active' : ''}`}
+                onClick={() => setPreviewMode(!previewMode)}
+                title={previewMode ? 'Редактировать Markdown' : 'Предпросмотр Markdown'}
+              >
+                <Icon name={previewMode ? 'edit' : 'eye'} size={14} />
+              </button>
+              <button
+                class="btn-ghost-xs text-danger"
+                onClick={handleDeleteNote}
+                title="Удалить заметку"
+              >
+                <Icon name="trash" size={14} />
+              </button>
+            </>
+          )}
           <button class="btn-primary-xs" onClick={handleCreateNew} title="Создать заметку">
             <Icon name="plus" size={13} />
             <span>Новая</span>
@@ -150,15 +183,25 @@ export function NotesDrawer({
               type="text"
               class="notes-drawer-note-title"
               value={noteTitle}
-              onInput={(e) => setNoteTitle((e.target as HTMLInputElement).value)}
+              onInput={(e) => {
+                const newVal = (e.target as HTMLInputElement).value;
+                setNoteTitle(newVal);
+                renameNote(selectedId, newVal);
+              }}
               placeholder="Название заметки..."
             />
-            <textarea
-              class="notes-drawer-editor-body"
-              value={noteText}
-              onInput={(e) => handleTextChange((e.target as HTMLTextAreaElement).value)}
-              placeholder="Пишите markdown здесь... Поддерживаются списки - [ ], заголовки #, ссылки [[связи]]."
-            />
+            {previewMode ? (
+              <div class="notes-drawer-editor-body preview-scroll" style={{ overflowY: 'auto' }}>
+                <MarkdownPreview content={noteText} />
+              </div>
+            ) : (
+              <textarea
+                class="notes-drawer-editor-body"
+                value={noteText}
+                onInput={(e) => handleTextChange((e.target as HTMLTextAreaElement).value)}
+                placeholder="Пишите markdown здесь... Поддерживаются списки - [ ], заголовки #, ссылки [[связи]]."
+              />
+            )}
           </div>
         ) : (
           <div class="miro-empty-notes">
