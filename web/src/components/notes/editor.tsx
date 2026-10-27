@@ -30,6 +30,7 @@ import { MarkdownPreview, extractHeadings, type HeadingItem } from './markdown-p
 import { PropertiesPanel } from './properties-panel.js';
 import { OutlinePanel } from './outline-panel.js';
 import { Icon } from '../../ui/icons.js';
+import { showToast } from '../../ui/toast.js';
 
 interface NoteEditorProps {
   noteId: string;
@@ -91,8 +92,8 @@ export function NoteEditor({ noteId }: NoteEditorProps) {
   useEffect(() => {
     if (editorMode !== 'source' || !editorContainerRef.current) return;
 
-    // Click handler to navigate [[links]]
-    const domClickHandler = EditorView.domEventHandlers({
+    // Event handlers for CodeMirror (link clicks & pasting screenshots)
+    const domHandlers = EditorView.domEventHandlers({
       click: (event, view) => {
         const pos = view.posAtCoords({ x: event.clientX, y: event.clientY });
         if (pos === null) return false;
@@ -113,6 +114,22 @@ export function NoteEditor({ noteId }: NoteEditorProps) {
           }
         }
         return false;
+      },
+      paste: (event) => {
+        const items = event.clipboardData?.items;
+        if (items) {
+          for (let i = 0; i < items.length; i++) {
+            if (items[i].type.startsWith('image/')) {
+              const file = items[i].getAsFile();
+              if (file) {
+                event.preventDefault();
+                handleUploadFileToNote(file);
+                return true;
+              }
+            }
+          }
+        }
+        return false;
       }
     });
 
@@ -122,7 +139,7 @@ export function NoteEditor({ noteId }: NoteEditorProps) {
       markdown(),
       autocompletion({ override: [wikilinksCompletionSource] }),
       yCollab(yText, null),
-      domClickHandler,
+      domHandlers,
       EditorView.lineWrapping
     ];
 
@@ -236,19 +253,22 @@ export function NoteEditor({ noteId }: NoteEditorProps) {
   const handleUploadFileToNote = async (file: File) => {
     try {
       const buffer = await file.arrayBuffer();
+      const fileName = file.name || 'screenshot.png';
+      const fileType = file.type || 'image/png';
       const res = await api.fetch('/api/attachments', {
         method: 'POST',
         headers: {
-          'Content-Type': file.type || 'application/octet-stream',
-          'x-file-name': encodeURIComponent(file.name)
+          'Content-Type': fileType,
+          'x-file-name': encodeURIComponent(fileName)
         },
         body: buffer
       });
       if (!res.ok) return;
       const data = await res.json();
-      const isImg = (data.mimeType || '').startsWith('image/') && !data.mimeType.includes('svg');
-      const snippet = isImg ? `![[${data.fileName}]]` : `[[${data.fileName}]]`;
+      const isImg = (data.mimeType || fileType || '').startsWith('image/') && !((data.mimeType || '').includes('svg'));
+      const snippet = isImg ? `![[${data.fileName || fileName}]]` : `[[${data.fileName || fileName}]]`;
       insertSnippet(snippet);
+      showToast('Изображение вставлено в заметку');
     } catch (err) {
       console.error('Failed to upload file to note:', err);
     }

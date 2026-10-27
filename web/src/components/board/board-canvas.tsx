@@ -567,6 +567,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
 
   // Exact cursor canvas coordinates for paste
   const lastMouseCanvasPosRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const lastPasteTimeRef = useRef<number>(0);
 
   // Dynamic edge reconnection dragging state
   const [reconnectEdgeState, setReconnectEdgeState] = useState<{
@@ -1124,11 +1125,14 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
         return;
       }
 
-      // Paste (Ctrl+V)
+      // Paste (Ctrl+V): let native 'paste' ClipboardEvent fire so handleWindowPaste receives screenshot binary
       if (matchShortcut(e, 'mod+v')) {
-        e.preventDefault();
         const targetPos = lastMouseCanvasPosRef.current;
-        pasteClipboard(targetPos.x, targetPos.y);
+        setTimeout(() => {
+          if (Date.now() - lastPasteTimeRef.current > 140) {
+            pasteClipboard(targetPos.x, targetPos.y);
+          }
+        }, 120);
         return;
       }
 
@@ -1337,56 +1341,92 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
   };
 
   // Paste clipboard items with cursor coordinates or default offset
-  const pasteClipboard = (targetWorldX?: number, targetWorldY?: number) => {
-    const { nodes: clipNodes, edges: clipEdges } = clipboardRef.current;
-    if (clipNodes.length === 0) return;
+  const pasteClipboard = async (targetWorldX?: number, targetWorldY?: number) => {
+    const targetPos = (targetWorldX !== undefined && targetWorldY !== undefined && targetWorldX !== 0 && targetWorldY !== 0)
+      ? { x: targetWorldX, y: targetWorldY }
+      : (lastMouseCanvasPosRef.current && lastMouseCanvasPosRef.current.x !== 0)
+        ? lastMouseCanvasPosRef.current
+        : screenToCanvas(window.innerWidth / 2, window.innerHeight / 2);
 
-    let offsetX = 28;
-    let offsetY = 28;
-
-    if (targetWorldX !== undefined && targetWorldY !== undefined && targetWorldX !== 0 && targetWorldY !== 0) {
-      const minX = Math.min(...clipNodes.map((n) => n.x));
-      const minY = Math.min(...clipNodes.map((n) => n.y));
-      offsetX = targetWorldX - minX;
-      offsetY = targetWorldY - minY;
+    // 1. Check if system clipboard has an image (async Clipboard API)
+    if (typeof navigator !== 'undefined' && navigator.clipboard && typeof navigator.clipboard.read === 'function') {
+      try {
+        const items = await navigator.clipboard.read();
+        for (const item of items) {
+          const imgType = item.types.find((t) => t.startsWith('image/'));
+          if (imgType) {
+            const blob = await item.getType(imgType);
+            const file = new File([blob], 'screenshot.png', { type: imgType });
+            await handleUploadFileToBoard(file, targetPos.x, targetPos.y);
+            return;
+          }
+        }
+      } catch {
+        // Proceed to internal clipboard if permission denied or unavailable
+      }
     }
 
-    const idMap = new Map<string, string>();
-    const newSelected = new Set<string>();
+    // 2. Check internal Doks clipboard (nodes + edges)
+    const { nodes: clipNodes, edges: clipEdges } = clipboardRef.current;
+    if (clipNodes.length > 0) {
+      let offsetX = 28;
+      let offsetY = 28;
 
-    boardDoc.transact(() => {
-      for (const src of clipNodes) {
-        const newId = crypto.randomUUID();
-        idMap.set(src.id, newId);
-        const newMap = new Y.Map();
-        yNodes.set(newId, newMap);
-        setNodeProperties(newMap, {
-          ...src,
-          id: newId,
-          x: Math.round(src.x + offsetX),
-          y: Math.round(src.y + offsetY),
-          locked: false
-        });
-        newSelected.add(newId);
+      if (targetWorldX !== undefined && targetWorldY !== undefined && targetWorldX !== 0 && targetWorldY !== 0) {
+        const minX = Math.min(...clipNodes.map((n) => n.x));
+        const minY = Math.min(...clipNodes.map((n) => n.y));
+        offsetX = targetWorldX - minX;
+        offsetY = targetWorldY - minY;
       }
 
-      for (const edge of clipEdges) {
-        const fromId = idMap.get(edge.from);
-        const toId = idMap.get(edge.to);
-        if (fromId && toId) {
-          const newEdgeId = crypto.randomUUID();
-          yEdges.set(newEdgeId, {
-            ...edge,
-            id: newEdgeId,
-            from: fromId,
-            to: toId
+      const idMap = new Map<string, string>();
+      const newSelected = new Set<string>();
+
+      boardDoc.transact(() => {
+        for (const src of clipNodes) {
+          const newId = crypto.randomUUID();
+          idMap.set(src.id, newId);
+          const newMap = new Y.Map();
+          yNodes.set(newId, newMap);
+          setNodeProperties(newMap, {
+            ...src,
+            id: newId,
+            x: Math.round(src.x + offsetX),
+            y: Math.round(src.y + offsetY),
+            locked: false
           });
+          newSelected.add(newId);
         }
-      }
-    }, CANVAS_UNDO_ORIGIN);
 
-    setSelectedNodeIds(newSelected);
-    setSelectedEdgeId(null);
+        for (const edge of clipEdges) {
+          const fromId = idMap.get(edge.from);
+          const toId = idMap.get(edge.to);
+          if (fromId && toId) {
+            const newEdgeId = crypto.randomUUID();
+            yEdges.set(newEdgeId, {
+              ...edge,
+              id: newEdgeId,
+              from: fromId,
+              to: toId
+            });
+          }
+        }
+      }, CANVAS_UNDO_ORIGIN);
+
+      setSelectedNodeIds(newSelected);
+      setSelectedEdgeId(null);
+      return;
+    }
+
+    // 3. Fallback: check text from clipboard to create a sticky note
+    if (typeof navigator !== 'undefined' && navigator.clipboard && typeof navigator.clipboard.readText === 'function') {
+      try {
+        const text = await navigator.clipboard.readText();
+        if (text && text.trim().length > 0) {
+          createNodeAt('sticky', targetPos.x - 100, targetPos.y - 65, activeColor, text.trim());
+        }
+      } catch {}
+    }
   };
 
   // Wrap selected nodes into a new Frame container (Ctrl+G)
@@ -1747,11 +1787,13 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
   const handleUploadFileToBoard = async (file: File, x: number, y: number) => {
     try {
       const buffer = await file.arrayBuffer();
+      const fileName = file.name || 'screenshot.png';
+      const fileType = file.type || 'image/png';
       const res = await fetch(`/api/attachments?scope=${encodeURIComponent(currentScope.value)}`, {
         method: 'POST',
         headers: {
-          'Content-Type': file.type || 'application/octet-stream',
-          'x-file-name': encodeURIComponent(file.name)
+          'Content-Type': fileType,
+          'x-file-name': encodeURIComponent(fileName)
         },
         body: buffer
       });
@@ -1759,12 +1801,12 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
       const data = await res.json();
       const id = crypto.randomUUID();
       const nodeMap = new Y.Map();
-      const isImage = (data.mimeType || '').startsWith('image/') && !data.mimeType.includes('svg');
-      const isPdf = (data.mimeType || '').includes('pdf') || file.name.toLowerCase().endsWith('.pdf');
+      const isImage = (data.mimeType || fileType || '').startsWith('image/') && !((data.mimeType || '').includes('svg'));
+      const isPdf = (data.mimeType || '').includes('pdf') || fileName.toLowerCase().endsWith('.pdf');
       const hasTextPreview = Boolean(data.extractedText);
 
       let fileDataUrl: string | undefined;
-      if (file.size <= 4 * 1024 * 1024) {
+      if (file.size <= 8 * 1024 * 1024) {
         try {
           fileDataUrl = await new Promise<string>((resolve, reject) => {
             const reader = new FileReader();
@@ -1775,25 +1817,57 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
         } catch {}
       }
 
+      // Calculate proper image dimensions maintaining aspect ratio
+      let w = 280;
+      let h = 200;
+      if (isImage) {
+        try {
+          const img = new Image();
+          const objUrl = fileDataUrl || URL.createObjectURL(file);
+          await new Promise<void>((resolve) => {
+            img.onload = () => resolve();
+            img.onerror = () => resolve();
+            img.src = objUrl;
+          });
+          if (img.naturalWidth && img.naturalHeight) {
+            const nw = img.naturalWidth;
+            const nh = img.naturalHeight;
+            const maxW = 540;
+            const maxH = 400;
+            const ratio = Math.min(maxW / nw, maxH / nh, 1);
+            w = Math.max(100, Math.round(nw * ratio));
+            h = Math.max(60, Math.round(nh * ratio));
+          }
+          if (!fileDataUrl) URL.revokeObjectURL(objUrl);
+        } catch {}
+      } else if (hasTextPreview || isPdf) {
+        w = 360;
+        h = 280;
+      } else {
+        w = 240;
+        h = 130;
+      }
+
       boardDoc.transact(() => {
         yNodes.set(id, nodeMap);
         setNodeProperties(nodeMap, {
           id,
-          type: isImage ? 'sticky' : 'file',
-          x: Math.round(x),
-          y: Math.round(y),
-          w: isImage ? 280 : hasTextPreview || isPdf ? 360 : 240,
-          h: isImage ? 200 : hasTextPreview || isPdf ? 280 : 130,
-          text: file.name,
+          type: isImage ? 'image' : 'file',
+          x: Math.round(x - w / 2),
+          y: Math.round(y - h / 2),
+          w,
+          h,
+          text: fileName,
           fileHash: data.hash,
-          fileName: data.fileName,
+          fileName,
           extractedText: data.extractedText,
           fileDataUrl,
+          imageUrl: fileDataUrl || `/api/attachments/${data.hash}`,
           uploaderOrigin: window.location.origin,
           showPreview: hasTextPreview || isPdf,
           author: currentScope.value === 'team' ? (agentStatus.value?.memberName || '') : '',
           done: false,
-          z: 1,
+          z: 2,
           deleted: false,
           locked: false
         });
@@ -1801,6 +1875,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
 
       setSelectedNodeIds(new Set([id]));
       setActiveTool('select');
+      showToast(isImage ? 'Скриншот добавлен на холст' : `Файл "${fileName}" загружен`);
     } catch (err) {
       console.error('Failed to upload file to board:', err);
     }
@@ -1816,7 +1891,30 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
       showToast(`Заметка "${detail.title || 'Заметка'}" добавлена на доску`);
     };
 
-    const handleWindowPaste = (e: ClipboardEvent) => {
+    const handleWindowPaste = async (e: ClipboardEvent) => {
+      lastPasteTimeRef.current = Date.now();
+
+      // 1. If clipboard contains an image (screenshot or copied picture), handle it immediately!
+      const items = e.clipboardData?.items;
+      if (items && items.length > 0) {
+        for (let i = 0; i < items.length; i++) {
+          const item = items[i];
+          if (item.type.startsWith('image/')) {
+            const file = item.getAsFile();
+            if (file) {
+              e.preventDefault();
+              e.stopPropagation();
+              const targetPos = (lastMouseCanvasPosRef.current && lastMouseCanvasPosRef.current.x !== 0)
+                ? lastMouseCanvasPosRef.current
+                : screenToCanvas(window.innerWidth / 2, window.innerHeight / 2);
+              await handleUploadFileToBoard(file, targetPos.x, targetPos.y);
+              return;
+            }
+          }
+        }
+      }
+
+      // If an input/textarea is focused and it's not an image, allow standard native text paste
       const activeEl = document.activeElement;
       if (
         activeEl &&
@@ -1826,21 +1924,26 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
       ) {
         return;
       }
-      const items = e.clipboardData?.items;
-      if (!items) return;
-      for (let i = 0; i < items.length; i++) {
-        const item = items[i];
-        if (item.type.startsWith('image/')) {
-          const file = item.getAsFile();
-          if (file) {
-            e.preventDefault();
-            const targetPos = (lastMouseCanvasPosRef.current && lastMouseCanvasPosRef.current.x !== 0)
-              ? lastMouseCanvasPosRef.current
-              : screenToCanvas(window.innerWidth / 2, window.innerHeight / 2);
-            handleUploadFileToBoard(file, targetPos.x - 140, targetPos.y - 100);
-            return;
-          }
-        }
+
+      // 2. If no image, check internal Doks clipboard (copied nodes/edges)
+      const { nodes: clipNodes } = clipboardRef.current;
+      if (clipNodes.length > 0) {
+        e.preventDefault();
+        const targetPos = (lastMouseCanvasPosRef.current && lastMouseCanvasPosRef.current.x !== 0)
+          ? lastMouseCanvasPosRef.current
+          : screenToCanvas(window.innerWidth / 2, window.innerHeight / 2);
+        pasteClipboard(targetPos.x, targetPos.y);
+        return;
+      }
+
+      // 3. Fallback: if plain text in clipboardData, paste as a sticky note on the canvas
+      const text = e.clipboardData?.getData('text/plain');
+      if (text && text.trim().length > 0) {
+        e.preventDefault();
+        const targetPos = (lastMouseCanvasPosRef.current && lastMouseCanvasPosRef.current.x !== 0)
+          ? lastMouseCanvasPosRef.current
+          : screenToCanvas(window.innerWidth / 2, window.innerHeight / 2);
+        createNodeAt('sticky', targetPos.x - 100, targetPos.y - 65, activeColor, text.trim());
       }
     };
 
@@ -4333,12 +4436,13 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
           const isFrame = node.type === 'frame';
           const isNote = node.type === 'note';
           const isSticky = node.type === 'sticky';
+          const isImage = node.type === 'image' || ((node.fileName || '').match(/\.(png|jpe?g|gif|webp)$/i) && !node.extractedText);
           const shapeClass = node.type === 'shape' && node.shapeVariant ? `shape-variant-${node.shapeVariant}` : '';
 
           const stickyBg = isSticky && nodeColorHex !== CANVAS_COLORS.default ? `${nodeColorHex}26` : undefined;
           const borderColor = isFrame
             ? 'rgba(255, 255, 255, 0.15)'
-            : node.type === 'text'
+            : node.type === 'text' || isImage
             ? 'transparent'
             : isSticky && nodeColorHex !== CANVAS_COLORS.default
             ? `${nodeColorHex}80`
@@ -4489,23 +4593,19 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
                     </div>
                   );
                 })()
+              ) : isImage ? (
+                <div class="node-image-container" onMouseDown={(e) => handleNodePointerDown(node, e as any)}>
+                  <img
+                    src={node.fileDataUrl || node.imageUrl || (node.fileHash ? `/api/attachments/${node.fileHash}` : '')}
+                    alt={node.fileName || node.text || 'Снимок экрана'}
+                    class="node-rendered-img"
+                    style={{ width: '100%', height: '100%', objectFit: 'contain', pointerEvents: 'none' }}
+                  />
+                </div>
               ) : node.fileHash ? (
                 (() => {
-                  const isImg = (node.fileName || '').match(/\.(png|jpe?g|gif|webp)$/i);
                   const isAud = (node.fileName || '').match(/\.(mp3|ogg|wav)$/i);
                   const isVid = (node.fileName || '').match(/\.(mp4|webm)$/i);
-
-                  if (isImg) {
-                    return (
-                      <div class="node-image-container" onMouseDown={(e) => e.stopPropagation()}>
-                        <img
-                          src={node.fileDataUrl || `/api/attachments/${node.fileHash}`}
-                          alt={node.fileName || node.text}
-                          class="node-rendered-img"
-                        />
-                      </div>
-                    );
-                  }
                   if (isAud) {
                     return (
                       <div class="node-media-container" onMouseDown={(e) => e.stopPropagation()}>
@@ -5530,7 +5630,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
           <div
             class="context-menu-item"
             onClick={() => {
-              pasteClipboard();
+              pasteClipboard(contextMenu.canvasX, contextMenu.canvasY);
               setContextMenu(null);
             }}
           >

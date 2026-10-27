@@ -559,4 +559,44 @@ test.describe('F12: Playwright E2E Scenarios for Doks', () => {
     await page.keyboard.type('Hello Doks Pure Ink');
     await expect(textarea).toHaveValue('Hello Doks Pure Ink');
   });
+
+  test('Scenario 14: Clipboard Screenshot paste creates responsive image card on canvas', async ({ page }) => {
+    await page.goto(`http://127.0.0.1:${port1}`);
+    await openBoard(page);
+
+    // Simulate pasting a screenshot image from clipboard onto the canvas
+    await page.evaluate(() => {
+      const base64Png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+      const binary = atob(base64Png);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) {
+        bytes[i] = binary.charCodeAt(i);
+      }
+      const blob = new Blob([bytes], { type: 'image/png' });
+      const file = new File([blob], 'screenshot.png', { type: 'image/png' });
+
+      const dt = new DataTransfer();
+      dt.items.add(file);
+      const pasteEvt = new ClipboardEvent('paste', {
+        clipboardData: dt,
+        bubbles: true,
+        cancelable: true
+      });
+      window.dispatchEvent(pasteEvt);
+    });
+
+    // Verify image node rendered on canvas
+    const imageNode = page.locator('.board-node-box.type-image').first();
+    await expect(imageNode).toBeVisible({ timeout: 5000 });
+
+    // Verify img tag inside rendered with object-fit contain and correct alt
+    const img = imageNode.locator('img.node-rendered-img');
+    await expect(img).toBeVisible();
+    await expect(img).toHaveAttribute('alt', 'screenshot.png');
+
+    // Verify node is selected and has 8 resize handles
+    await expect(imageNode).toHaveClass(/selected/);
+    const resizeHandles = imageNode.locator('.resize-handle');
+    await expect(resizeHandles).toHaveCount(8);
+  });
 });
