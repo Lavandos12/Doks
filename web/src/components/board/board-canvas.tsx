@@ -148,6 +148,7 @@ function renderShapeSvg(node: BoardNodeData, colorHex: string) {
           fill={fillColor}
           stroke={strokeColor}
           strokeWidth={strokeWidth}
+          vectorEffect="non-scaling-stroke"
         />
       );
       break;
@@ -161,6 +162,7 @@ function renderShapeSvg(node: BoardNodeData, colorHex: string) {
           stroke={strokeColor}
           strokeWidth={strokeWidth}
           strokeLinejoin="round"
+          vectorEffect="non-scaling-stroke"
         />
       );
       break;
@@ -175,6 +177,7 @@ function renderShapeSvg(node: BoardNodeData, colorHex: string) {
           stroke={strokeColor}
           strokeWidth={strokeWidth}
           strokeLinejoin="round"
+          vectorEffect="non-scaling-stroke"
         />
       );
       break;
@@ -190,6 +193,7 @@ function renderShapeSvg(node: BoardNodeData, colorHex: string) {
           stroke={strokeColor}
           strokeWidth={strokeWidth}
           strokeLinejoin="round"
+          vectorEffect="non-scaling-stroke"
         />
       );
       break;
@@ -200,7 +204,7 @@ function renderShapeSvg(node: BoardNodeData, colorHex: string) {
       const d = `M ${pad} ${ch + pad} A ${w / 2 - pad} ${ch} 0 0 1 ${w - pad} ${ch + pad} V ${h - ch - pad} A ${w / 2 - pad} ${ch} 0 0 1 ${pad} ${h - ch - pad} Z`;
       pathElement = (
         <g>
-          <path d={d} fill={fillColor} stroke={strokeColor} strokeWidth={strokeWidth} />
+          <path d={d} fill={fillColor} stroke={strokeColor} strokeWidth={strokeWidth} vectorEffect="non-scaling-stroke" />
           <ellipse
             cx={w / 2}
             cy={ch + pad}
@@ -209,6 +213,7 @@ function renderShapeSvg(node: BoardNodeData, colorHex: string) {
             fill={fillColor}
             stroke={strokeColor}
             strokeWidth={strokeWidth}
+            vectorEffect="non-scaling-stroke"
           />
         </g>
       );
@@ -222,6 +227,7 @@ function renderShapeSvg(node: BoardNodeData, colorHex: string) {
           fill={fillColor}
           stroke={strokeColor}
           strokeWidth={strokeWidth}
+          vectorEffect="non-scaling-stroke"
         />
       );
       break;
@@ -238,6 +244,7 @@ function renderShapeSvg(node: BoardNodeData, colorHex: string) {
           fill={fillColor}
           stroke={strokeColor}
           strokeWidth={strokeWidth}
+          vectorEffect="non-scaling-stroke"
         />
       );
       break;
@@ -254,6 +261,7 @@ function renderShapeSvg(node: BoardNodeData, colorHex: string) {
           fill={fillColor}
           stroke={strokeColor}
           strokeWidth={strokeWidth}
+          vectorEffect="non-scaling-stroke"
         />
       );
       break;
@@ -2242,19 +2250,70 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
           let newX = startXPos;
           let newY = startYPos;
 
-          if (handle.includes('e')) {
-            newW = Math.max(80, startW + dx);
-          }
-          if (handle.includes('w')) {
-            newW = Math.max(80, startW - dx);
-            newX = startXPos + (startW - newW);
-          }
-          if (handle.includes('s')) {
-            newH = Math.max(48, startH + dy);
-          }
-          if (handle.includes('n')) {
-            newH = Math.max(48, startH - dy);
-            newY = startYPos + (startH - newH);
+          const nodeType = (nodeMap.get('type') as string) || 'sticky';
+          const isImage =
+            nodeType === 'image' ||
+            ((nodeMap.get('fileName') as string || '').match(/\.(png|jpe?g|gif|webp)$/i) && !nodeMap.get('extractedText'));
+          const isCircle = nodeType === 'shape' && (nodeMap.get('shapeVariant') as string) === 'circle';
+
+          // Proportional aspect-ratio resizing for images and circles on corner handles (Shift toggles freeform)
+          const isCorner = handle === 'nw' || handle === 'ne' || handle === 'se' || handle === 'sw';
+          const keepProportional = (isImage || isCircle || e.shiftKey) && !((isImage || isCircle) && e.shiftKey);
+
+          if (keepProportional && isCorner) {
+            const ratio = (startW > 0 && startH > 0) ? (startW / startH) : 1;
+            if (handle === 'se') {
+              if (Math.abs(dx) >= Math.abs(dy * ratio)) {
+                newW = Math.max(60, startW + dx);
+                newH = Math.max(40, Math.round(newW / ratio));
+              } else {
+                newH = Math.max(40, startH + dy);
+                newW = Math.max(60, Math.round(newH * ratio));
+              }
+            } else if (handle === 'sw') {
+              if (Math.abs(-dx) >= Math.abs(dy * ratio)) {
+                newW = Math.max(60, startW - dx);
+                newH = Math.max(40, Math.round(newW / ratio));
+              } else {
+                newH = Math.max(40, startH + dy);
+                newW = Math.max(60, Math.round(newH * ratio));
+              }
+              newX = startXPos + (startW - newW);
+            } else if (handle === 'ne') {
+              if (Math.abs(dx) >= Math.abs(-dy * ratio)) {
+                newW = Math.max(60, startW + dx);
+                newH = Math.max(40, Math.round(newW / ratio));
+              } else {
+                newH = Math.max(40, startH - dy);
+                newW = Math.max(60, Math.round(newH * ratio));
+              }
+              newY = startYPos + (startH - newH);
+            } else if (handle === 'nw') {
+              if (Math.abs(-dx) >= Math.abs(-dy * ratio)) {
+                newW = Math.max(60, startW - dx);
+                newH = Math.max(40, Math.round(newW / ratio));
+              } else {
+                newH = Math.max(40, startH - dy);
+                newW = Math.max(60, Math.round(newH * ratio));
+              }
+              newX = startXPos + (startW - newW);
+              newY = startYPos + (startH - newH);
+            }
+          } else {
+            if (handle.includes('e')) {
+              newW = Math.max(80, startW + dx);
+            }
+            if (handle.includes('w')) {
+              newW = Math.max(80, startW - dx);
+              newX = startXPos + (startW - newW);
+            }
+            if (handle.includes('s')) {
+              newH = Math.max(48, startH + dy);
+            }
+            if (handle.includes('n')) {
+              newH = Math.max(48, startH - dy);
+              newY = startYPos + (startH - newH);
+            }
           }
 
           let guides: AlignmentGuide[] = [];
@@ -4601,7 +4660,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
                     src={node.fileDataUrl || node.imageUrl || (node.fileHash ? `/api/attachments/${node.fileHash}` : '')}
                     alt={node.fileName || node.text || 'Снимок экрана'}
                     class="node-rendered-img"
-                    style={{ width: '100%', height: '100%', objectFit: 'contain', pointerEvents: 'none' }}
+                    style={{ width: '100%', height: '100%', objectFit: 'fill', pointerEvents: 'none' }}
                   />
                 </div>
               ) : node.fileHash ? (
@@ -5164,7 +5223,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
 
                       <div class="chart-visual-area">
                         {chartType === 'pie' || chartType === 'donut' ? (
-                          <svg viewBox="0 0 160 160" width="130" height="130">
+                          <svg viewBox="0 0 160 160" class="chart-svg-render" style={{ width: '100%', height: '100%', maxWidth: '100%', maxHeight: '100%', flex: 1 }}>
                             {(() => {
                               const cx = 80;
                               const cy = 80;
@@ -5248,15 +5307,14 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
                             </div>
                           </div>
                         ) : (
-                          <div style={{ width: '100%', height: '110px', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', gap: '14px', padding: '0 12px 6px' }}>
+                          <div style={{ width: '100%', height: '100%', minHeight: '110px', flex: 1, display: 'flex', alignItems: 'flex-end', justifyContent: 'center', gap: '14px', padding: '0 12px 6px' }}>
                             {data.map((seg) => {
                               const val = Math.max(0, Number(seg.value) || 0);
                               const pct = Math.round((val / total) * 100);
-                              const barHeight = Math.max(6, Math.round((val / total) * 90));
                               return (
-                                <div key={seg.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flex: 1, maxWidth: '48px', height: '100%', justifyContent: 'flex-end', gap: '4px' }}>
+                                <div key={seg.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flex: 1, maxWidth: '64px', height: '100%', justifyContent: 'flex-end', gap: '4px' }}>
                                   <span style={{ fontSize: '10px', color: '#94a3b8', fontWeight: 600 }}>{pct}%</span>
-                                  <div style={{ width: '100%', height: `${barHeight}px`, background: seg.color, borderRadius: '4px 4px 0 0' }} />
+                                  <div style={{ width: '100%', height: `${Math.max(6, pct)}%`, minHeight: '6px', background: seg.color, borderRadius: '4px 4px 0 0' }} />
                                   <span style={{ fontSize: '10px', color: '#cbd5e1', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%' }} title={seg.label}>{seg.label}</span>
                                 </div>
                               );

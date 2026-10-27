@@ -633,4 +633,65 @@ test.describe('F12: Playwright E2E Scenarios for Doks', () => {
     await expect(edgePath).toBeAttached({ timeout: 5000 });
     await expect(edgePath).toHaveAttribute('d', /^M/);
   });
+
+  test('Scenario 15: Responsive block scaling: resizing image card scales img tag to 100% frame without letterbox gap', async ({ page }) => {
+    await page.goto(`http://127.0.0.1:${port1}`);
+    await openBoard(page);
+
+    // Paste screenshot image onto the canvas
+    await page.evaluate(() => {
+      const base64Png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+      const binary = atob(base64Png);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) {
+        bytes[i] = binary.charCodeAt(i);
+      }
+      const blob = new Blob([bytes], { type: 'image/png' });
+      const file = new File([blob], 'scale-test.png', { type: 'image/png' });
+
+      const dt = new DataTransfer();
+      dt.items.add(file);
+      const pasteEvt = new ClipboardEvent('paste', {
+        clipboardData: dt,
+        bubbles: true,
+        cancelable: true
+      });
+      window.dispatchEvent(pasteEvt);
+    });
+
+    const imageNode = page.locator('.board-node-box.type-image').first();
+    await expect(imageNode).toBeVisible({ timeout: 5000 });
+    await expect(imageNode).toHaveClass(/selected/);
+
+    // Initial dimensions check
+    const initialBox = await imageNode.boundingBox();
+    expect(initialBox).not.toBeNull();
+
+    // Drag the bottom-right corner resize handle (se) to expand the card
+    const seHandle = imageNode.locator('.handle-se');
+    await expect(seHandle).toBeVisible();
+    const handleBox = await seHandle.boundingBox();
+    expect(handleBox).not.toBeNull();
+
+    await page.mouse.move(handleBox!.x + handleBox!.width / 2, handleBox!.y + handleBox!.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(handleBox!.x + 120, handleBox!.y + 80, { steps: 5 });
+    await page.mouse.up();
+
+    // Verify card expanded
+    const resizedBox = await imageNode.boundingBox();
+    expect(resizedBox).not.toBeNull();
+    expect(resizedBox!.width).toBeGreaterThan(initialBox!.width);
+    expect(resizedBox!.height).toBeGreaterThan(initialBox!.height);
+
+    // Verify inner img tag scales to fill 100% of the frame without letterbox voids
+    const img = imageNode.locator('img.node-rendered-img');
+    await expect(img).toBeVisible();
+    const imgBox = await img.boundingBox();
+    expect(imgBox).not.toBeNull();
+
+    // Difference between card frame and image should be within 4px (padding/border only)
+    expect(Math.abs(imgBox!.width - resizedBox!.width)).toBeLessThanOrEqual(4);
+    expect(Math.abs(imgBox!.height - resizedBox!.height)).toBeLessThanOrEqual(4);
+  });
 });

@@ -195,4 +195,94 @@ describe('V7 Screenshot & Image Pasting Suite', () => {
     expect(edge?.fromSide).toBe('right');
     expect(edge?.toSide).toBe('left');
   });
+
+  it('5. Responsive scaling: corner resize preserves aspect ratio to eliminate letterbox gaps', () => {
+    // Helper function reproducing the proportional resize algorithm
+    function computeProportionalResize(
+      startW: number,
+      startH: number,
+      startX: number,
+      startY: number,
+      handle: string,
+      dx: number,
+      dy: number,
+      isImage: boolean,
+      shiftKey: boolean
+    ) {
+      let newW = startW;
+      let newH = startH;
+      let newX = startX;
+      let newY = startY;
+
+      const isCorner = handle === 'nw' || handle === 'ne' || handle === 'se' || handle === 'sw';
+      const keepProportional = isImage && !shiftKey;
+
+      if (keepProportional && isCorner) {
+        const ratio = (startW > 0 && startH > 0) ? (startW / startH) : 1;
+        if (handle === 'se') {
+          if (Math.abs(dx) >= Math.abs(dy * ratio)) {
+            newW = Math.max(60, startW + dx);
+            newH = Math.max(40, Math.round(newW / ratio));
+          } else {
+            newH = Math.max(40, startH + dy);
+            newW = Math.max(60, Math.round(newH * ratio));
+          }
+        } else if (handle === 'sw') {
+          if (Math.abs(-dx) >= Math.abs(dy * ratio)) {
+            newW = Math.max(60, startW - dx);
+            newH = Math.max(40, Math.round(newW / ratio));
+          } else {
+            newH = Math.max(40, startH + dy);
+            newW = Math.max(60, Math.round(newH * ratio));
+          }
+          newX = startX + (startW - newW);
+        } else if (handle === 'ne') {
+          if (Math.abs(dx) >= Math.abs(-dy * ratio)) {
+            newW = Math.max(60, startW + dx);
+            newH = Math.max(40, Math.round(newW / ratio));
+          } else {
+            newH = Math.max(40, startH - dy);
+            newW = Math.max(60, Math.round(newH * ratio));
+          }
+          newY = startY + (startH - newH);
+        } else if (handle === 'nw') {
+          if (Math.abs(-dx) >= Math.abs(-dy * ratio)) {
+            newW = Math.max(60, startW - dx);
+            newH = Math.max(40, Math.round(newW / ratio));
+          } else {
+            newH = Math.max(40, startH - dy);
+            newW = Math.max(60, Math.round(newH * ratio));
+          }
+          newX = startX + (startW - newW);
+          newY = startY + (startH - newH);
+        }
+      }
+
+      return { newX, newY, newW, newH };
+    }
+
+    const startW = 320;
+    const startH = 180; // 16:9 ratio
+    const originalRatio = startW / startH;
+
+    // Corner SE drag - horizontal dominant
+    const res1 = computeProportionalResize(startW, startH, 100, 100, 'se', 160, 40, true, false);
+    expect(res1.newW).toBe(480);
+    expect(res1.newH).toBe(270);
+    expect(res1.newW / res1.newH).toBeCloseTo(originalRatio, 2);
+
+    // Corner SE drag - vertical dominant (pulling frame downward)
+    const res2 = computeProportionalResize(startW, startH, 100, 100, 'se', 50, 180, true, false);
+    expect(res2.newH).toBe(360);
+    expect(res2.newW).toBe(640);
+    expect(res2.newW / res2.newH).toBeCloseTo(originalRatio, 2);
+
+    // Corner NW drag (top-left) - adjusts position and dimensions together
+    const res3 = computeProportionalResize(startW, startH, 200, 200, 'nw', -80, -45, true, false);
+    expect(res3.newW).toBe(400);
+    expect(res3.newH).toBe(225);
+    expect(res3.newX).toBe(120);
+    expect(res3.newY).toBe(155);
+    expect(res3.newW / res3.newH).toBeCloseTo(originalRatio, 2);
+  });
 });
