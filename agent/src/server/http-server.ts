@@ -1245,9 +1245,7 @@ export class AgentHttpServer {
   }
 
   public async start(): Promise<void> {
-    const hostToBind = (this.config.bindAddress && this.config.bindAddress !== 'auto' && this.config.bindAddress !== '127.0.0.1')
-      ? this.config.bindAddress
-      : (process.env.DOKS_HOST || '0.0.0.0');
+    const hostToBind = process.env.DOKS_HOST || '0.0.0.0';
     const freePort = await findAvailablePort(
       this.config.webPort,
       hostToBind
@@ -1261,8 +1259,9 @@ export class AgentHttpServer {
       port: this.config.webPort,
       host: hostToBind
     });
+    const radminIp = detectRadminIp();
     console.log(
-      `[HttpServer] Local UI & API listening at http://${hostToBind}:${this.config.webPort}`
+      `[HttpServer] Local UI & API listening at http://127.0.0.1:${this.config.webPort}${radminIp ? ` (Radmin: http://${radminIp}:${this.config.webPort})` : ''}`
     );
   }
 

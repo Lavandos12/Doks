@@ -10,6 +10,7 @@ delete process.env.http_proxy;
 delete process.env.https_proxy;
 
 import { Agent } from './agent.js';
+import { findRadminIp } from './network.js';
 
 export * from './agent.js';
 export * from './config.js';
@@ -69,13 +70,17 @@ Options:
   const agent = new Agent({ baseDir, webPort, peerPort, teamKey });
 
   agent.start().then(() => {
-    const url = `http://127.0.0.1:${agent.config.webPort}`;
-    console.log(`[Doks Agent] Running at ${url}`);
+    const localUrl = `http://127.0.0.1:${agent.config.webPort}`;
+    console.log(`[Doks Agent] Running at ${localUrl}`);
+    const radminIp = findRadminIp();
+    if (radminIp) {
+      console.log(`[Doks Agent] Radmin VPN: http://${radminIp}:${agent.config.webPort}`);
+    }
     console.log(`[Doks Agent] Agent ID: ${agent.config.agentId}`);
     if (openBrowser) {
-      console.log(`[Doks Agent] Opening browser at ${url}`);
+      console.log(`[Doks Agent] Opening browser at ${localUrl}`);
       const openCmd = process.platform === 'win32' ? 'start' : process.platform === 'darwin' ? 'open' : 'xdg-open';
-      exec(`${openCmd} ${url}`);
+      exec(`${openCmd} ${localUrl}`);
     }
   }).catch((err) => {
     console.error('[Doks Agent] Startup failed:', err);
