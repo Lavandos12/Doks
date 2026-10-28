@@ -220,6 +220,7 @@ export class AgentHttpServer {
               : 80;
           const isAllowedOriginPort =
             originPort === this.config.webPort ||
+            originPort === 4780 ||
             originPort === 5173 ||
             originPort === 5174 ||
             originPort === 3000 ||
@@ -1601,6 +1602,7 @@ export class AgentHttpServer {
     if (freePort !== this.config.webPort) {
       console.warn(`[HttpServer] Port ${this.config.webPort} is busy, auto-switching to free port ${freePort}`);
       this.config.webPort = freePort;
+      this.bridgeService.setWebPort(this.config.webPort);
     }
 
     await this.fastify.listen({

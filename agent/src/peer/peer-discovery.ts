@@ -47,7 +47,7 @@ export class PeerDiscoveryService extends EventEmitter {
     super();
     this.teamKey = options.teamKey;
     this.wsPort = options.wsPort;
-    this.webPort = options.webPort || 3000;
+    this.webPort = options.webPort || 4780;
     this.displayName = options.displayName || 'Командная доска';
     this.peerId = options.peerId;
     this.udpPort = options.port || 41234;
@@ -86,7 +86,7 @@ export class PeerDiscoveryService extends EventEmitter {
                 displayName: data.displayName || 'Комната Doks',
                 host,
                 wsPort: data.wsPort,
-                webPort: data.webPort || 3000,
+                webPort: data.webPort || 4780,
                 inviteUri: `doks://${host}:${data.wsPort}#${data.workspaceHash || ''}`,
                 lastSeen: Date.now()
               };

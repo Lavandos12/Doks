@@ -36,7 +36,7 @@
     "build:protected": "node scripts/build-protected.mjs",
     "pack:release": "node scripts/build-protected.mjs",
     "build:exe": "node scripts/build-exe.mjs",
-    "test": "vitest run",
+    "test": "vitest run --fileParallelism=false",
     "e2e": "playwright test",
     "check": "npm run typecheck && npm run test && npm run build",
     "typecheck": "tsc --noEmit --project shared/tsconfig.json && tsc --noEmit --project agent/tsconfig.json && tsc --noEmit --project web/tsconfig.json && tsc --noEmit --project tests/tsconfig.json",

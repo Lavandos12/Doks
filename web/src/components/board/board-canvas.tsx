@@ -1042,7 +1042,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
     if (!containerRef.current) return;
     const rect = containerRef.current.getBoundingClientRect();
 
-    if (e.ctrlKey || e.metaKey) {
+    if (e.ctrlKey || e.metaKey || (e.deltaX === 0 && !e.shiftKey)) {
       const mouseX = e.clientX - rect.left;
       const mouseY = e.clientY - rect.top;
       const wheelTarget = computeContinuousWheelTarget(
@@ -1052,6 +1052,11 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
         mouseY
       );
       animateToViewport(wheelTarget, false);
+    } else if (e.shiftKey && e.deltaX === 0) {
+      animateToViewport({
+        x: targetViewportRef.current.x - e.deltaY,
+        y: targetViewportRef.current.y
+      }, false);
     } else {
       animateToViewport({
         x: targetViewportRef.current.x - e.deltaX,
@@ -1757,6 +1762,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
     setActiveTool('select');
     setActiveFlyout('none');
     startEditingNode(id, true);
+    return id;
   };
 
   // Create a note card linked to an existing note
@@ -2873,8 +2879,8 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
     setIsExportMenuOpen(false);
     setActiveFlyout('none');
 
-    // Pan via Space + Left click, Middle click, Right click, or Hand tool
-    if (isSpacePressed || e.button === 1 || e.button === 2 || activeTool === 'hand') {
+    // Pan via Space + Left click, Middle click, Right click, Hand tool, or Read-Only Viewer mode
+    if (isViewerMode.value || isSpacePressed || e.button === 1 || e.button === 2 || activeTool === 'hand') {
       if (e.button !== 2) {
         setPanState({
           startX: e.clientX,
@@ -3231,6 +3237,14 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
       onPointerLeave={() => setCursorScreenPos(null)}
       onMouseLeave={() => setCursorScreenPos(null)}
       onMouseDown={handleBackgroundPointerDown}
+      onDblClick={(e) => {
+        if (isViewerMode.value) return;
+        const target = e.target as HTMLElement | null;
+        if (target && (target.classList.contains('board-container') || target.classList.contains('board-transform-layer') || target.classList.contains('canvas-grid-svg-layer'))) {
+          const pos = screenToCanvas(e.clientX, e.clientY);
+          createNodeAt('sticky', pos.x - 100, pos.y - 65, activeColor);
+        }
+      }}
       onContextMenu={isViewerMode.value ? (e) => e.preventDefault() : handleContextMenu}
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
@@ -4592,14 +4606,18 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
         <CanvasEdgesLayer
           nodesMap={nodesBoxMap}
           edges={canvasEdges}
-          selectedEdgeId={selectedEdgeId}
+          selectedEdgeId={isViewerMode.value ? null : selectedEdgeId}
+          viewportZoom={viewport.zoom}
+          readOnly={isViewerMode.value}
           onSelectEdge={(id) => {
+            if (isViewerMode.value) return;
             setSelectedEdgeId(id);
             if (id) setSelectedNodeIds(new Set());
           }}
           onUpdateEdge={handleUpdateEdge}
           onDeleteEdge={handleDeleteEdge}
           onStartReconnect={(edgeId, which, startPoint) => {
+            if (isViewerMode.value) return;
             setReconnectEdgeState({
               edgeId,
               which,

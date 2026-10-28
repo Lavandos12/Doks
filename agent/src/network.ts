@@ -214,15 +214,51 @@ export function isRadminIp(ip: string): boolean {
 /**
  * Checks if a specific TCP port is currently free on the given host.
  */
-export function isPortFree(port: number, host = '127.0.0.1'): Promise<boolean> {
+function isTcpEndpointListening(port: number, host: string, timeoutMs = 180): Promise<boolean> {
+  return new Promise((resolve) => {
+    const socket = new net.Socket();
+    let settled = false;
+    const done = (inUse: boolean) => {
+      if (settled) return;
+      settled = true;
+      socket.destroy();
+      resolve(inUse);
+    };
+    socket.setTimeout(timeoutMs);
+    socket.once('connect', () => done(true));
+    socket.once('timeout', () => done(false));
+    socket.once('error', (err: any) => {
+      // ECONNREFUSED means nothing is listening on this host:port
+      if (err && (err.code === 'ECONNREFUSED' || err.code === 'EADDRNOTAVAIL' || err.code === 'ENETUNREACH')) {
+        done(false);
+      } else {
+        done(false);
+      }
+    });
+    socket.connect(port, host);
+  });
+}
+
+function canBindExclusive(port: number, host: string): Promise<boolean> {
   return new Promise((resolve) => {
     const server = net.createServer();
     server.unref();
-    server.on('error', () => resolve(false));
-    server.listen(port, host, () => {
+    server.once('error', () => resolve(false));
+    server.listen({ port, host, exclusive: true }, () => {
       server.close(() => resolve(true));
     });
   });
+}
+
+export async function isPortFree(port: number, host = '127.0.0.1'): Promise<boolean> {
+  // 1. If any process is already accepting connections on loopback IPv4 or IPv6, the port is busy!
+  if (await isTcpEndpointListening(port, '127.0.0.1')) return false;
+  if (await isTcpEndpointListening(port, '::1')) return false;
+
+  // 2. Verify we can bind exclusively on both loopback and target host
+  if (!(await canBindExclusive(port, '127.0.0.1'))) return false;
+  if (host !== '127.0.0.1' && !(await canBindExclusive(port, host))) return false;
+  return true;
 }
 
 /**

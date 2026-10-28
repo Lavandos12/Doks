@@ -47,7 +47,7 @@ Usage:
 Options:
   --open              Open browser on startup
   --dir <path>        Vault data directory (default: ~/Doks)
-  --port <number>     Web UI & API port (default: 3000)
+  --port <number>     Web UI & API port (default: 4780)
   --peer-port <num>   Peer service port (default: 4747)
   --key <secret>      Team authentication key (64 hex characters)
   --version, -v       Show version number

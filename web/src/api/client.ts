@@ -143,7 +143,7 @@ class ApiClient {
   public getWsUrl(scope: WorkspaceScope): string {
     if (typeof window === 'undefined') return '';
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const host = window.location.host || '127.0.0.1:3000';
+    const host = window.location.host || '127.0.0.1:4780';
     const token = this.getSessionToken();
     const tokenParam = token ? `&token=${encodeURIComponent(token)}` : '';
     const bridgeParam = this.bridgeToken ? `&b=${encodeURIComponent(this.bridgeToken)}` : '';

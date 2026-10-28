@@ -32,6 +32,8 @@ interface Props {
   nodesMap: Map<string, { id: string; x: number; y: number; width: number; height: number }>;
   edges: CanvasEdgeModel[];
   selectedEdgeId: string | null;
+  viewportZoom?: number;
+  readOnly?: boolean;
   onSelectEdge: (edgeId: string | null) => void;
   onUpdateEdge: (edgeId: string, patch: Partial<CanvasEdgeModel>) => void;
   onDeleteEdge: (edgeId: string) => void;
@@ -42,6 +44,8 @@ export const CanvasEdgesLayer: FunctionComponent<Props> = ({
   nodesMap,
   edges,
   selectedEdgeId,
+  viewportZoom,
+  readOnly,
   onSelectEdge,
   onUpdateEdge,
   onDeleteEdge,
@@ -169,16 +173,19 @@ export const CanvasEdgesLayer: FunctionComponent<Props> = ({
                 stroke="rgba(0,0,0,0.001)"
                 strokeWidth={20}
                 className="canvas-edge-hit-area"
-                style={{ pointerEvents: 'stroke', cursor: 'pointer' }}
+                style={{ pointerEvents: readOnly ? 'none' : 'stroke', cursor: readOnly ? 'default' : 'pointer' }}
                 onMouseDown={(e: MouseEvent) => {
+                  if (readOnly) return;
                   e.stopPropagation();
                   onSelectEdge(edge.id);
                 }}
                 onClick={(e: MouseEvent) => {
+                  if (readOnly) return;
                   e.stopPropagation();
                   onSelectEdge(edge.id);
                 }}
                 onDblClick={(e: MouseEvent) => {
+                  if (readOnly) return;
                   e.stopPropagation();
                   onSelectEdge(edge.id);
                   setEditingLabelEdgeId(edge.id);
@@ -225,7 +232,7 @@ export const CanvasEdgesLayer: FunctionComponent<Props> = ({
                 />
               )}
               {/* Endpoint handles when selected */}
-              {isSelected && (
+              {isSelected && !readOnly && (
                 <Fragment>
                   <circle
                     cx={p1.x}
@@ -260,16 +267,16 @@ export const CanvasEdgesLayer: FunctionComponent<Props> = ({
                 </Fragment>
               )}
               {/* Edge text label */}
-              {(edge.label || editingLabelEdgeId === edge.id) && (
+              {(edge.label || (!readOnly && editingLabelEdgeId === edge.id)) && (
                 <foreignObject
                   x={labelX - 90}
                   y={labelY - 16}
                   width={180}
                   height={32}
-                  style={{ overflow: 'visible', pointerEvents: 'auto' }}
+                  style={{ overflow: 'visible', pointerEvents: readOnly ? 'none' : 'auto' }}
                 >
                   <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-                    {editingLabelEdgeId === edge.id ? (
+                    {!readOnly && editingLabelEdgeId === edge.id ? (
                       <input
                         autoFocus
                         className="edge-label-input doks-edge-label-input"
@@ -295,12 +302,14 @@ export const CanvasEdgesLayer: FunctionComponent<Props> = ({
                     ) : (
                       <span
                         className="edge-text-label doks-edge-label-pill"
-                        style={{ borderColor: strokeColor }}
+                        style={{ borderColor: strokeColor, cursor: readOnly ? 'default' : 'pointer' }}
                         onMouseDown={(e: MouseEvent) => {
+                          if (readOnly) return;
                           e.stopPropagation();
                           onSelectEdge(edge.id);
                         }}
                         onDblClick={(e: MouseEvent) => {
+                          if (readOnly) return;
                           e.stopPropagation();
                           setEditingLabelEdgeId(edge.id);
                         }}
@@ -317,7 +326,7 @@ export const CanvasEdgesLayer: FunctionComponent<Props> = ({
       </svg>
 
       {/* Floating Inspector Bar for Selected Edge */}
-      {selectedEdgeId && (() => {
+      {selectedEdgeId && !readOnly && (() => {
         const edge = validEdges.find((e) => e.id === selectedEdgeId);
         if (!edge) return null;
         const fromNode = nodesMap.get(edge.fromNode);
@@ -336,6 +345,8 @@ export const CanvasEdgesLayer: FunctionComponent<Props> = ({
           edge.curveType || 'bezier'
         );
 
+        const inspectorScale = 1 / Math.max(0.25, Math.min(viewportZoom || 1, 2.5));
+
         return (
           <div
             className="floating-edge-pill doks-floating-inspector doks-edge-inspector liquid-glass-surface"
@@ -343,7 +354,8 @@ export const CanvasEdgesLayer: FunctionComponent<Props> = ({
               position: 'absolute',
               left: `${labelX}px`,
               top: `${labelY - 54}px`,
-              transform: 'translateX(-50%)',
+              transform: `translateX(-50%) scale(${inspectorScale})`,
+              transformOrigin: 'bottom center',
               zIndex: 200,
               pointerEvents: 'auto',
             }}

@@ -105,7 +105,7 @@ export function NetworkPopover({ isOpen, onClose }: NetworkPopoverProps): VNode 
   const status = agentStatus.value;
   const radminIp = netInfo?.detectedRadminIp || status?.radminIp;
   const effectiveIp = radminIp || netInfo?.lanIp || status?.effectiveIp || '127.0.0.1';
-  const webPort = (netInfo as any)?.webPort || status?.webPort || 3000;
+  const webPort = (netInfo as any)?.webPort || status?.webPort || 4780;
   const effectivePort = netInfo?.port || status?.peerPort || 4747;
   const browserDirectUrl = `http://${effectiveIp}:${webPort}`;
   const inviteLink = netInfo?.inviteUri || (status as any)?.inviteLink || `doks://${effectiveIp}:${effectivePort}#common-key`;

@@ -96,7 +96,8 @@ export function loadOrCreateConfig(options: ConfigOptions = {}): AgentConfig {
   const memberName = (!rawMemberName || rawMemberName === 'Tester') ? 'Вы' : rawMemberName;
   const memberColor = existing.memberColor || AUTHOR_COLORS[Math.floor(Math.random() * AUTHOR_COLORS.length)];
   const peerPort = options.peerPort ?? existing.peerPort ?? 4747;
-  const webPort = options.webPort ?? existing.webPort ?? 3000;
+  const savedWebPort = existing.webPort === 3000 || existing.webPort === 7860 ? 4780 : existing.webPort;
+  const webPort = options.webPort ?? savedWebPort ?? 4780;
   let rawBindAddress = options.bindAddress ?? existing.bindAddress ?? (process.env.DOKS_HOST || 'auto');
   if (rawBindAddress && rawBindAddress.startsWith('26.')) {
     // Migration: legacy configs stored Radmin IP in bindAddress, which broke 127.0.0.1 loopback binding

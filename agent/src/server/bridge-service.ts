@@ -34,6 +34,10 @@ export class BridgeService {
     this.doksDir = path.dirname(statePath);
   }
 
+  public setWebPort(port: number): void {
+    this.webPort = port;
+  }
+
   public isValidBridgeToken(token?: string | null): boolean {
     if (!this.enabled || !this.bridgeToken || !token) return false;
     if (this.expiresAt && Date.now() > this.expiresAt) {
