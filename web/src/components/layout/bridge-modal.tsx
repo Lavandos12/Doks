@@ -4,6 +4,7 @@ import { generateQrMatrix, renderQrSvgPath } from '../../utils/qr-svg.js';
 import { api } from '../../api/client.js';
 import { Icon } from '../../ui/icons.js';
 import { showToast } from '../../ui/toast.js';
+import { t } from '../../i18n/index.js';
 
 interface BridgeStatusData {
   enabled: boolean;
@@ -128,7 +129,7 @@ export function BridgeModal({ isOpen, onClose }: BridgeModalProps): VNode | null
           <div class="modal-title-group">
             <Icon name="smartphone" size={20} class="modal-header-icon" />
             <div>
-              <h3 class="modal-title">Режим моста</h3>
+              <h3 class="modal-title">{t('topbar.bridge')}</h3>
               <p class="modal-subtitle">
                 Ваш Doks на любом устройстве. Только для просмотра — обработка и данные остаются на этом компьютере.
               </p>

@@ -138,7 +138,7 @@ export function NetworkPopover({ isOpen, onClose }: NetworkPopoverProps): VNode 
                 Сеть Radmin VPN
               </h3>
               <div style={{ fontSize: '11.5px', color: '#94a3b8', marginTop: '2px' }}>
-                Ваш IP в сети: <span style={{ color: '#38bdf8', fontFamily: 'monospace' }}>{effectiveIp}</span> ({radminIp ? 'Radmin VPN активен' : 'Локальная сеть'})
+                Ваш IP в сети: <span style={{ color: '#c084fc', fontFamily: 'monospace' }}>{effectiveIp}</span> ({radminIp ? 'Radmin VPN активен' : 'Локальная сеть'})
               </div>
             </div>
           </div>
@@ -178,18 +178,18 @@ export function NetworkPopover({ isOpen, onClose }: NetworkPopoverProps): VNode 
           {/* Способ 1: Вход через браузер (1 клик) */}
           <div style={{
             padding: '14px',
-            background: 'linear-gradient(135deg, rgba(56, 189, 248, 0.08) 0%, rgba(129, 140, 248, 0.04) 100%)',
+            background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.12) 0%, rgba(124, 58, 237, 0.05) 100%)',
             borderRadius: '10px',
-            border: '1px solid rgba(56, 189, 248, 0.25)',
+            border: '1px solid rgba(139, 92, 246, 0.3)',
             display: 'flex',
             flexDirection: 'column',
             gap: '8px'
           }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <span style={{ fontSize: '13px', fontWeight: 600, color: '#38bdf8' }}>
+              <span style={{ fontSize: '13px', fontWeight: 600, color: '#c084fc' }}>
                 Способ 1 — Мгновенный вход через браузер
               </span>
-              <span style={{ fontSize: '10.5px', background: 'rgba(56, 189, 248, 0.2)', color: '#7dd3fc', padding: '2px 6px', borderRadius: '4px' }}>
+              <span style={{ fontSize: '10.5px', background: 'rgba(139, 92, 246, 0.22)', color: '#e9d5ff', padding: '2px 6px', borderRadius: '4px' }}>
                 Без установки Doks!
               </span>
             </div>
@@ -201,7 +201,7 @@ export function NetworkPopover({ isOpen, onClose }: NetworkPopoverProps): VNode 
                 type="text"
                 readonly
                 value={browserDirectUrl}
-                style={{ flex: 1, fontFamily: 'monospace', fontSize: '12.5px', background: '#0b0f19', color: '#38bdf8' }}
+                style={{ flex: 1, fontFamily: 'monospace', fontSize: '12.5px', background: '#0b0f19', color: '#c084fc' }}
               />
               <button
                 type="button"

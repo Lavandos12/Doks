@@ -4,6 +4,7 @@ import { theme, agentStatus, currentScope } from '../../state/app-state.js';
 import { Icon } from '../../ui/icons.js';
 import { showToast } from '../../ui/toast.js';
 import { api } from '../../api/client.js';
+import { t, currentLanguage, setLanguage, type Language } from '../../i18n/index.js';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -23,7 +24,7 @@ const AUTHOR_COLORS = [
   '#f59e0b',
   '#10b981',
   '#06b6d4',
-  '#3b82f6',
+  '#8b5cf6',
   '#6366f1',
   '#ec4899'
 ];
@@ -46,7 +47,7 @@ export function SettingsModal({
     return localStorage.getItem('doks_member_name') || agentStatus.value?.memberName || 'Пользователь';
   });
   const [color, setColor] = useState<string>(() => {
-    return localStorage.getItem('doks_member_color') || agentStatus.value?.memberColor || '#3b82f6';
+    return localStorage.getItem('doks_member_color') || agentStatus.value?.memberColor || '#8b5cf6';
   });
 
   const handleSaveProfile = () => {
@@ -101,21 +102,21 @@ export function SettingsModal({
             onClick={() => setActiveTab('profile')}
           >
             <Icon name="users" size={14} />
-            <span>Профиль соавтора</span>
+            <span>{t('settings.tab_profile')}</span>
           </button>
           <button
             class={`settings-tab-btn ${activeTab === 'canvas' ? 'active' : ''}`}
             onClick={() => setActiveTab('canvas')}
           >
             <Icon name="layout-canvas" size={14} />
-            <span>Холст и сетка</span>
+            <span>{t('settings.tab_canvas')}</span>
           </button>
           <button
             class={`settings-tab-btn ${activeTab === 'backup' ? 'active' : ''}`}
             onClick={() => setActiveTab('backup')}
           >
             <Icon name="download" size={14} />
-            <span>Экспорт и бэкапы</span>
+            <span>{t('settings.tab_backup')}</span>
           </button>
         </div>
 
@@ -124,7 +125,7 @@ export function SettingsModal({
           {activeTab === 'profile' && (
             <div>
               <div class="form-group">
-                <label>Ваше отображаемое имя</label>
+                <label>{t('settings.display_name')}</label>
                 <input
                   type="text"
                   value={name}
@@ -134,7 +135,7 @@ export function SettingsModal({
               </div>
 
               <div class="form-group">
-                <label>Цвет курсора и маркера</label>
+                <label>{t('settings.cursor_color')}</label>
                 <div class="settings-color-palette">
                   {AUTHOR_COLORS.map((c) => (
                     <button
@@ -150,7 +151,7 @@ export function SettingsModal({
 
               <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '12px' }}>
                 <button class="btn-primary" onClick={handleSaveProfile}>
-                  Сохранить профиль
+                  {t('settings.save_profile')}
                 </button>
               </div>
             </div>
@@ -159,28 +160,28 @@ export function SettingsModal({
           {activeTab === 'canvas' && (
             <div>
               <div class="settings-section-card">
-                <label style={{ fontWeight: 600, color: '#f1f5f9', marginBottom: '8px' }}>Фон холста</label>
+                <label class="settings-card-label">{t('settings.grid_bg')}</label>
                 <div style={{ display: 'flex', gap: '8px' }}>
-                  {(['dots', 'lines', 'none'] as const).map((t) => (
+                  {(['dots', 'lines', 'none'] as const).map((g) => (
                     <button
-                      key={t}
+                      key={g}
                       type="button"
-                      class={`table-tool-btn ${gridType === t ? 'active' : ''}`}
+                      class={`table-tool-btn ${gridType === g ? 'active' : ''}`}
                       style={{
                         padding: '8px 14px',
-                        background: gridType === t ? '#4f46e5' : 'rgba(255,255,255,0.06)',
+                        background: gridType === g ? '#7c3aed' : 'rgba(255,255,255,0.06)',
                         color: '#ffffff'
                       }}
-                      onClick={() => onSetGridType?.(t)}
+                      onClick={() => onSetGridType?.(g)}
                     >
-                      {t === 'dots' ? 'Точки' : t === 'lines' ? 'Линии' : 'Без сетки'}
+                      {g === 'dots' ? t('settings.grid_dots') : g === 'lines' ? t('settings.grid_lines') : t('settings.grid_none')}
                     </button>
                   ))}
                 </div>
               </div>
 
               <div class="settings-section-card">
-                <label style={{ fontWeight: 600, color: '#f1f5f9', marginBottom: '8px' }}>Привязка к сетке (Snap-to-Grid 16px)</label>
+                <label class="settings-card-label">{t('settings.snap_grid')}</label>
                 <button
                   type="button"
                   class="btn-secondary"
@@ -192,19 +193,40 @@ export function SettingsModal({
                   }}
                   onClick={() => onSetSnapToGrid?.(!snapToGrid)}
                 >
-                  {snapToGrid ? 'Включено (привязка 16px)' : 'Выключено'}
+                  {snapToGrid ? t('settings.enabled') : t('settings.disabled')}
                 </button>
               </div>
 
               <div class="settings-section-card">
-                <label style={{ fontWeight: 600, color: '#f1f5f9', marginBottom: '8px' }}>Тема интерфейса</label>
+                <label class="settings-card-label">{t('settings.theme')}</label>
                 <button
                   type="button"
                   class="btn-secondary"
                   onClick={() => (theme.value = theme.value === 'dark' ? 'light' : 'dark')}
                 >
-                  {theme.value === 'dark' ? 'Тёмная тема (Dark)' : 'Светлая тема (Light)'}
+                  {theme.value === 'dark' ? t('settings.theme_dark') : t('settings.theme_light')}
                 </button>
+              </div>
+
+              <div class="settings-section-card">
+                <label class="settings-card-label">{t('settings.language')}</label>
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                  {([
+                    { code: 'ru', label: 'Русский (RU)' },
+                    { code: 'en', label: 'English (EN)' },
+                    { code: 'es', label: 'Español (ES)' }
+                  ] as const).map((item) => (
+                    <button
+                      key={item.code}
+                      type="button"
+                      class={currentLanguage.value === item.code ? 'btn-primary-sm' : 'btn-secondary-sm'}
+                      style={currentLanguage.value === item.code ? { background: '#7c3aed', color: '#fff', borderColor: '#8b5cf6' } : {}}
+                      onClick={() => setLanguage(item.code)}
+                    >
+                      {item.label}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
           )}
@@ -212,46 +234,46 @@ export function SettingsModal({
           {activeTab === 'backup' && (
             <div>
               <div class="settings-section-card">
-                <label style={{ fontWeight: 600, color: '#f1f5f9', marginBottom: '6px' }}>Экспорт доски</label>
+                <label class="settings-card-label">{t('settings.board_export')}</label>
                 <p style={{ fontSize: '12px', color: '#94a3b8', margin: '0 0 10px 0' }}>
-                  Сохраните текущую доску как векторный SVG или файл структуры JSON.
+                  {t('settings.board_export_desc')}
                 </p>
                 <div style={{ display: 'flex', gap: '8px' }}>
                   <button class="table-tool-btn" style={{ padding: '8px 12px' }} onClick={onExportJson}>
-                    Экспорт в JSON
+                    JSON (.canvas)
                   </button>
                   <button class="table-tool-btn" style={{ padding: '8px 12px' }} onClick={onExportSvg}>
-                    Экспорт в SVG
+                    SVG (.svg)
                   </button>
                 </div>
               </div>
 
               <div class="settings-section-card">
-                <label style={{ fontWeight: 600, color: '#f1f5f9', marginBottom: '6px' }}>Полный бэкап рабочей области</label>
+                <label class="settings-card-label">{t('settings.full_backup')}</label>
                 <p style={{ fontSize: '12px', color: '#94a3b8', margin: '0 0 10px 0' }}>
-                  Скачайте полный архив .ZIP со всеми досками, заметками и связями.
+                  {t('settings.full_backup_desc')}
                 </p>
                 <button class="btn-primary" onClick={handleExportZip}>
                   <Icon name="download" size={14} />
-                  <span>Скачать полный ZIP-бэкап</span>
+                  <span>{t('settings.download_zip')}</span>
                 </button>
               </div>
 
               <div class="settings-section-card">
-                <label style={{ fontWeight: 600, color: '#f1f5f9', marginBottom: '6px' }}>История снимков и Корзина</label>
+                <label class="settings-card-label">{t('settings.trash_and_history')}</label>
                 <p style={{ fontSize: '12px', color: '#94a3b8', margin: '0 0 10px 0' }}>
-                  Просмотр контрольных точек версий, восстановление удаленных заметок и досок.
+                  {t('trash.modal_subtitle')}
                 </p>
                 <button
                   class="btn-secondary"
                   onClick={() => {
-                    window.dispatchEvent(new CustomEvent('doks:open-history'));
+                    window.dispatchEvent(new CustomEvent('doks:open-history', { detail: { tab: 'trash' } }));
                     onClose();
                   }}
                   style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '8px 14px' }}
                 >
-                  <Icon name="history" size={14} />
-                  <span>Открыть историю и Корзину</span>
+                  <Icon name="trash" size={14} />
+                  <span>{t('settings.open_trash')}</span>
                 </button>
               </div>
             </div>

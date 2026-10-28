@@ -11,6 +11,7 @@ import {
 } from '../../state/app-state.js';
 import { Icon } from '../../ui/icons.js';
 import { showToast } from '../../ui/toast.js';
+import { t } from '../../i18n/index.js';
 
 export interface BoardSettingsModalProps {
   isOpen: boolean;
@@ -179,12 +180,12 @@ export function BoardSettingsModal({
                   fontWeight: 600,
                   padding: '2px 8px',
                   borderRadius: 6,
-                  color: scope === 'team' ? '#34d399' : '#60a5fa',
-                  background: scope === 'team' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(59, 130, 246, 0.15)',
-                  border: `1px solid ${scope === 'team' ? 'rgba(16, 185, 129, 0.3)' : 'rgba(59, 130, 246, 0.3)'}`
+                  color: scope === 'team' ? '#34d399' : '#c084fc',
+                  background: scope === 'team' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(139, 92, 246, 0.15)',
+                  border: `1px solid ${scope === 'team' ? 'rgba(16, 185, 129, 0.3)' : 'rgba(139, 92, 246, 0.3)'}`
                 }}
               >
-                {scope === 'team' ? 'Общая доска' : 'Личная доска'}
+                {scope === 'team' ? t('topbar.team') : t('topbar.solo')}
               </span>
             </div>
 
@@ -233,9 +234,9 @@ export function BoardSettingsModal({
                     gap: 8,
                     padding: '9px 14px',
                     borderRadius: 8,
-                    border: '1px solid rgba(59, 130, 246, 0.4)',
-                    background: 'rgba(59, 130, 246, 0.12)',
-                    color: '#60a5fa',
+                    border: '1px solid rgba(139, 92, 246, 0.4)',
+                    background: 'rgba(139, 92, 246, 0.15)',
+                    color: '#c084fc',
                     fontWeight: 600,
                     fontSize: 13,
                     cursor: isConverting ? 'not-allowed' : 'pointer',

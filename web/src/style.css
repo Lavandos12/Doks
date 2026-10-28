@@ -3,17 +3,17 @@
   --font-mono: Consolas, "JetBrains Mono", "Fira Code", monospace;
 
   /* Stage C Dark Theme Tokens (Default) */
-  --bg-primary: #14161c;
-  --bg-secondary: #1a1d25;
-  --bg-card: #232733;
-  --bg-card-hover: #2b3040;
-  --border-color: #2e3343;
-  --border-focus: #4b556b;
+  --bg-primary: #09080f;
+  --bg-secondary: #110f1c;
+  --bg-card: #181528;
+  --bg-card-hover: #221e38;
+  --border-color: #2b2644;
+  --border-focus: #6d28d9;
   --text-primary: #f1f3f9;
   --text-secondary: #9da5b4;
   --text-muted: #656c7d;
-  --accent: #7c8cff;
-  --accent-hover: #6a7ae6;
+  --accent: #8b5cf6;
+  --accent-hover: #7c3aed;
   --danger: #f87171;
   --success: #34d399;
   --warning: #fbbf24;
@@ -7325,4 +7325,214 @@ button.settings-color-btn.selected {
 .is-viewer-mode .miro-board-bar,
 .is-viewer-mode .miro-actions-bar {
   top: 42px !important;
+}
+
+
+/* ==========================================================================
+   V17 FIX: ZERO TEXT OVERLAPS, BLACK-PURPLE THEME & LAYOUT INTEGRITY
+   ========================================================================== */
+
+/* 1. Fix Settings Modal Label & Button Overlap */
+.settings-section-card {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: flex-start !important;
+  gap: 10px !important;
+  background: rgba(255, 255, 255, 0.03) !important;
+  border: 1px solid rgba(139, 92, 246, 0.14) !important;
+  border-radius: 12px !important;
+  padding: 14px 16px !important;
+  margin-bottom: 12px !important;
+  width: 100% !important;
+}
+
+.settings-section-card > label,
+.settings-card-label {
+  display: block !important;
+  width: 100% !important;
+  margin: 0 !important;
+  font-size: 13.5px !important;
+  font-weight: 600 !important;
+  color: #f3f4f6 !important;
+  line-height: 1.4 !important;
+}
+
+/* 2. Fix Notes Drawer Overlapping Top-Right Bar */
+.notes-slide-drawer,
+.miro-notes-drawer {
+  position: fixed !important;
+  top: 64px !important;
+  right: 16px !important;
+  bottom: 68px !important;
+  height: auto !important;
+  width: 440px !important;
+  max-width: calc(100vw - 32px) !important;
+  border-radius: 16px !important;
+  border: 1px solid rgba(139, 92, 246, 0.25) !important;
+  background: rgba(14, 12, 24, 0.96) !important;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.85) !important;
+  z-index: 450 !important;
+}
+
+/* 3. Fix Network Popover Stuck in Bottom-Left */
+.network-popover-backdrop {
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 2100 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 20px !important;
+  background: rgba(6, 5, 12, 0.76) !important;
+  backdrop-filter: blur(12px) !important;
+}
+
+/* 4. Fix Widget Headers & Flex Input Collisions on Canvas (Chart, Checklist, Table, Kanban) */
+.chart-header,
+.checklist-title-row,
+.node-table-toolbar,
+.kanban-header-bar,
+.code-header-bar {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 6px 8px !important;
+  height: auto !important;
+  min-height: 36px !important;
+  padding: 6px 10px !important;
+}
+
+.chart-title-input,
+.chart-row-input.label,
+.checklist-title-input,
+.checklist-item-input,
+.kanban-title {
+  flex: 1 1 80px !important;
+  min-width: 0 !important;
+  width: auto !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+
+.chart-mode-pill-group {
+  flex-shrink: 0 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+}
+
+/* 5. Fix Top Bars & Floating Inspector Collisions */
+.miro-board-bar {
+  max-width: calc(100vw - 620px) !important;
+}
+
+.miro-board-title {
+  max-width: 180px !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+.floating-inspector-bar {
+  row-gap: 8px !important;
+  column-gap: 6px !important;
+  max-width: min(740px, 94vw) !important;
+}
+
+/* 6. Fix History / Trash Screen Header & Card Wrapping */
+.screen-header {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 12px !important;
+}
+
+.screen-title-group {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 4px !important;
+}
+
+.trash-card,
+.snapshot-card {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 10px 14px !important;
+}
+
+.trash-card-info,
+.snap-details {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  align-items: center !important;
+  gap: 8px 10px !important;
+  flex: 1 1 240px !important;
+  min-width: 0 !important;
+}
+
+.trash-count-pill {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  min-width: 18px !important;
+  height: 18px !important;
+  padding: 0 5px !important;
+  border-radius: 999px !important;
+  background: rgba(139, 92, 246, 0.28) !important;
+  border: 1px solid rgba(167, 139, 250, 0.5) !important;
+  color: #e9d5ff !important;
+  font-size: 11px !important;
+  font-weight: 700 !important;
+}
+
+/* 7. Zero Blue Solo & Accent Overrides */
+.miro-scope-status-pill.solo {
+  background: rgba(139, 92, 246, 0.15) !important;
+  border-color: rgba(139, 92, 246, 0.4) !important;
+  color: #c084fc !important;
+}
+
+.miro-scope-status-pill.solo:hover {
+  background: rgba(139, 92, 246, 0.26) !important;
+  border-color: rgba(167, 139, 250, 0.65) !important;
+  color: #ffffff !important;
+}
+
+.miro-scope-tag.solo {
+  background: rgba(139, 92, 246, 0.18) !important;
+  color: #c084fc !important;
+  border: 1px solid rgba(139, 92, 246, 0.35) !important;
+}
+
+.text-solo {
+  color: #c084fc !important;
+}
+
+.toast-card.toast-info {
+  border-left: 3px solid #8b5cf6 !important;
+}
+
+.smart-guide-line {
+  stroke: #8b5cf6 !important;
+}
+
+.smart-guide-marker {
+  fill: #8b5cf6 !important;
+}
+
+.smart-guide-pill {
+  background: #7c3aed !important;
+}
+
+.trash-info-bar {
+  background: rgba(139, 92, 246, 0.1) !important;
+  border-color: rgba(139, 92, 246, 0.25) !important;
+}
+
+.frame-label-input:focus,
+.edge-label-input:focus {
+  border-color: #8b5cf6 !important;
 }

@@ -13,6 +13,7 @@ import {
 import { MarkdownPreview } from '../notes/markdown-preview.js';
 import { Icon } from '../../ui/icons.js';
 import { showToast } from '../../ui/toast.js';
+import { t } from '../../i18n/index.js';
 
 interface NotesDrawerProps {
   isOpen: boolean;
@@ -114,7 +115,7 @@ export function NotesDrawer({
       <div class="notes-drawer-header">
         <div class="notes-drawer-title-row">
           <Icon name="file-text" size={17} class="text-accent" />
-          <span>Заметки ({currentScope.value === 'solo' ? 'Соло' : 'Команда'})</span>
+          <span>{t('topbar.notes')} ({currentScope.value === 'solo' ? t('topbar.solo') : t('topbar.team')})</span>
         </div>
         <div class="notes-drawer-actions">
           {selectedId && !isViewer && (

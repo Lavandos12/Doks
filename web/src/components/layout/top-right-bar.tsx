@@ -3,9 +3,12 @@ import {
   workspaceMode,
   setWorkspaceMode,
   agentStatus,
-  isViewerMode
+  isViewerMode,
+  allTrashNotes,
+  allTrashBoards
 } from '../../state/app-state.js';
 import { Icon } from '../../ui/icons.js';
+import { t, currentLanguage, cycleLanguage } from '../../i18n/index.js';
 
 interface TopRightBarProps {
   onToggleNotes: () => void;
@@ -13,6 +16,7 @@ interface TopRightBarProps {
   onOpenNetwork: () => void;
   onOpenSettings: () => void;
   onOpenBridge?: () => void;
+  onOpenTrash?: () => void;
   isNotesOpen?: boolean;
   isSplitMode?: boolean;
 }
@@ -23,6 +27,7 @@ export function TopRightBar({
   onOpenNetwork,
   onOpenSettings,
   onOpenBridge,
+  onOpenTrash,
   isNotesOpen = false,
   isSplitMode = false
 }: TopRightBarProps): VNode {
@@ -46,10 +51,10 @@ export function TopRightBar({
         class={`miro-action-pill ${isNotesOpen ? 'active' : ''}`}
         data-testid="notes-drawer-toggle-btn"
         onClick={onToggleNotes}
-        title="Заметки (Шторка заметок поверх доски)"
+        title={t('topbar.notes')}
       >
         <Icon name="file-text" size={14} />
-        <span>Заметки</span>
+        <span>{t('topbar.notes')}</span>
       </button>
 
       {!isViewer && (
@@ -59,21 +64,21 @@ export function TopRightBar({
             class="miro-action-pill"
             data-testid="ai-export-btn"
             onClick={onOpenAiExport}
-            title="Экспорт контекста доски для ИИ"
+            title={t('topbar.ai_context')}
           >
             <Icon name="sparkles" size={14} />
-            <span>ИИ-Контекст</span>
+            <span>{t('topbar.ai_context')}</span>
           </button>
 
           {/* [ ● Radmin / Локально ] */}
           <div
             class="miro-network-pill"
             onClick={onOpenNetwork}
-            title="Сетевые подключения и Radmin VPN"
+            title="Radmin VPN / P2P"
             style={{ cursor: 'pointer' }}
           >
             <span class={`status-dot ${isRadminFound ? 'green' : 'gray'}`} />
-            <span>{isRadminFound ? `Radmin: ${status?.radminIp || effectiveIp}` : 'Локально'}</span>
+            <span>{isRadminFound ? `Radmin: ${status?.radminIp || effectiveIp}` : t('topbar.local')}</span>
           </div>
 
           {/* [ Мост (QR) ] */}
@@ -82,18 +87,47 @@ export function TopRightBar({
               class="miro-action-pill"
               data-testid="bridge-toggle-btn"
               onClick={onOpenBridge}
-              title="Режим моста (QR-код для смартфона)"
+              title={t('topbar.bridge')}
             >
               <Icon name="smartphone" size={13} />
-              <span>Мост</span>
+              <span>{t('topbar.bridge')}</span>
             </button>
           )}
+
+          {/* [ Trash / Корзина ] */}
+          {onOpenTrash && (
+            <button
+              class="miro-action-pill"
+              data-testid="trash-toggle-btn"
+              onClick={onOpenTrash}
+              title={t('topbar.trash')}
+            >
+              <Icon name="trash" size={14} />
+              <span>{t('topbar.trash')}</span>
+              {(allTrashNotes.value.length + allTrashBoards.value.length) > 0 && (
+                <span class="trash-count-pill">
+                  {allTrashNotes.value.length + allTrashBoards.value.length}
+                </span>
+              )}
+            </button>
+          )}
+
+          {/* [ Language Switcher: RU / EN / ES ] */}
+          <button
+            type="button"
+            class="miro-action-pill lang-switch-pill"
+            onClick={cycleLanguage}
+            title={t('settings.language')}
+            style={{ padding: '5px 8px', fontWeight: 700, color: '#c084fc' }}
+          >
+            <span>{currentLanguage.value.toUpperCase()}</span>
+          </button>
 
           {/* [ Settings / Настройки ] */}
           <button
             class="miro-action-pill settings-trigger-btn"
             onClick={onOpenSettings}
-            title="Настройки холста, профиля и бэкапов"
+            title={t('topbar.settings')}
             style={{ padding: '5px 8px' }}
           >
             <Icon name="settings" size={15} />

@@ -164,6 +164,7 @@ export function App() {
         onOpenNetwork={() => setIsNetworkOpen(true)}
         onOpenSettings={() => setIsSettingsOpen(true)}
         onOpenBridge={() => setIsBridgeOpen(true)}
+        onOpenTrash={() => setIsHistoryOpen(true)}
         isNotesOpen={isNotesOpen}
         isSplitMode={isSplitMode}
       />

@@ -4,6 +4,7 @@ import type { WorkspaceScope } from '@doks/shared';
 import { createBoard, selectBoardWithScope } from '../../state/app-state.js';
 import { Icon } from '../../ui/icons.js';
 import { showToast } from '../../ui/toast.js';
+import { t } from '../../i18n/index.js';
 
 export interface CreateBoardModalProps {
   isOpen: boolean;
@@ -62,13 +63,13 @@ export function CreateBoardModal({
         <div class="modal-header">
           <div class="modal-title-group">
             <Icon name="layout" size={20} class="text-accent" />
-            <h3 class="modal-title">Создать новую доску</h3>
+            <h3 class="modal-title">{t('topbar.create_board')}</h3>
           </div>
           <button
             type="button"
             class="modal-close-btn"
             onClick={onClose}
-            title="Закрыть"
+            title={t('sidebar.cancel')}
           >
             <Icon name="x" size={16} />
           </button>
@@ -112,8 +113,8 @@ export function CreateBoardModal({
                 style={{
                   padding: '14px',
                   borderRadius: '10px',
-                  border: `1.5px solid ${selectedScope === 'solo' ? '#3b82f6' : 'rgba(255, 255, 255, 0.12)'}`,
-                  background: selectedScope === 'solo' ? 'rgba(59, 130, 246, 0.12)' : 'rgba(255, 255, 255, 0.03)',
+                  border: `1.5px solid ${selectedScope === 'solo' ? '#8b5cf6' : 'rgba(255, 255, 255, 0.12)'}`,
+                  background: selectedScope === 'solo' ? 'rgba(139, 92, 246, 0.15)' : 'rgba(255, 255, 255, 0.03)',
                   cursor: 'pointer',
                   transition: 'all 0.15s ease',
                   display: 'flex',
@@ -121,9 +122,9 @@ export function CreateBoardModal({
                   gap: 8
                 }}
               >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#60a5fa' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#c084fc' }}>
                   <Icon name="lock" size={20} />
-                  <span style={{ fontWeight: 600, fontSize: 14, color: 'var(--text-primary)' }}>Личная</span>
+                  <span style={{ fontWeight: 600, fontSize: 14, color: 'var(--text-primary)' }}>{t('topbar.solo')}</span>
                 </div>
                 <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: '1.4' }}>
                   Хранится локально на вашем ПК. Не видна в сети и не синхронизируется с другими.
@@ -148,7 +149,7 @@ export function CreateBoardModal({
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#34d399' }}>
                   <Icon name="globe-mesh" size={20} />
-                  <span style={{ fontWeight: 600, fontSize: 14, color: 'var(--text-primary)' }}>Общая</span>
+                  <span style={{ fontWeight: 600, fontSize: 14, color: 'var(--text-primary)' }}>{t('topbar.team')}</span>
                 </div>
                 <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: '1.4' }}>
                   Доступна для совместной работы по Radmin VPN / LAN с живыми курсорами.
@@ -172,7 +173,7 @@ export function CreateBoardModal({
                 cursor: 'pointer'
               }}
             >
-              Отмена
+              {t('sidebar.cancel')}
             </button>
             <button
               type="submit"
@@ -181,13 +182,13 @@ export function CreateBoardModal({
                 padding: '8px 18px',
                 borderRadius: '8px',
                 border: 'none',
-                background: selectedScope === 'team' ? '#10b981' : '#3b82f6',
+                background: selectedScope === 'team' ? '#10b981' : '#7c3aed',
                 color: '#fff',
                 fontWeight: 600,
                 cursor: 'pointer'
               }}
             >
-              Создать доску
+              {t('topbar.create_board')}
             </button>
           </div>
         </form>

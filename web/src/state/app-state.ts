@@ -705,6 +705,23 @@ export function deleteBoard(id: string, scope?: WorkspaceScope): void {
   }
 }
 
+export function emptyTrash(): void {
+  [soloMaps, teamMaps].forEach((maps) => {
+    const deletedNoteKeys: string[] = [];
+    maps.notes.forEach((val, key) => {
+      if (val.deleted) deletedNoteKeys.push(key);
+    });
+    deletedNoteKeys.forEach((k) => maps.notes.delete(k));
+
+    const deletedBoardKeys: string[] = [];
+    maps.boards.forEach((val, key) => {
+      if (val.deleted) deletedBoardKeys.push(key);
+    });
+    deletedBoardKeys.forEach((k) => maps.boards.delete(k));
+  });
+  syncIndexSignals();
+}
+
 export function selectBoardWithScope(boardId: string, scope: WorkspaceScope, title?: string): void {
   if (currentScope.value !== scope) {
     currentScope.value = scope;

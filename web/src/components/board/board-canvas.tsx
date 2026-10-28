@@ -36,6 +36,8 @@ import {
   isCommandPaletteOpen,
   theme,
   allBoards,
+  allTrashNotes,
+  allTrashBoards,
   isViewerMode,
   selectBoardWithScope,
   globalBoardClipboard,
@@ -3385,7 +3387,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
         ) : (
           <div class={`miro-scope-status-pill ${(currentBoardMeta?.scope || effectiveScope) === 'solo' ? 'solo' : 'team'}`} style={{ cursor: 'default' }}>
             <Icon name={(currentBoardMeta?.scope || effectiveScope) === 'solo' ? 'lock' : 'globe-mesh'} size={12} />
-            <span>{(currentBoardMeta?.scope || effectiveScope) === 'solo' ? 'Личная' : 'Общая'}</span>
+            <span>{(currentBoardMeta?.scope || effectiveScope) === 'solo' ? t('topbar.solo') : t('topbar.team')}</span>
           </div>
         )}
 
@@ -3396,28 +3398,28 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
             setIsExportMenuOpen(!isExportMenuOpen);
             setIsBoardsPopoverOpen(false);
           }}
-          title="Экспорт доски (.canvas, .svg, .zip, ИИ)"
+          title="Export (.canvas, .svg, .zip, AI)"
         >
           <Icon name="download" size={14} />
-          <span>Экспорт</span>
+          <span>{t('topbar.export')}</span>
         </button>
 
         {/* Boards & Templates Dropdown Popover */}
         {isBoardsPopoverOpen && (
           <div class="miro-boards-popover liquid-glass-surface">
             <div class="miro-popover-header">
-              <span class="miro-popover-title">МОИ ДОСКИ ({allBoards.value.length})</span>
+              <span class="miro-popover-title">{t('topbar.my_boards')} ({allBoards.value.length})</span>
               {!isViewerMode.value && (
                 <button
                   class="btn-primary-xs"
-                  title="Создать новую доску"
+                  title={t('topbar.create_board')}
                   onClick={() => {
                     setIsBoardsPopoverOpen(false);
                     setIsCreateBoardOpen(true);
                   }}
                 >
                   <Icon name="plus" size={12} />
-                  <span>Создать доску</span>
+                  <span>{t('topbar.create_board')}</span>
                 </button>
               )}
             </div>
@@ -3463,6 +3465,28 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                 </div>
               ))}
             </div>
+            {!isViewerMode.value && (
+              <>
+                <div class="miro-popover-divider" style={{ margin: '8px 0 6px' }} />
+                <button
+                  type="button"
+                  class="miro-menu-item"
+                  style={{ width: '100%', justifyContent: 'space-between', color: '#c084fc' }}
+                  onClick={() => {
+                    setIsBoardsPopoverOpen(false);
+                    window.dispatchEvent(new CustomEvent('doks:open-history', { detail: { tab: 'trash' } }));
+                  }}
+                >
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                    <Icon name="trash" size={14} />
+                    <span>{t('topbar.trash')}</span>
+                  </span>
+                  {(allTrashNotes.value.length + allTrashBoards.value.length) > 0 && (
+                    <span class="trash-count-pill">{allTrashNotes.value.length + allTrashBoards.value.length}</span>
+                  )}
+                </button>
+              </>
+            )}
           </div>
         )}
 
@@ -3477,7 +3501,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
               }}
             >
               <Icon name="sparkles" size={14} />
-              <span>Экспорт для ИИ...</span>
+              <span>{t('topbar.export_ai')}</span>
             </button>
             <div class="miro-popover-divider" />
             <button
@@ -3485,14 +3509,14 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
               onClick={handleExportJsonCanvas}
             >
               <Icon name="download" size={14} />
-              <span>Скачать .canvas (Obsidian)</span>
+              <span>{t('topbar.export_canvas')}</span>
             </button>
             <button
               class="miro-menu-item"
               onClick={handleExportSvg}
             >
               <Icon name="image" size={14} />
-              <span>Экспорт в SVG (.svg)</span>
+              <span>{t('topbar.export_svg')}</span>
             </button>
             <a
               class="miro-menu-item"
@@ -3501,7 +3525,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
               onClick={() => setIsExportMenuOpen(false)}
             >
               <Icon name="archive" size={14} />
-              <span>Резервная копия хранилища (.zip)</span>
+              <span>{t('topbar.export_zip')}</span>
             </a>
           </div>
         )}
@@ -3531,7 +3555,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
               setActiveTool('select');
               setActiveFlyout('none');
             }}
-            title="Выбор и перемещение (V)"
+            title={t('dock.select')}
           >
             <Icon name="select" size={20} />
           </button>
@@ -3544,7 +3568,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
               setActiveTool('hand');
               setActiveFlyout('none');
             }}
-            title="Панорамирование (H / Space)"
+            title={t('dock.hand')}
           >
             <Icon name="hand" size={20} />
           </button>
@@ -3565,13 +3589,13 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                   setActiveFlyout('none');
                 }
               }}
-              title="Стикеры Miro (S)"
+              title={t('dock.sticky')}
             >
               <Icon name="sticky" size={20} />
             </button>
             {activeFlyout === 'sticky' && (
               <div class="miro-flyout-menu liquid-glass-surface">
-                <div class="miro-flyout-title">Цвет стикера</div>
+                <div class="miro-flyout-title">{t('dock.sticky_color')}</div>
                 <div class="miro-sticky-swatch-grid">
                   {Object.entries(CANVAS_COLORS).filter(([k]) => k !== 'default').map(([key, hex]) => (
                     <button
@@ -3604,13 +3628,13 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                   setActiveFlyout('none');
                 }
               }}
-              title="Геометрические фигуры (R)"
+              title={t('dock.shapes')}
             >
               <Icon name="shape" size={20} />
             </button>
             {activeFlyout === 'shape' && (
               <div class="miro-flyout-menu liquid-glass-surface">
-                <div class="miro-flyout-title">Форма фигуры</div>
+                <div class="miro-flyout-title">{t('dock.shape_type')}</div>
                 <div class="miro-shape-grid">
                   <button
                     class={`miro-shape-pick-btn ${selectedShapeVariant === 'rectangle' ? 'active' : ''}`}
@@ -3690,13 +3714,13 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                 setActiveTool('arrow');
                 setActiveFlyout(activeFlyout === 'arrow' ? 'none' : 'arrow');
               }}
-              title="Связующая стрелка (L / C)"
+              title={t('dock.arrow')}
             >
               <Icon name="arrow" size={20} />
             </button>
             {activeFlyout === 'arrow' && (
               <div class="miro-flyout-menu liquid-glass-surface">
-                <div class="miro-flyout-title">Тип линии</div>
+                <div class="miro-flyout-title">{t('dock.line_type')}</div>
                 <div class="miro-line-types">
                   <button
                     class={`miro-line-btn ${defaultLineStyle.curveType === 'bezier' ? 'active' : ''}`}
@@ -3740,7 +3764,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                 setActiveTool('draw');
                 setActiveFlyout(activeFlyout === 'draw' ? 'none' : 'draw');
               }}
-              title="Свободное рисование (P / E)"
+              title={t('dock.draw')}
             >
               <Icon name={activeTool === 'eraser' ? 'eraser' : 'pen'} size={20} />
               {activeTool !== 'eraser' && (
@@ -3760,35 +3784,35 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
             </button>
             {activeFlyout === 'draw' && (
               <div class="miro-flyout-menu liquid-glass-surface" style={{ width: '220px' }}>
-                <div class="miro-flyout-title">Инструменты рисования</div>
+                <div class="miro-flyout-title">{t('dock.draw')}</div>
                 <div class="miro-draw-modes">
                   <button
                     class={`miro-draw-mode-btn ${activeTool === 'draw' && drawMode === 'pen' ? 'active' : ''}`}
                     onClick={() => { setActiveTool('draw'); setDrawMode('pen'); }}
                   >
                     <Icon name="pen" size={14} />
-                    <span>Ручка</span>
+                    <span>{t('dock.pen')}</span>
                   </button>
                   <button
                     class={`miro-draw-mode-btn ${activeTool === 'draw' && drawMode === 'brush' ? 'active' : ''}`}
                     onClick={() => { setActiveTool('draw'); setDrawMode('brush'); }}
                   >
                     <Icon name="brush" size={14} />
-                    <span>Кисть</span>
+                    <span>{t('dock.brush')}</span>
                   </button>
                   <button
                     class={`miro-draw-mode-btn ${activeTool === 'draw' && drawMode === 'highlighter' ? 'active' : ''}`}
                     onClick={() => { setActiveTool('draw'); setDrawMode('highlighter'); }}
                   >
                     <Icon name="brush" size={14} />
-                    <span>Маркер</span>
+                    <span>{t('dock.highlighter')}</span>
                   </button>
                   <button
                     class={`miro-draw-mode-btn ${activeTool === 'eraser' ? 'active' : ''}`}
                     onClick={() => { setActiveTool('eraser'); }}
                   >
                     <Icon name="eraser" size={14} />
-                    <span>Ластик (E)</span>
+                    <span>{t('dock.eraser')}</span>
                   </button>
                 </div>
                 <div class="miro-popover-divider" />
@@ -3815,7 +3839,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
               setActiveTool('text');
               setActiveFlyout('none');
             }}
-            title="Текст (T)"
+            title={t('dock.text')}
           >
             <Icon name="text" size={20} />
           </button>
@@ -3828,7 +3852,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
               setActiveTool('frame');
               setActiveFlyout('none');
             }}
-            title="Фрейм / Контейнер (F)"
+            title={t('dock.frame')}
           >
             <Icon name="frame" size={20} />
           </button>
@@ -3843,7 +3867,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
               onClick={() => {
                 setActiveFlyout(activeFlyout === 'widgets' ? 'none' : 'widgets');
               }}
-              title="Виджеты: Чек-лист, Таблица, Канбан, Код (+)"
+              title={t('dock.widgets')}
             >
               <Icon name="plus" size={20} />
             </button>
@@ -3862,7 +3886,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                   }}
                 >
                   <Icon name="checklist" size={16} />
-                  <span>Чек-лист</span>
+                  <span>{t('dock.checklist')}</span>
                 </button>
                 <button
                   type="button"
@@ -3876,7 +3900,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                   }}
                 >
                   <Icon name="table" size={16} />
-                  <span>Таблица</span>
+                  <span>{t('dock.table')}</span>
                 </button>
                 <button
                   type="button"
@@ -3890,7 +3914,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                   }}
                 >
                   <Icon name="kanban" size={16} />
-                  <span>Канбан-колонка</span>
+                  <span>{t('dock.kanban')}</span>
                 </button>
                 <button
                   type="button"
@@ -3904,7 +3928,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                   }}
                 >
                   <Icon name="code" size={16} />
-                  <span>Блок кода</span>
+                  <span>{t('dock.code')}</span>
                 </button>
                 <button
                   type="button"
@@ -3918,7 +3942,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                   }}
                 >
                   <Icon name="chart" size={16} />
-                  <span>Диаграмма долей (D)</span>
+                  <span>{t('dock.chart')}</span>
                 </button>
               </div>
             )}
@@ -3930,7 +3954,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
           <button
             class="miro-dock-btn"
             onClick={() => setIsAutoDiagramModalOpen(true)}
-            title="Mindmap и автодиаграммы (M)"
+            title={t('dock.mindmap')}
           >
             <Icon name="sparkles" size={20} />
           </button>
@@ -3939,7 +3963,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
           <button
             class="miro-dock-btn"
             onClick={() => fileAttachmentInputRef.current?.click()}
-            title="Загрузить документ (.docx, .pdf, .md, картинки)"
+            title={t('dock.upload')}
           >
             <Icon name="upload" size={20} />
           </button>
@@ -3963,7 +3987,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
           <button
             class="miro-undo-btn hud-btn"
             onClick={() => undoManagerRef.current?.undo()}
-            title="Отменить действие (Ctrl+Z)"
+            title={t('dock.undo')}
           >
             <Icon name="undo" size={16} />
           </button>
@@ -3971,7 +3995,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
           <button
             class="miro-undo-btn hud-btn"
             onClick={() => undoManagerRef.current?.redo()}
-            title="Повторить действие (Ctrl+Y)"
+            title={t('dock.redo')}
           >
             <Icon name="redo" size={16} />
           </button>
@@ -4086,7 +4110,8 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
 
       {/* 2. Floating Context Inspector Bar */}
       {!isViewerMode.value && selectionBounds && selectedNodeIds.size > 0 && (() => {
-        const isToolbarFlipped = selectionBounds.y - 54 < 80;
+        const minTopClearance = selectedNodeIds.size > 1 ? 132 : 88;
+        const isToolbarFlipped = selectionBounds.y - 54 < minTopClearance;
         return (
           <div
             class="floating-inspector-bar liquid-glass-surface"

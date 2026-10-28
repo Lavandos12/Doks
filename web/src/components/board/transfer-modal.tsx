@@ -234,9 +234,9 @@ export function TransferModal({
                       flex: 1,
                       padding: '6px 8px',
                       fontSize: 12,
-                      background: newBoardScope === 'solo' ? 'rgba(59, 130, 246, 0.2)' : 'transparent',
-                      borderColor: newBoardScope === 'solo' ? '#3b82f6' : 'rgba(255,255,255,0.12)',
-                      color: newBoardScope === 'solo' ? '#60a5fa' : 'var(--text-secondary)'
+                      background: newBoardScope === 'solo' ? 'rgba(139, 92, 246, 0.2)' : 'transparent',
+                      borderColor: newBoardScope === 'solo' ? '#8b5cf6' : 'rgba(255,255,255,0.12)',
+                      color: newBoardScope === 'solo' ? '#c084fc' : 'var(--text-secondary)'
                     }}
                   >
                     Личная
