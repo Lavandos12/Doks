@@ -11,7 +11,10 @@ import {
   openTabs,
   boards,
   theme,
-  isImportWizardOpen
+  isImportWizardOpen,
+  SOLO_MAIN_BOARD_ID,
+  TEAM_MAIN_BOARD_ID,
+  isDualBoardSplit
 } from './state/app-state.js';
 import { TopRightBar } from './components/layout/top-right-bar.js';
 import { NotesDrawer } from './components/layout/notes-drawer.js';
@@ -77,7 +80,29 @@ export function App() {
     <div class={`app-layout theme-${theme.value} view-board-canvas`}>
       {/* Miro 100vw × 100vh Unified Workspace */}
       <main class="main-viewport" style={{ width: '100vw', height: '100vh', overflow: 'hidden' }}>
-        {isSplitMode ? (
+        {isDualBoardSplit.value ? (
+          <div class="split-view-container app-split-container dual-board-split" style={{ display: 'flex', width: '100%', height: '100%' }}>
+            <div class="split-pane primary" style={{ flex: 1, height: '100%', position: 'relative' }}>
+              <BoardCanvas
+                key="solo-main"
+                boardId={SOLO_MAIN_BOARD_ID}
+                scopeOverride="solo"
+                gridType={gridType}
+                snapToGrid={snapToGrid}
+              />
+            </div>
+            <div class="split-divider" style={{ width: 4, background: 'rgba(255, 255, 255, 0.1)', cursor: 'col-resize' }} />
+            <div class="split-pane secondary" style={{ flex: 1, height: '100%', position: 'relative' }}>
+              <BoardCanvas
+                key="team-main"
+                boardId={TEAM_MAIN_BOARD_ID}
+                scopeOverride="team"
+                gridType={gridType}
+                snapToGrid={snapToGrid}
+              />
+            </div>
+          </div>
+        ) : isSplitMode ? (
           <div class="split-view-container app-split-container">
             <div class="split-pane primary">
               <BoardCanvas

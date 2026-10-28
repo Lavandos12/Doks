@@ -36,6 +36,19 @@ export interface TabItem {
   pinned?: boolean;
 }
 
+// Canonical Board IDs & Scope Management
+export const SOLO_MAIN_BOARD_ID = 'solo-main';
+export const TEAM_MAIN_BOARD_ID = 'team-main';
+export const isDualBoardSplit = signal<boolean>(false);
+
+// Global persistent clipboard across boards and split panes
+export const globalBoardClipboard: {
+  nodes: any[];
+  edges: any[];
+  copiedAt: number;
+  sourceScope?: WorkspaceScope;
+} = { nodes: [], edges: [], copiedAt: 0 };
+
 // Two-Tier Workspace Scope
 const savedScope = typeof localStorage !== 'undefined' ? (localStorage.getItem('doks_scope') as WorkspaceScope) : null;
 export const currentScope = signal<WorkspaceScope>(savedScope || 'team');
@@ -51,7 +64,12 @@ export function setScope(newScope: WorkspaceScope): void {
   if (typeof localStorage !== 'undefined') {
     localStorage.setItem('doks_scope', newScope);
   }
+  ensureCanonicalBoards();
   yjsClient.switchScope(newScope);
+  const targetBoardId = newScope === 'solo' ? SOLO_MAIN_BOARD_ID : TEAM_MAIN_BOARD_ID;
+  const targetTitle = newScope === 'solo' ? 'Моя доска (Черновик)' : 'Общая доска';
+  selectedBoardId.value = targetBoardId;
+  openTab('board', targetBoardId, targetTitle);
   syncIndexSignals();
 }
 
@@ -152,6 +170,32 @@ const teamIndexDoc = yjsClient.getOrCreateDoc(getScopedIndexDocName('team'));
 export const soloMaps = getIndexMaps(soloIndexDoc);
 export const teamMaps = getIndexMaps(teamIndexDoc);
 
+export function ensureCanonicalBoards(): void {
+  if (!soloMaps.boards.has(SOLO_MAIN_BOARD_ID)) {
+    soloMaps.boards.set(SOLO_MAIN_BOARD_ID, {
+      id: SOLO_MAIN_BOARD_ID,
+      title: 'Моя доска (Черновик)',
+      folder: null,
+      deleted: false,
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    });
+  }
+  if (!teamMaps.boards.has(TEAM_MAIN_BOARD_ID)) {
+    teamMaps.boards.set(TEAM_MAIN_BOARD_ID, {
+      id: TEAM_MAIN_BOARD_ID,
+      title: 'Общая доска',
+      folder: null,
+      deleted: false,
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    });
+  }
+}
+
+// Initial ensure of canonical boards
+ensureCanonicalBoards();
+
 export function getActiveIndexDoc() {
   return currentScope.value === 'solo' ? soloIndexDoc : teamIndexDoc;
 }
@@ -168,6 +212,7 @@ export const maps = new Proxy({} as ReturnType<typeof getIndexMaps>, {
 });
 
 function syncIndexSignals() {
+  ensureCanonicalBoards();
   const activeMaps = getActiveMaps();
 
   const noteList: NoteMeta[] = [];
@@ -576,6 +621,48 @@ export async function transferNodesAcrossScopes(req: BridgeTransferRequest): Pro
     openTab('board', req.targetBoardId);
   }
   return data;
+}
+
+/**
+ * 1-Click Instant Push to Opposite Scope ("На общую доску ->" / "<- В черновик")
+ */
+export async function quickPushNodesToOppositeScope(
+  fromScope: WorkspaceScope,
+  sourceBoardId: string,
+  nodeIds: string[],
+  switchAfter = false
+): Promise<BridgeTransferResponse> {
+  const targetScope: WorkspaceScope = fromScope === 'solo' ? 'team' : 'solo';
+  const targetBoardId = targetScope === 'team' ? TEAM_MAIN_BOARD_ID : SOLO_MAIN_BOARD_ID;
+
+  ensureCanonicalBoards();
+
+  const res = await api.transferNodes({
+    fromScope,
+    toScope: targetScope,
+    boardId: sourceBoardId,
+    targetBoardId,
+    nodeIds,
+    includeLinkedNotes: true,
+    mode: 'copy'
+  });
+
+  if (res.success) {
+    showToast(
+      fromScope === 'solo'
+        ? 'Отправлено на Общую доску!'
+        : 'Скопировано в ваш личный Черновик!',
+      'success'
+    );
+    if (switchAfter) {
+      setScope(targetScope);
+      openTab('board', targetBoardId);
+    }
+  } else {
+    showToast(res.error || 'Ошибка переноса объектов', 'error');
+  }
+
+  return res;
 }
 
 // Global hotkey listeners for desktop feel with capture phase

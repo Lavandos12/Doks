@@ -300,8 +300,8 @@ test.describe('F12: Playwright E2E Scenarios for Doks', () => {
     await page.goto(`http://127.0.0.1:${port1}`);
 
     // Verify scope switcher pill exists
-    const soloBtn = page.locator('.scope-pill-btn:has-text("Соло")');
-    const teamBtn = page.locator('.scope-pill-btn:has-text("Команда")');
+    const soloBtn = page.locator('.scope-pill-btn.solo, .scope-pill-btn:has-text("Моя доска"), .scope-pill-btn:has-text("Соло")').first();
+    const teamBtn = page.locator('.scope-pill-btn.team, .scope-pill-btn:has-text("Общая доска"), .scope-pill-btn:has-text("Команда")').first();
     await expect(soloBtn).toBeVisible();
     await expect(teamBtn).toBeVisible();
 
@@ -325,23 +325,20 @@ test.describe('F12: Playwright E2E Scenarios for Doks', () => {
     const nodeBox = page.locator('.board-node-box').first();
     await nodeBox.click();
 
-    // Verify "В команду" promotion button is visible in toolbox
+    // Verify 1-click push button is visible in toolbox
     const transferBtn = page.locator('[data-testid="scope-transfer-btn"]');
     await expect(transferBtn).toBeVisible();
     await transferBtn.click();
 
-    // Transfer Modal opens
-    const modal = page.locator('.transfer-modal');
-    await expect(modal).toBeVisible();
-    await expect(modal).toContainText('Опубликовать в Команду');
+    // Verify 1-click push toast notification appears without opening modal dialogs
+    const toast = page.locator('.toast-card').first();
+    await expect(toast).toContainText('Отправлено на Общую доску');
 
-    // Submit transfer
-    const submitBtn = modal.locator('button.btn-primary');
-    await submitBtn.click();
-
-    // Modal closes and active scope becomes Team
-    await expect(modal).not.toBeVisible({ timeout: 5000 });
+    // Switch to Team Scope and verify transferred sticky note is present on Team board
+    await teamBtn.click();
     await expect(teamBtn).toHaveClass(/active/);
+    const teamNodeTextarea = page.locator('.board-node-box .node-inline-textarea').first();
+    await expect(teamNodeTextarea).toHaveValue('Приватная идея для переноса');
   });
 
   test('Scenario 8: Auto-return to Select tool after creating a node', async ({ page }) => {
@@ -608,7 +605,7 @@ test.describe('F12: Playwright E2E Scenarios for Doks', () => {
     // Add a sticky note to connect with the screenshot
     await page.click('button[title*="Стикер"]');
     const boardArea = page.locator('.board-container');
-    await boardArea.click({ position: { x: 780, y: 320 } });
+    await boardArea.click({ position: { x: 880, y: 420 } });
     const stickyNode = page.locator('.board-node-box.type-sticky').first();
     await expect(stickyNode).toBeVisible();
 

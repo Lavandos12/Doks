@@ -13,6 +13,7 @@ import {
   type BoardNodeData,
   type BoardEdgeData,
   type BoardNodeType,
+  type WorkspaceScope,
   boardToJSONCanvas
 } from '@doks/shared';
 import { yjsClient, agentStatus } from '../../state/yjs-client.js';
@@ -33,7 +34,12 @@ import {
   workspaceMode,
   setWorkspaceMode,
   isCommandPaletteOpen,
-  theme
+  theme,
+  SOLO_MAIN_BOARD_ID,
+  TEAM_MAIN_BOARD_ID,
+  isDualBoardSplit,
+  globalBoardClipboard,
+  quickPushNodesToOppositeScope
 } from '../../state/app-state.js';
 import { NoteEditor } from '../notes/editor.js';
 import { api } from '../../api/client.js';
@@ -101,6 +107,7 @@ interface BoardCanvasProps {
   boardId: string;
   gridType?: 'dots' | 'lines' | 'none';
   snapToGrid?: boolean;
+  scopeOverride?: WorkspaceScope;
 }
 
 interface RemoteCursor {
@@ -284,7 +291,8 @@ function renderShapeSvg(node: BoardNodeData, colorHex: string) {
   );
 }
 
-export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }: BoardCanvasProps) {
+export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, scopeOverride }: BoardCanvasProps) {
+  const effectiveScope: WorkspaceScope = scopeOverride || currentScope.value;
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Viewport state
@@ -568,7 +576,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
   const [remoteCursors, setRemoteCursors] = useState<RemoteCursor[]>([]);
 
   // Internal clipboard for copy/paste (nodes + connecting edges)
-  const clipboardRef = useRef<{ nodes: BoardNodeData[]; edges: BoardEdgeData[] }>({ nodes: [], edges: [] });
+
 
   // Real-time ghost preview card for drag-and-drop
   const [ghostDropPreview, setGhostDropPreview] = useState<{ x: number; y: number; title: string } | null>(null);
@@ -692,7 +700,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
   // Undo manager
   const undoManagerRef = useRef<Y.UndoManager | null>(null);
 
-  const docName = getScopedBoardDocName(currentScope.value, boardId);
+  const docName = getScopedBoardDocName(effectiveScope, boardId);
   const boardDoc = yjsClient.getOrCreateDoc(docName);
   const awareness = yjsClient.getOrCreateAwareness(docName);
   const { nodes: yNodes, edges: yEdges } = getBoardMaps(boardDoc);
@@ -981,7 +989,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
   const onCreateNoteAndCard = useCallback(
     async (title: string, markdown: string, x: number, y: number) => {
       const noteId = createNote(title, null);
-      const noteDoc = yjsClient.getOrCreateDoc(getScopedNoteDocName(currentScope.value, noteId));
+      const noteDoc = yjsClient.getOrCreateDoc(getScopedNoteDocName(effectiveScope, noteId));
       const yText = noteDoc.getText('text');
       if (yText.length === 0 && markdown) {
         yText.insert(0, markdown);
@@ -1307,10 +1315,10 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
     const connectedEdges = edgesList.filter(
       (e) => !e.deleted && selectedIds.has(e.from) && selectedIds.has(e.to)
     );
-    clipboardRef.current = {
-      nodes: selectedNodes,
-      edges: connectedEdges
-    };
+    globalBoardClipboard.nodes = selectedNodes;
+    globalBoardClipboard.edges = connectedEdges;
+    globalBoardClipboard.copiedAt = Date.now();
+    globalBoardClipboard.sourceScope = effectiveScope;
     lastInternalCopyTimeRef.current = Date.now();
     if (typeof navigator !== 'undefined' && navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
       navigator.clipboard.writeText('__DOKS_INTERNAL_NODES__').catch(() => {});
@@ -1373,8 +1381,8 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
         : screenToCanvas(window.innerWidth / 2, window.innerHeight / 2);
 
     // If internal Doks clipboard has items and was copied recently, prioritize it over stale OS images!
-    const { nodes: clipNodes, edges: clipEdges } = clipboardRef.current;
-    const isRecentInternalCopy = clipNodes.length > 0 && (Date.now() - lastInternalCopyTimeRef.current < 120000);
+    const { nodes: clipNodes, edges: clipEdges } = globalBoardClipboard;
+    const isRecentInternalCopy = clipNodes.length > 0 && (Date.now() - globalBoardClipboard.copiedAt < 300000);
 
     if (!isRecentInternalCopy) {
       // 1. Check if system clipboard has an image (async Clipboard API)
@@ -1820,7 +1828,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
       const buffer = await file.arrayBuffer();
       const fileName = file.name || 'screenshot.png';
       const fileType = file.type || 'image/png';
-      const res = await api.fetch(`/api/attachments?scope=${encodeURIComponent(currentScope.value)}`, {
+      const res = await api.fetch(`/api/attachments?scope=${encodeURIComponent(effectiveScope)}`, {
         method: 'POST',
         headers: {
           'Content-Type': fileType,
@@ -1896,7 +1904,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
           imageUrl: fileDataUrl || `/api/attachments/${data.hash}`,
           uploaderOrigin: window.location.origin,
           showPreview: hasTextPreview || isPdf,
-          author: currentScope.value === 'team' ? (agentStatus.value?.memberName || '') : '',
+          author: effectiveScope === 'team' ? (agentStatus.value?.memberName || '') : '',
           done: false,
           z: 2,
           deleted: false,
@@ -1925,26 +1933,14 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
     const handleWindowPaste = async (e: ClipboardEvent) => {
       lastPasteTimeRef.current = Date.now();
 
-      // Check if internal Doks nodes were copied
-      const textPlain = e.clipboardData?.getData('text/plain');
-      const isInternalExplicit = textPlain === '__DOKS_INTERNAL_NODES__' || (clipboardRef.current.nodes.length > 0 && Date.now() - lastInternalCopyTimeRef.current < 120000);
-
-      if (isInternalExplicit && clipboardRef.current.nodes.length > 0) {
-        e.preventDefault();
-        e.stopPropagation();
-        const targetPos = (lastMouseCanvasPosRef.current && lastMouseCanvasPosRef.current.x !== 0)
-          ? lastMouseCanvasPosRef.current
-          : screenToCanvas(window.innerWidth / 2, window.innerHeight / 2);
-        pasteClipboard(targetPos.x, targetPos.y);
-        return;
-      }
-
-      // 1. If clipboard contains an image (screenshot or copied picture), handle it immediately!
+      // 1. Prioritize explicit image paste from OS (screenshots, image files)
       const items = e.clipboardData?.items;
+      let hasImage = false;
       if (items && items.length > 0) {
         for (let i = 0; i < items.length; i++) {
           const item = items[i];
           if (item.type.startsWith('image/')) {
+            hasImage = true;
             const file = item.getAsFile();
             if (file) {
               e.preventDefault();
@@ -1959,6 +1955,20 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
         }
       }
 
+      // 2. Check if internal Doks nodes were copied
+      const textPlain = e.clipboardData?.getData('text/plain');
+      const isInternalExplicit = textPlain === '__DOKS_INTERNAL_NODES__' || (!hasImage && globalBoardClipboard.nodes.length > 0 && Date.now() - globalBoardClipboard.copiedAt < 60000);
+
+      if (isInternalExplicit && globalBoardClipboard.nodes.length > 0) {
+        e.preventDefault();
+        e.stopPropagation();
+        const targetPos = (lastMouseCanvasPosRef.current && lastMouseCanvasPosRef.current.x !== 0)
+          ? lastMouseCanvasPosRef.current
+          : screenToCanvas(window.innerWidth / 2, window.innerHeight / 2);
+        pasteClipboard(targetPos.x, targetPos.y);
+        return;
+      }
+
       // If an input/textarea is focused and it's not an image, allow standard native text paste
       const activeEl = document.activeElement;
       if (
@@ -1971,7 +1981,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
       }
 
       // 2. If no image, check internal Doks clipboard (copied nodes/edges)
-      const { nodes: clipNodes } = clipboardRef.current;
+      const { nodes: clipNodes } = globalBoardClipboard;
       if (clipNodes.length > 0) {
         e.preventDefault();
         const targetPos = (lastMouseCanvasPosRef.current && lastMouseCanvasPosRef.current.x !== 0)
@@ -2125,7 +2135,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
           h: gn.height,
           text: gn.text,
           color: 'default',
-          author: currentScope.value === 'team' ? (agentStatus.value?.memberName || '') : '',
+          author: effectiveScope === 'team' ? (agentStatus.value?.memberName || '') : '',
           done: false,
           z: 1,
           deleted: false,
@@ -3011,7 +3021,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
 
   // Toggle checkbox inside note card
   const toggleNoteCheckbox = (noteId: string, lineIndex: number) => {
-    const noteDoc = yjsClient.getOrCreateDoc(getScopedNoteDocName(currentScope.value, noteId));
+    const noteDoc = yjsClient.getOrCreateDoc(getScopedNoteDocName(effectiveScope, noteId));
     const yText = noteDoc.getText('text');
     const content = yText.toString();
     const lines = content.split('\n');
@@ -3195,25 +3205,71 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
 
         <div class="miro-divider" />
 
-        {/* Scope Switcher Pill: [ Соло | Команда ] */}
+        {/* Scope Mode Selector: [ Моя доска (Черновик) | Общая доска | Рядом 50/50 ] */}
         <div class="miro-scope-pill" role="tablist">
           <button
-            class={`scope-pill-btn miro-scope-btn ${currentScope.value === 'solo' ? 'active solo' : ''}`}
-            onClick={() => setScope('solo')}
-            title="Личное пространство (Alt+1)"
+            class={`scope-pill-btn miro-scope-btn ${!isDualBoardSplit.value && effectiveScope === 'solo' ? 'active solo' : ''}`}
+            onClick={() => {
+              isDualBoardSplit.value = false;
+              setScope('solo');
+            }}
+            title="Личный черновик (только вы, без синхронизации в сеть) (Alt+1)"
           >
-            <Icon name="lock" size={12} />
-            <span>Соло</span>
+            <Icon name="lock" size={13} />
+            <span>Моя доска</span>
+            <span class="miro-scope-badge" style={{ fontSize: 10, opacity: 0.75, marginLeft: 2 }}>Черновик</span>
           </button>
           <button
-            class={`scope-pill-btn miro-scope-btn ${currentScope.value === 'team' ? 'active team' : ''}`}
-            onClick={() => setScope('team')}
-            title="Командное пространство (Alt+2)"
+            class={`scope-pill-btn miro-scope-btn ${!isDualBoardSplit.value && effectiveScope === 'team' ? 'active team' : ''}`}
+            onClick={() => {
+              isDualBoardSplit.value = false;
+              setScope('team');
+            }}
+            title="Общая доска команды в реальном времени (Alt+2)"
           >
-            <Icon name="globe-mesh" size={12} />
-            <span>Команда</span>
+            <Icon name="globe-mesh" size={13} />
+            <span>Общая доска</span>
+          </button>
+          <button
+            class={`scope-pill-btn miro-scope-btn ${isDualBoardSplit.value ? 'active split' : ''}`}
+            onClick={() => {
+              isDualBoardSplit.value = !isDualBoardSplit.value;
+            }}
+            title="Разделить экран 50/50: Мой черновик слева, Общая доска справа"
+          >
+            <Icon name="split" size={13} />
+            <span>Рядом 50/50</span>
           </button>
         </div>
+
+        {/* Quick Action: 'Очистить' for Solo sketchpad */}
+        {effectiveScope === 'solo' && (
+          <button
+            class="miro-action-btn miro-clear-sketchpad-btn"
+            style={{ padding: '4px 8px', fontSize: 12, color: '#f87171', border: '1px solid rgba(248, 113, 113, 0.25)', borderRadius: 6, background: 'rgba(239, 68, 68, 0.08)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}
+            onClick={() => {
+              let count = 0;
+              boardDoc.transact(() => {
+                yNodes.forEach((nodeMap) => {
+                  if (!nodeMap.get('locked') && !nodeMap.get('deleted')) {
+                    nodeMap.set('deleted', true);
+                    nodeMap.set('deletedAt', Date.now());
+                    count++;
+                  }
+                });
+              }, 'clear-sketchpad');
+              if (count > 0) {
+                showToast(`Черновик очищен (${count} объектов удалено, нажмите Ctrl+Z для отмены)`, 'info');
+              } else {
+                showToast('Черновик уже пуст', 'info');
+              }
+            }}
+            title="Очистить холст черновика (Ctrl+Z для отмены)"
+          >
+            <Icon name="eraser" size={13} />
+            <span>Очистить</span>
+          </button>
+        )}
 
         {/* Export Dropdown Button */}
         <button
@@ -4236,14 +4292,19 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
             <Icon name="copy" size={15} />
           </button>
 
-          {/* Promote / Fork bridge */}
+          {/* 1-Click Push: Personal Sketchpad <-> Shared Team Board */}
           <button
             class="inspector-btn"
             data-testid="scope-transfer-btn"
-            title={currentScope.value === 'solo' ? 'Опубликовать в Команду' : 'Склонировать в Соло'}
-            onClick={() => handleOpenTransferModal()}
+            title={effectiveScope === 'solo' ? 'На общую доску ->' : '<- В мой черновик'}
+            onClick={async () => {
+              await quickPushNodesToOppositeScope(effectiveScope, boardId, Array.from(selectedNodeIds), false);
+            }}
           >
-            <Icon name={currentScope.value === 'solo' ? 'promote' : 'fork'} size={15} />
+            <Icon name={effectiveScope === 'solo' ? 'promote' : 'fork'} size={15} />
+            <span style={{ marginLeft: 4, fontSize: 11, fontWeight: 500 }}>
+              {effectiveScope === 'solo' ? 'На общую доску' : 'В черновик'}
+            </span>
           </button>
 
           {/* Delete */}
@@ -4721,7 +4782,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
                     );
                   }
 
-                  const noteDoc = yjsClient.getOrCreateDoc(getScopedNoteDocName(currentScope.value, node.noteId!));
+                  const noteDoc = yjsClient.getOrCreateDoc(getScopedNoteDocName(effectiveScope, node.noteId!));
                   const noteYText = noteDoc.getText('text');
                   const noteContent = noteYText.toString();
 
@@ -4793,7 +4854,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
                     const noteTitle = (node.fileName || node.text || 'Документ').replace(/\.[^/.]+$/, '');
                     const noteContent = node.extractedText || `# ${noteTitle}\n\n`;
                     const noteId = createNote(noteTitle, null);
-                    const noteDoc = yjsClient.getOrCreateDoc(getScopedNoteDocName(currentScope.value, noteId));
+                    const noteDoc = yjsClient.getOrCreateDoc(getScopedNoteDocName(effectiveScope, noteId));
                     noteDoc.getText('text').insert(0, noteContent);
                     openTab('note', noteId, noteTitle);
                     ensureSplitTabs();
@@ -5554,7 +5615,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
               )}
 
               {/* Author micro-badge in Team Scope (never show debug 'Tester') */}
-              {node.type === 'sticky' && currentScope.value === 'team' && node.author && node.author !== 'Tester' && (
+              {node.type === 'sticky' && effectiveScope === 'team' && node.author && node.author !== 'Tester' && (
                 <span class="node-author-microbadge" title={`Автор: ${node.author}`}>
                   {node.author}
                 </span>
@@ -5856,13 +5917,14 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
           </div>
           <div
             class="context-menu-item"
-            onClick={() => {
-              handleOpenTransferModal();
+            onClick={async () => {
+              const ids = Array.from(selectedNodeIds).length > 0 ? Array.from(selectedNodeIds) : nodesList.filter((n) => !n.deleted).map((n) => n.id);
+              await quickPushNodesToOppositeScope(effectiveScope, boardId, ids, false);
               setContextMenu(null);
             }}
           >
-            <Icon name={currentScope.value === 'solo' ? 'promote' : 'fork'} size={14} />
-            <span>{currentScope.value === 'solo' ? 'Опубликовать в Команду' : 'Склонировать в Соло'}</span>
+            <Icon name={effectiveScope === 'solo' ? 'promote' : 'fork'} size={14} />
+            <span>{effectiveScope === 'solo' ? 'На общую доску ->' : '<- В мой черновик'}</span>
           </div>
           {contextMenu.nodeId && (
             <>
@@ -5925,7 +5987,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
       <TransferModal
         isOpen={isTransferModalOpen}
         onClose={() => setIsTransferModalOpen(false)}
-        fromScope={currentScope.value}
+        fromScope={effectiveScope}
         boardId={boardId}
         nodeIds={transferNodeIds}
       />

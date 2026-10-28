@@ -314,33 +314,9 @@ export class DocManager extends EventEmitter {
 
       const idMap = new Map<string, string>(); // oldNodeId -> newNodeId
       let transferredNoteCount = 0;
-      let frameId: string | undefined;
 
       targetBoardDoc.transact(() => {
-        // Create frame on target board
-        frameId = crypto.randomUUID();
-        const dateStr = new Date().toLocaleDateString();
-        const frameTitle = targetScope === 'team'
-          ? `Публикация из Соло (${dateStr})`
-          : `Копия из Команды (${dateStr})`;
-
-        const frameMap = createNodeMap({
-          id: frameId,
-          type: 'frame',
-          x: minX + offsetX - 30,
-          y: minY + offsetY - 50,
-          w: maxX - minX + 60,
-          h: maxY - minY + 80,
-          text: frameTitle,
-          color: '5',
-          author: 'Bridge',
-          z: 0,
-          scope: targetScope,
-          deleted: false
-        });
-        targetNodes.set(frameId, frameMap);
-
-        // Transfer each node
+        // Transfer each node directly without wrapping in an unwanted frame
         for (const nodeData of nodesToTransfer) {
           const newNodeId = crypto.randomUUID();
           idMap.set(nodeData.id, newNodeId);
@@ -430,8 +406,7 @@ export class DocManager extends EventEmitter {
       return {
         success: true,
         transferredNodeCount: nodesToTransfer.length,
-        transferredNoteCount,
-        frameId
+        transferredNoteCount
       };
     } catch (err: any) {
       return {

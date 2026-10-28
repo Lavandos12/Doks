@@ -11,7 +11,8 @@ import {
   uint8ArrayToBase64,
   base64ToUint8Array,
   DOC_INDEX,
-  type WorkspaceScope
+  type WorkspaceScope,
+  getScopedIndexDocName
 } from '@doks/shared';
 import { api, type AgentStatusResponse } from '../api/client.js';
 
@@ -56,12 +57,9 @@ export class YjsClient {
   public switchScope(newScope: WorkspaceScope): void {
     if (this.currentScope === newScope) return;
     this.currentScope = newScope;
-    if (this.socket) {
-      try {
-        this.socket.close();
-      } catch {}
-    }
-    this.initSocket();
+    // Zero-reconnect dual-scope: keep socket open and ensure the new scope's index is subscribed
+    const indexDocName = getScopedIndexDocName(newScope);
+    this.subscribeDoc(indexDocName);
   }
 
   private async initSocket(): Promise<void> {

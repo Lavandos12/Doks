@@ -182,17 +182,14 @@ describe('V3 Two-Tier Architecture: Solo vs Team Isolation & Cross-Scope Bridge'
     expect(transferResult.success).toBe(true);
     expect(transferResult.transferredNodeCount).toBe(2);
     expect(transferResult.transferredNoteCount).toBe(1);
-    expect(transferResult.frameId).toBeDefined();
+    expect(transferResult.frameId).toBeUndefined();
 
     // 3. Verify Team Board Contents
     const teamBoardDoc = docManager.getOrCreateDoc(getScopedBoardDocName('team', teamBoardId));
     const { nodes: teamBoardNodes } = getBoardMaps(teamBoardDoc);
 
-    // Frame node must exist
-    const frameNodeMap = teamBoardNodes.get(transferResult.frameId!);
-    expect(frameNodeMap).toBeDefined();
-    expect(frameNodeMap?.get('type')).toBe('frame');
-    expect(frameNodeMap?.get('text')?.toString()).toContain('Публикация из Соло');
+    // Transferred nodes exist directly without an unwanted frame wrapper
+    expect(teamBoardNodes.size).toBe(2);
 
     // Transferred nodes must exist with scope: 'team'
     let foundSticky = false;
@@ -293,13 +290,13 @@ describe('V3 Two-Tier Architecture: Solo vs Team Isolation & Cross-Scope Bridge'
 
     expect(forkResult.success).toBe(true);
     expect(forkResult.transferredNodeCount).toBe(1);
+    expect(forkResult.frameId).toBeUndefined();
 
     // 3. Verify Solo Board
     const soloBoardDoc = docManager.getOrCreateDoc(getScopedBoardDocName('solo', soloBoardId));
     const { nodes: soloNodes } = getBoardMaps(soloBoardDoc);
 
-    const frameNode = soloNodes.get(forkResult.frameId!);
-    expect(frameNode?.get('text')?.toString()).toContain('Копия из Команды');
+    expect(soloNodes.size).toBe(1);
 
     let foundForked = false;
     soloNodes.forEach((nodeMap, id) => {

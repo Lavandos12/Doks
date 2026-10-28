@@ -1185,7 +1185,9 @@ export class AgentHttpServer {
             subscribedDocs.size === 0 ||
             subscribedDocs.has(docName) ||
             docName === DOC_INDEX ||
-            docName === `${queryScope}:${DOC_INDEX}`
+            docName === `${queryScope}:${DOC_INDEX}` ||
+            docName === `solo:${DOC_INDEX}` ||
+            docName === `team:${DOC_INDEX}`
           );
         };
 
@@ -1214,12 +1216,14 @@ export class AgentHttpServer {
             } else if (msg.type === 'awareness') {
               // Apply browser awareness state and broadcast to mesh if not solo
               const data = base64ToUint8Array(msg.data);
+              const isSolo = msg.docName?.startsWith('solo:');
+              const awarenessScope = isSolo ? 'solo' : 'team';
               try {
-                awarenessProtocol.applyAwarenessUpdate(this.docManager.getAwareness(queryScope), data, 'client');
+                awarenessProtocol.applyAwarenessUpdate(this.docManager.getAwareness(awarenessScope), data, 'client');
               } catch (err) {
                 console.error('[HttpServer] Awareness error:', err);
               }
-              if (queryScope !== 'solo') {
+              if (!isSolo && queryScope !== 'solo') {
                 this.peerService.broadcastAwareness(msg.docName, data);
               }
             } else if (msg.type === 'subscribe') {
@@ -1238,9 +1242,6 @@ export class AgentHttpServer {
         // Forward doc updates to the browser
         const updateListener = ({ scope: docScope, docName, update, origin }: any) => {
           if (origin === 'client' || socket.readyState !== socket.OPEN) return;
-          if (docScope && docScope !== queryScope && !docName.startsWith(queryScope)) {
-            return;
-          }
 
           if (isDocSubscribed(docName)) {
             const syncMsg = this.docManager.createUpdateSyncMessage(update);

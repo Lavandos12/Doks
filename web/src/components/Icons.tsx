@@ -37,6 +37,7 @@ export type IconName =
   // Workspace & Views
   | 'layout-canvas'
   | 'layout-split'
+  | 'split'
   | 'layout-doc'
   | 'sidebar-left'
   | 'minimap'
@@ -317,6 +318,7 @@ export function Icon({
         );
       case 'layout-split':
       case 'columns':
+      case 'split':
         return (
           <>
             <rect x="3" y="3" width="18" height="18" rx="2" />
