@@ -36,10 +36,9 @@ export interface TabItem {
   pinned?: boolean;
 }
 
-// Canonical Board IDs & Scope Management
+// Canonical Board IDs & Scope Management (backward compatibility)
 export const SOLO_MAIN_BOARD_ID = 'solo-main';
 export const TEAM_MAIN_BOARD_ID = 'team-main';
-export const isDualBoardSplit = signal<boolean>(false);
 
 // Global persistent clipboard across boards and split panes
 export const globalBoardClipboard: {
@@ -51,7 +50,7 @@ export const globalBoardClipboard: {
 
 // Two-Tier Workspace Scope
 const savedScope = typeof localStorage !== 'undefined' ? (localStorage.getItem('doks_scope') as WorkspaceScope) : null;
-export const currentScope = signal<WorkspaceScope>(savedScope || 'team');
+export const currentScope = signal<WorkspaceScope>(savedScope || 'solo');
 
 export const isSidebarCollapsed = signal<boolean>(false);
 export function toggleSidebar(): void {
@@ -64,13 +63,18 @@ export function setScope(newScope: WorkspaceScope): void {
   if (typeof localStorage !== 'undefined') {
     localStorage.setItem('doks_scope', newScope);
   }
-  ensureCanonicalBoards();
   yjsClient.switchScope(newScope);
-  const targetBoardId = newScope === 'solo' ? SOLO_MAIN_BOARD_ID : TEAM_MAIN_BOARD_ID;
-  const targetTitle = newScope === 'solo' ? 'Моя доска (Черновик)' : 'Общая доска';
-  selectedBoardId.value = targetBoardId;
-  openTab('board', targetBoardId, targetTitle);
   syncIndexSignals();
+  // Find first active board in new scope
+  const targetBoardsMap = newScope === 'solo' ? soloMaps.boards : teamMaps.boards;
+  let targetBoard: BoardMeta | undefined;
+  targetBoardsMap.forEach((b) => {
+    if (!b.deleted && !targetBoard) targetBoard = b;
+  });
+  if (targetBoard) {
+    selectedBoardId.value = targetBoard.id;
+    openTab('board', targetBoard.id, targetBoard.title);
+  }
 }
 
 // Persisted theme (B16)
@@ -170,31 +174,36 @@ const teamIndexDoc = yjsClient.getOrCreateDoc(getScopedIndexDocName('team'));
 export const soloMaps = getIndexMaps(soloIndexDoc);
 export const teamMaps = getIndexMaps(teamIndexDoc);
 
-export function ensureCanonicalBoards(): void {
-  if (!soloMaps.boards.has(SOLO_MAIN_BOARD_ID)) {
-    soloMaps.boards.set(SOLO_MAIN_BOARD_ID, {
-      id: SOLO_MAIN_BOARD_ID,
-      title: 'Моя доска (Черновик)',
+export function ensureDefaultBoard(): void {
+  let hasAnyBoard = false;
+  soloMaps.boards.forEach((b) => {
+    if (!b.deleted) hasAnyBoard = true;
+  });
+  teamMaps.boards.forEach((b) => {
+    if (!b.deleted) hasAnyBoard = true;
+  });
+
+  if (!hasAnyBoard) {
+    const id = SOLO_MAIN_BOARD_ID;
+    soloMaps.boards.set(id, {
+      id,
+      title: 'Моя первая доска',
       folder: null,
       deleted: false,
       createdAt: Date.now(),
-      updatedAt: Date.now()
-    });
-  }
-  if (!teamMaps.boards.has(TEAM_MAIN_BOARD_ID)) {
-    teamMaps.boards.set(TEAM_MAIN_BOARD_ID, {
-      id: TEAM_MAIN_BOARD_ID,
-      title: 'Общая доска',
-      folder: null,
-      deleted: false,
-      createdAt: Date.now(),
-      updatedAt: Date.now()
+      updatedAt: Date.now(),
+      scope: 'solo'
     });
   }
 }
 
-// Initial ensure of canonical boards
-ensureCanonicalBoards();
+// Backward compatibility alias
+export function ensureCanonicalBoards(): void {
+  ensureDefaultBoard();
+}
+
+// Initial ensure of default board
+ensureDefaultBoard();
 
 export function getActiveIndexDoc() {
   return currentScope.value === 'solo' ? soloIndexDoc : teamIndexDoc;
@@ -204,6 +213,9 @@ export function getActiveMaps() {
   return currentScope.value === 'solo' ? soloMaps : teamMaps;
 }
 
+// Unified signal merging boards from BOTH scopes
+export const allBoards = signal<BoardMeta[]>([]);
+
 // Proxied maps property for backward compatibility with components expecting active scope maps
 export const maps = new Proxy({} as ReturnType<typeof getIndexMaps>, {
   get(_target, prop) {
@@ -212,8 +224,23 @@ export const maps = new Proxy({} as ReturnType<typeof getIndexMaps>, {
 });
 
 function syncIndexSignals() {
-  ensureCanonicalBoards();
+  ensureDefaultBoard();
   const activeMaps = getActiveMaps();
+
+  // Unified allBoards across both scopes, sorted by updatedAt desc
+  const mergedBoards: BoardMeta[] = [];
+  soloMaps.boards.forEach((val) => {
+    if (!val.deleted) {
+      mergedBoards.push({ ...val, scope: 'solo' });
+    }
+  });
+  teamMaps.boards.forEach((val) => {
+    if (!val.deleted) {
+      mergedBoards.push({ ...val, scope: 'team' });
+    }
+  });
+  mergedBoards.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+  allBoards.value = mergedBoards;
 
   const noteList: NoteMeta[] = [];
   activeMaps.notes.forEach((val) => {
@@ -229,9 +256,9 @@ function syncIndexSignals() {
 
   // Auto-open first board if no tabs open and boards exist
   if (openTabs.value.length === 0 && !activeTabId.value) {
-    const firstBoard = boardList.find((b) => !b.deleted);
+    const firstBoard = allBoards.value[0] || boardList.find((b) => !b.deleted);
     if (firstBoard) {
-      openTab('board', firstBoard.id, firstBoard.title);
+      selectBoardWithScope(firstBoard.id, firstBoard.scope || 'solo', firstBoard.title);
     }
   }
 
@@ -513,13 +540,16 @@ export function renameNote(id: string, newTitle: string): void {
   });
 }
 
-export function renameBoard(id: string, newTitle: string): void {
-  const activeMaps = getActiveMaps();
-  const existing = activeMaps.boards.get(id);
+export function renameBoard(id: string, newTitle: string, scope?: WorkspaceScope): void {
+  const targetMap = scope
+    ? (scope === 'solo' ? soloMaps.boards : teamMaps.boards)
+    : (soloMaps.boards.has(id) ? soloMaps.boards : teamMaps.boards);
+  const existing = targetMap.get(id);
   if (existing) {
-    activeMaps.boards.set(id, {
+    targetMap.set(id, {
       ...existing,
-      title: newTitle
+      title: newTitle,
+      updatedAt: Date.now()
     });
   }
 }
@@ -586,17 +616,87 @@ export function restoreBoard(id: string): void {
   }
 }
 
-export function deleteBoard(id: string): void {
-  const activeMaps = getActiveMaps();
-  const existing = activeMaps.boards.get(id);
+export function deleteBoard(id: string, scope?: WorkspaceScope): void {
+  const targetMap = scope
+    ? (scope === 'solo' ? soloMaps.boards : teamMaps.boards)
+    : (soloMaps.boards.has(id) ? soloMaps.boards : teamMaps.boards);
+  const existing = targetMap.get(id);
   if (existing) {
-    activeMaps.boards.set(id, {
+    targetMap.set(id, {
       ...existing,
       deleted: true,
       deletedAt: Date.now()
     });
     closeTab(id);
   }
+}
+
+export function selectBoardWithScope(boardId: string, scope: WorkspaceScope, title?: string): void {
+  if (currentScope.value !== scope) {
+    currentScope.value = scope;
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('doks_scope', scope);
+    }
+    yjsClient.switchScope(scope);
+    syncIndexSignals();
+  }
+  selectedBoardId.value = boardId;
+  openTab('board', boardId, title || 'Доска');
+}
+
+export async function convertBoardScope(
+  boardId: string,
+  fromScope: WorkspaceScope,
+  toScope: WorkspaceScope
+): Promise<string> {
+  if (fromScope === toScope) return boardId;
+
+  const sourceMap = fromScope === 'solo' ? soloMaps.boards : teamMaps.boards;
+  const meta = sourceMap.get(boardId);
+  const title = meta?.title || 'Доска';
+
+  // 1. Create target board in toScope with the same title
+  const newBoardId = createBoard(title, meta?.folder || null, toScope, false);
+
+  // 2. Fetch all nodes from source board doc
+  try {
+    const srcDocName = getScopedBoardDocName(fromScope, boardId);
+    const srcDoc = yjsClient.getOrCreateDoc(srcDocName);
+    const { nodes } = getBoardMaps(srcDoc);
+    const nodeIds: string[] = [];
+    nodes.forEach((nMap, nId) => {
+      if (!nMap.get('deleted')) {
+        nodeIds.push(nId);
+      }
+    });
+
+    if (nodeIds.length > 0) {
+      await api.transferNodes({
+        fromScope,
+        toScope,
+        boardId,
+        targetBoardId: newBoardId,
+        nodeIds,
+        includeLinkedNotes: true,
+        mode: 'move'
+      });
+    }
+  } catch (err) {
+    console.error('Failed to transfer nodes during board scope conversion:', err);
+  }
+
+  // 3. Soft-delete the old board in fromScope
+  deleteBoard(boardId, fromScope);
+
+  // 4. Switch to new board
+  selectBoardWithScope(newBoardId, toScope, title);
+  showToast(
+    toScope === 'team'
+      ? `Доска "${title}" теперь Общая (доступна в сети)`
+      : `Доска "${title}" теперь Личная (скрыта из сети)`,
+    'success'
+  );
+  return newBoardId;
 }
 
 export function deleteFolder(id: string): void {
@@ -635,7 +735,22 @@ export async function quickPushNodesToOppositeScope(
   const targetScope: WorkspaceScope = fromScope === 'solo' ? 'team' : 'solo';
   const targetBoardId = targetScope === 'team' ? TEAM_MAIN_BOARD_ID : SOLO_MAIN_BOARD_ID;
 
-  ensureCanonicalBoards();
+  const targetDoc = targetScope === 'solo' ? soloIndexDoc : teamIndexDoc;
+  const targetMaps = targetScope === 'solo' ? soloMaps : teamMaps;
+  if (!targetMaps.boards.has(targetBoardId)) {
+    targetDoc.transact(() => {
+      targetMaps.boards.set(targetBoardId, {
+        id: targetBoardId,
+        title: targetScope === 'team' ? 'Общая доска' : 'Моя доска',
+        folder: null,
+        deleted: false,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+        scope: targetScope
+      });
+    });
+    syncIndexSignals();
+  }
 
   const res = await api.transferNodes({
     fromScope,

@@ -4,9 +4,7 @@ import type { WorkspaceScope } from '@doks/shared';
 import {
   transferNodesAcrossScopes,
   createBoard,
-  currentScope,
-  soloMaps,
-  teamMaps
+  allBoards
 } from '../../state/app-state.js';
 import { Icon } from '../../ui/icons.js';
 import { showToast } from '../../ui/toast.js';
@@ -28,27 +26,18 @@ export function TransferModal({
 }: TransferModalProps) {
   if (!isOpen) return null;
 
-  const targetScope: WorkspaceScope = fromScope === 'solo' ? 'team' : 'solo';
-  const isPromote = fromScope === 'solo';
+  const candidateBoards = allBoards.value.filter((b) => b.id !== boardId && !b.deleted);
 
-  const [destinationType, setDestinationType] = useState<'new' | 'existing'>('new');
-  const [selectedTargetBoardId, setSelectedTargetBoardId] = useState<string>('');
+  const [destinationType, setDestinationType] = useState<'new' | 'existing'>('existing');
+  const [selectedTargetBoardId, setSelectedTargetBoardId] = useState<string>(
+    candidateBoards[0]?.id || ''
+  );
+  const [newBoardScope, setNewBoardScope] = useState<WorkspaceScope>(fromScope === 'solo' ? 'team' : 'solo');
   const [transferMode, setTransferMode] = useState<'copy' | 'move'>('copy');
 
-  const [newBoardTitle, setNewBoardTitle] = useState<string>(
-    isPromote ? 'Командная доска (из Соло)' : 'Личная доска (из Команды)'
-  );
+  const [newBoardTitle, setNewBoardTitle] = useState<string>('Новая доска');
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-
-  // Collect existing boards in target scope
-  const targetBoardsMap = targetScope === 'solo' ? soloMaps.boards : teamMaps.boards;
-  const existingBoards: { id: string; title: string }[] = [];
-  targetBoardsMap.forEach((b) => {
-    if (!b.deleted) {
-      existingBoards.push({ id: b.id, title: b.title });
-    }
-  });
 
   const handleSubmit = async () => {
     setIsSubmitting(true);
@@ -56,15 +45,19 @@ export function TransferModal({
 
     try {
       let finalTargetBoardId = selectedTargetBoardId;
+      let targetScope: WorkspaceScope = fromScope;
 
       if (destinationType === 'new' || !finalTargetBoardId) {
-        // Direct creation in target scope without flickering scope switch
+        targetScope = newBoardScope;
         finalTargetBoardId = createBoard(
-          newBoardTitle.trim() || (isPromote ? 'Командная доска' : 'Личная доска'),
+          newBoardTitle.trim() || 'Новая доска',
           null,
           targetScope,
           false
         );
+      } else {
+        const found = candidateBoards.find((b) => b.id === finalTargetBoardId);
+        targetScope = found?.scope || fromScope;
       }
 
       if (nodeIds.length > 0) {
@@ -80,14 +73,13 @@ export function TransferModal({
 
         if (res.success) {
           const actionText = transferMode === 'move' ? 'перемещены' : 'скопированы';
-          showToast(`Элементы успешно ${actionText} в ${targetScope === 'team' ? 'Команду' : 'Соло'}`);
+          showToast(`Элементы успешно ${actionText} на целевую доску`, 'success');
           onClose();
         } else {
           setErrorMsg(res.error || 'Ошибка переноса элементов');
         }
       } else {
-        const actionText = transferMode === 'move' ? 'перемещена' : 'скопирована';
-        showToast(`Доска успешно ${actionText} в ${targetScope === 'team' ? 'Команду' : 'Соло'}`);
+        showToast('Нет выбранных объектов для переноса', 'info');
         onClose();
       }
     } catch (err: any) {
@@ -101,22 +93,20 @@ export function TransferModal({
     <div class="modal-overlay doks-modal-backdrop transfer-modal-backdrop" onClick={onClose}>
       <div
         class="modal-card doks-modal-dialog transfer-modal liquid-glass-surface"
-        style={{ maxWidth: '460px', width: '100%' }}
+        style={{ maxWidth: '480px', width: '92vw' }}
         onClick={(e) => e.stopPropagation()}
       >
         <div class="modal-header">
           <div class="modal-header-icon-title" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <span class="scope-icon-large text-accent">
-              <Icon name={isPromote ? 'globe-mesh' : 'lock'} size={24} />
+              <Icon name="share" size={22} />
             </span>
             <div>
               <h3 class="modal-title" style={{ margin: 0, fontSize: '17px', fontWeight: 600 }}>
-                {isPromote ? 'Опубликовать в Команду' : 'Форкнуть в Соло'}
+                Перенос объектов на другую доску
               </h3>
               <p class="modal-subtitle" style={{ margin: '4px 0 0', fontSize: '12px', color: '#94a3b8' }}>
-                {isPromote
-                  ? 'Перенос карточек в общее P2P меш-пространство'
-                  : 'Создание изолированной копии на вашем компьютере'}
+                Копирование или перемещение карточек и схем между досками
               </p>
             </div>
           </div>
@@ -130,7 +120,7 @@ export function TransferModal({
 
           {/* Mode Selector: Copy vs Move */}
           <div class="form-group" style={{ margin: 0 }}>
-            <label style={{ fontSize: '13px', fontWeight: 500, color: '#f1f5f9', marginBottom: '6px' }}>
+            <label style={{ fontSize: '13px', fontWeight: 500, color: '#f1f5f9', marginBottom: '6px', display: 'block' }}>
               Режим операции
             </label>
             <div style={{ display: 'flex', gap: '8px' }}>
@@ -165,12 +155,32 @@ export function TransferModal({
             </div>
           </div>
 
-          {/* Destination Type: New Board vs Existing Board */}
+          {/* Destination Type: Existing Board vs New Board */}
           <div class="form-group" style={{ margin: 0 }}>
-            <label style={{ fontSize: '13px', fontWeight: 500, color: '#f1f5f9', marginBottom: '6px' }}>
-              Целевая доска ({targetScope === 'team' ? 'Команда' : 'Соло'})
+            <label style={{ fontSize: '13px', fontWeight: 500, color: '#f1f5f9', marginBottom: '6px', display: 'block' }}>
+              Целевая доска
             </label>
             <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
+              <button
+                type="button"
+                class={`btn-secondary ${destinationType === 'existing' ? 'active' : ''}`}
+                style={{
+                  flex: 1,
+                  padding: '6px 10px',
+                  fontSize: '12px',
+                  background: destinationType === 'existing' ? 'rgba(99, 102, 241, 0.25)' : 'rgba(255,255,255,0.06)',
+                  borderColor: destinationType === 'existing' ? '#6366f1' : 'rgba(255,255,255,0.14)'
+                }}
+                disabled={candidateBoards.length === 0}
+                onClick={() => {
+                  setDestinationType('existing');
+                  if (!selectedTargetBoardId && candidateBoards.length > 0) {
+                    setSelectedTargetBoardId(candidateBoards[0].id);
+                  }
+                }}
+              >
+                Существующая ({candidateBoards.length})
+              </button>
               <button
                 type="button"
                 class={`btn-secondary ${destinationType === 'new' ? 'active' : ''}`}
@@ -185,51 +195,65 @@ export function TransferModal({
               >
                 Новая доска
               </button>
-              <button
-                type="button"
-                class={`btn-secondary ${destinationType === 'existing' ? 'active' : ''}`}
-                style={{
-                  flex: 1,
-                  padding: '6px 10px',
-                  fontSize: '12px',
-                  background: destinationType === 'existing' ? 'rgba(99, 102, 241, 0.25)' : 'rgba(255,255,255,0.06)',
-                  borderColor: destinationType === 'existing' ? '#6366f1' : 'rgba(255,255,255,0.14)'
-                }}
-                disabled={existingBoards.length === 0}
-                onClick={() => {
-                  setDestinationType('existing');
-                  if (!selectedTargetBoardId && existingBoards.length > 0) {
-                    setSelectedTargetBoardId(existingBoards[0].id);
-                  }
-                }}
-              >
-                Существующая ({existingBoards.length})
-              </button>
             </div>
 
-            {destinationType === 'new' ? (
-              <input
-                type="text"
-                class="form-input"
-                value={newBoardTitle}
-                onInput={(e) => setNewBoardTitle((e.target as HTMLInputElement).value)}
-                placeholder="Введите название новой доски..."
-                style={{ width: '100%' }}
-                autoFocus
-              />
-            ) : (
+            {destinationType === 'existing' ? (
               <select
-                class="form-input"
-                style={{ width: '100%', padding: '8px', background: '#181b24', color: '#f1f5f9' }}
+                class="form-input text-input"
+                style={{ width: '100%', padding: '8px 10px', background: '#12151f', color: '#f1f5f9', borderRadius: 8, border: '1px solid rgba(255,255,255,0.15)' }}
                 value={selectedTargetBoardId}
                 onChange={(e) => setSelectedTargetBoardId((e.target as HTMLSelectElement).value)}
               >
-                {existingBoards.map((b) => (
+                {candidateBoards.map((b) => (
                   <option key={b.id} value={b.id}>
-                    {b.title}
+                    {b.title} [{b.scope === 'team' ? 'Общая' : 'Личная'}]
                   </option>
                 ))}
               </select>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <input
+                  type="text"
+                  class="form-input text-input"
+                  value={newBoardTitle}
+                  onInput={(e) => setNewBoardTitle((e.target as HTMLInputElement).value)}
+                  placeholder="Введите название новой доски..."
+                  style={{ width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.15)', background: 'rgba(255,255,255,0.05)', color: '#fff' }}
+                  autoFocus
+                />
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button
+                    type="button"
+                    class={`btn-secondary ${newBoardScope === 'solo' ? 'active' : ''}`}
+                    onClick={() => setNewBoardScope('solo')}
+                    style={{
+                      flex: 1,
+                      padding: '6px 8px',
+                      fontSize: 12,
+                      background: newBoardScope === 'solo' ? 'rgba(59, 130, 246, 0.2)' : 'transparent',
+                      borderColor: newBoardScope === 'solo' ? '#3b82f6' : 'rgba(255,255,255,0.12)',
+                      color: newBoardScope === 'solo' ? '#60a5fa' : 'var(--text-secondary)'
+                    }}
+                  >
+                    Личная
+                  </button>
+                  <button
+                    type="button"
+                    class={`btn-secondary ${newBoardScope === 'team' ? 'active' : ''}`}
+                    onClick={() => setNewBoardScope('team')}
+                    style={{
+                      flex: 1,
+                      padding: '6px 8px',
+                      fontSize: 12,
+                      background: newBoardScope === 'team' ? 'rgba(16, 185, 129, 0.2)' : 'transparent',
+                      borderColor: newBoardScope === 'team' ? '#10b981' : 'rgba(255,255,255,0.12)',
+                      color: newBoardScope === 'team' ? '#34d399' : 'var(--text-secondary)'
+                    }}
+                  >
+                    Общая
+                  </button>
+                </div>
+              </div>
             )}
           </div>
 
@@ -245,14 +269,14 @@ export function TransferModal({
           <button
             class="btn btn-primary"
             onClick={handleSubmit}
-            disabled={isSubmitting}
-            style={{ minWidth: '160px' }}
+            disabled={isSubmitting || (destinationType === 'existing' && candidateBoards.length === 0)}
+            style={{ minWidth: '150px' }}
           >
             {isSubmitting
               ? 'Обработка...'
               : transferMode === 'move'
-              ? (isPromote ? 'Переместить в Команду' : 'Переместить в Соло')
-              : (isPromote ? 'Скопировать в Команду' : 'Скопировать в Соло')}
+              ? 'Переместить'
+              : 'Скопировать'}
           </button>
         </div>
       </div>

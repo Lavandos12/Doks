@@ -6,6 +6,7 @@ export interface IconProps {
   className?: string;
   color?: string;
   strokeWidth?: number;
+  style?: any;
 }
 
 export type IconName =
@@ -122,7 +123,8 @@ export function Icon({
   class: cls = '',
   className = '',
   color = 'currentColor',
-  strokeWidth = 1.75
+  strokeWidth = 1.75,
+  style
 }: IconProps & { name: IconName }): VNode {
   const combinedClass = `lucide-icon doks-svg-icon ${cls} ${className}`.trim();
 
@@ -792,6 +794,7 @@ export function Icon({
       strokeLinecap="round"
       strokeLinejoin="round"
       class={combinedClass}
+      style={style}
       aria-hidden="true"
     >
       {renderPath()}

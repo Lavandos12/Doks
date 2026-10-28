@@ -4274,7 +4274,7 @@ input:focus, select:focus, textarea:focus {
 /* 5. Miro-Grade Multi-Select Alignment Bar */
 .align-toolbar {
   position: absolute;
-  top: 16px;
+  top: 68px !important;
   left: 50%;
   transform: translateX(-50%);
   display: inline-flex;
@@ -4286,7 +4286,7 @@ input:focus, select:focus, textarea:focus {
   border-radius: 10px;
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.06);
   backdrop-filter: blur(10px);
-  z-index: 70;
+  z-index: 250 !important;
   pointer-events: auto;
 }
 
@@ -4772,10 +4772,10 @@ button.doks-color-dot.active {
   position: fixed;
   top: 66px;
   right: 16px;
-  bottom: 16px;
+  bottom: 68px !important;
   width: 460px;
   max-width: calc(100vw - 32px);
-  z-index: 280;
+  z-index: 400 !important;
   display: flex;
   flex-direction: column;
   background: rgba(18, 20, 28, 0.94);
@@ -5530,16 +5530,101 @@ button.doks-color-dot.active {
   position: absolute;
   top: 14px;
   left: 16px;
-  z-index: 450 !important;
+  z-index: 500 !important;
+  max-width: calc(100% - 360px);
   display: flex;
   align-items: center;
   gap: 8px;
   padding: 6px 12px;
-  background: rgba(18, 20, 28, 0.92);
+  background: rgba(18, 20, 28, 0.94);
   backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 12px;
   box-shadow: 0 16px 40px rgba(0, 0, 0, 0.65);
+}
+
+.miro-scope-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+.miro-scope-status-pill.solo {
+  background: rgba(59, 130, 246, 0.12);
+  border-color: rgba(59, 130, 246, 0.35);
+  color: #60a5fa;
+}
+
+.miro-scope-status-pill.solo:hover {
+  background: rgba(59, 130, 246, 0.22);
+  border-color: rgba(59, 130, 246, 0.55);
+}
+
+.miro-scope-status-pill.team {
+  background: rgba(16, 185, 129, 0.12);
+  border-color: rgba(16, 185, 129, 0.35);
+  color: #34d399;
+}
+
+.miro-scope-status-pill.team:hover {
+  background: rgba(16, 185, 129, 0.22);
+  border-color: rgba(16, 185, 129, 0.55);
+}
+
+.miro-scope-tag {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 4px;
+  margin-left: auto;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.miro-scope-tag.solo {
+  background: rgba(59, 130, 246, 0.15);
+  color: #60a5fa;
+  border: 1px solid rgba(59, 130, 246, 0.25);
+}
+
+.miro-scope-tag.team {
+  background: rgba(16, 185, 129, 0.15);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.25);
+}
+
+.miro-board-item-settings-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  opacity: 0;
+  transition: all 0.15s ease;
+  margin-left: 4px;
+}
+
+.miro-board-item:hover .miro-board-item-settings-btn {
+  opacity: 0.85;
+}
+
+.miro-board-item-settings-btn:hover {
+  opacity: 1 !important;
+  background: rgba(255, 255, 255, 0.15);
+  color: var(--text-primary);
 }
 
 .miro-board-selector-btn {
@@ -5644,14 +5729,14 @@ button.doks-color-dot.active {
   position: absolute;
   top: calc(100% + 8px);
   left: 0;
-  width: 260px;
+  width: 300px;
   padding: 10px;
-  background: rgba(18, 20, 28, 0.96);
+  background: #12151f !important;
   backdrop-filter: blur(24px);
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(255, 255, 255, 0.18) !important;
   border-radius: 12px;
-  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.7);
-  z-index: 500 !important;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.85) !important;
+  z-index: 600 !important;
 }
 
 .miro-popover-header {
@@ -5743,12 +5828,12 @@ button.doks-color-dot.active {
   left: auto;
   width: 240px;
   padding: 8px;
-  background: rgba(18, 20, 28, 0.96);
+  background: #12151f !important;
   backdrop-filter: blur(24px);
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(255, 255, 255, 0.18) !important;
   border-radius: 12px;
-  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.7);
-  z-index: 500 !important;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.85) !important;
+  z-index: 600 !important;
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -5778,8 +5863,8 @@ button.doks-color-dot.active {
 .miro-creation-dock-container {
   position: absolute;
   left: 16px;
-  top: 76px;
-  transform: none;
+  top: 50%;
+  transform: translateY(-50%);
   z-index: 200;
   display: flex;
   flex-direction: column;
@@ -6014,7 +6099,7 @@ button.doks-color-dot.active {
   position: absolute;
   top: 14px;
   right: 16px;
-  z-index: 300;
+  z-index: 500 !important;
   display: flex;
   align-items: center;
   gap: 8px;

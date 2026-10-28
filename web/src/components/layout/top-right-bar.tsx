@@ -12,6 +12,7 @@ interface TopRightBarProps {
   onOpenNetwork: () => void;
   onOpenSettings: () => void;
   isNotesOpen?: boolean;
+  isSplitMode?: boolean;
 }
 
 export function TopRightBar({
@@ -19,7 +20,8 @@ export function TopRightBar({
   onOpenAiExport,
   onOpenNetwork,
   onOpenSettings,
-  isNotesOpen = false
+  isNotesOpen = false,
+  isSplitMode = false
 }: TopRightBarProps): VNode {
   const status = agentStatus.value;
   const isRadminFound = Boolean(status?.radminFound || status?.radminIp);
@@ -30,6 +32,10 @@ export function TopRightBar({
       class="miro-actions-bar liquid-glass-surface"
       onMouseDown={(e) => e.stopPropagation()}
       onClick={(e) => e.stopPropagation()}
+      style={{
+        right: isSplitMode ? 'calc(50% + 16px)' : '16px',
+        transition: 'right 0.2s ease'
+      }}
     >
       {/* [ Заметки ] Drawer Toggle Button */}
       <button

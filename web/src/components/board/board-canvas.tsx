@@ -35,12 +35,13 @@ import {
   setWorkspaceMode,
   isCommandPaletteOpen,
   theme,
-  SOLO_MAIN_BOARD_ID,
-  TEAM_MAIN_BOARD_ID,
-  isDualBoardSplit,
+  allBoards,
+  selectBoardWithScope,
   globalBoardClipboard,
   quickPushNodesToOppositeScope
 } from '../../state/app-state.js';
+import { CreateBoardModal } from './create-board-modal.js';
+import { BoardSettingsModal } from './board-settings-modal.js';
 import { NoteEditor } from '../notes/editor.js';
 import { api } from '../../api/client.js';
 import { CanvasEdgesLayer, type CanvasEdgeModel } from '../CanvasEdgesLayer.js';
@@ -604,6 +605,9 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
   const [pickerPos, setPickerPos] = useState<{ x: number; y: number } | null>(null);
   const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
   const [transferNodeIds, setTransferNodeIds] = useState<string[]>([]);
+  const [isCreateBoardOpen, setIsCreateBoardOpen] = useState(false);
+  const [isBoardSettingsOpen, setIsBoardSettingsOpen] = useState(false);
+  const [settingsTargetBoard, setSettingsTargetBoard] = useState<{ id: string; scope: WorkspaceScope; title: string } | null>(null);
 
   const handleOpenTransferModal = (ids?: string[]) => {
     let targetIds = ids && ids.length > 0 ? ids : Array.from(selectedNodeIds);
@@ -694,8 +698,8 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
   const fileAttachmentInputRef = useRef<HTMLInputElement>(null);
 
   const currentBoardMeta = useMemo(() => {
-    return boards.value.find((b) => b.id === boardId);
-  }, [boards.value, boardId]);
+    return allBoards.value.find((b) => b.id === boardId) || boards.value.find((b) => b.id === boardId);
+  }, [allBoards.value, boards.value, boardId]);
 
   // Undo manager
   const undoManagerRef = useRef<Y.UndoManager | null>(null);
@@ -3189,89 +3193,58 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
         onMouseDown={(e) => e.stopPropagation()}
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Boards Popover Trigger */}
+        {/* 1. Board Switcher Button */}
         <button
           class="miro-board-selector-btn"
           onClick={() => {
             setIsBoardsPopoverOpen(!isBoardsPopoverOpen);
             setIsExportMenuOpen(false);
           }}
-          title="Доски (Список и шаблоны)"
+          title="Доски (Список и переключение)"
         >
           <Icon name="layout" size={16} />
-          <span class="miro-board-title">{currentBoardMeta?.title || 'Новая доска'}</span>
+          <span class="miro-board-title">{currentBoardMeta?.title || 'Доска'}</span>
           <Icon name="chevron-down" size={12} />
         </button>
 
-        <div class="miro-divider" />
-
-        {/* Scope Mode Selector: [ Моя доска (Черновик) | Общая доска | Рядом 50/50 ] */}
-        <div class="miro-scope-pill" role="tablist">
+        {/* 2. Board Access & Settings Pill Button */}
+        {(currentBoardMeta?.scope || effectiveScope) === 'solo' ? (
           <button
-            class={`scope-pill-btn miro-scope-btn ${!isDualBoardSplit.value && effectiveScope === 'solo' ? 'active solo' : ''}`}
+            class="miro-scope-status-pill solo"
             onClick={() => {
-              isDualBoardSplit.value = false;
-              setScope('solo');
+              setSettingsTargetBoard({
+                id: boardId,
+                scope: 'solo',
+                title: currentBoardMeta?.title || 'Доска'
+              });
+              setIsBoardSettingsOpen(true);
             }}
-            title="Личный черновик (только вы, без синхронизации в сеть) (Alt+1)"
+            title="Настроить доступ и параметры доски"
           >
-            <Icon name="lock" size={13} />
-            <span>Моя доска</span>
-            <span class="miro-scope-badge" style={{ fontSize: 10, opacity: 0.75, marginLeft: 2 }}>Черновик</span>
+            <Icon name="lock" size={12} />
+            <span>Личная</span>
+            <Icon name="settings" size={11} style={{ opacity: 0.7 }} />
           </button>
+        ) : (
           <button
-            class={`scope-pill-btn miro-scope-btn ${!isDualBoardSplit.value && effectiveScope === 'team' ? 'active team' : ''}`}
+            class="miro-scope-status-pill team"
             onClick={() => {
-              isDualBoardSplit.value = false;
-              setScope('team');
+              setSettingsTargetBoard({
+                id: boardId,
+                scope: 'team',
+                title: currentBoardMeta?.title || 'Доска'
+              });
+              setIsBoardSettingsOpen(true);
             }}
-            title="Общая доска команды в реальном времени (Alt+2)"
+            title="Настроить общий доступ и сеть Radmin VPN"
           >
-            <Icon name="globe-mesh" size={13} />
-            <span>Общая доска</span>
-          </button>
-          <button
-            class={`scope-pill-btn miro-scope-btn ${isDualBoardSplit.value ? 'active split' : ''}`}
-            onClick={() => {
-              isDualBoardSplit.value = !isDualBoardSplit.value;
-            }}
-            title="Разделить экран 50/50: Мой черновик слева, Общая доска справа"
-          >
-            <Icon name="split" size={13} />
-            <span>Рядом 50/50</span>
-          </button>
-        </div>
-
-        {/* Quick Action: 'Очистить' for Solo sketchpad */}
-        {effectiveScope === 'solo' && (
-          <button
-            class="miro-action-btn miro-clear-sketchpad-btn"
-            style={{ padding: '4px 8px', fontSize: 12, color: '#f87171', border: '1px solid rgba(248, 113, 113, 0.25)', borderRadius: 6, background: 'rgba(239, 68, 68, 0.08)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}
-            onClick={() => {
-              let count = 0;
-              boardDoc.transact(() => {
-                yNodes.forEach((nodeMap) => {
-                  if (!nodeMap.get('locked') && !nodeMap.get('deleted')) {
-                    nodeMap.set('deleted', true);
-                    nodeMap.set('deletedAt', Date.now());
-                    count++;
-                  }
-                });
-              }, 'clear-sketchpad');
-              if (count > 0) {
-                showToast(`Черновик очищен (${count} объектов удалено, нажмите Ctrl+Z для отмены)`, 'info');
-              } else {
-                showToast('Черновик уже пуст', 'info');
-              }
-            }}
-            title="Очистить холст черновика (Ctrl+Z для отмены)"
-          >
-            <Icon name="eraser" size={13} />
-            <span>Очистить</span>
+            <Icon name="globe-mesh" size={12} />
+            <span>Общая</span>
+            <Icon name="settings" size={11} style={{ opacity: 0.7 }} />
           </button>
         )}
 
-        {/* Export Dropdown Button */}
+        {/* 3. Export Dropdown Button */}
         <button
           class={`miro-board-switcher-btn miro-export-toggle-btn ${isExportMenuOpen ? 'active' : ''}`}
           onClick={() => {
@@ -3288,58 +3261,59 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
         {isBoardsPopoverOpen && (
           <div class="miro-boards-popover liquid-glass-surface">
             <div class="miro-popover-header">
-              <span class="miro-popover-title">Доски</span>
+              <span class="miro-popover-title">МОИ ДОСКИ ({allBoards.value.length})</span>
               <button
                 class="btn-primary-xs"
-                title="Новая доска"
+                title="Создать новую доску"
                 onClick={() => {
-                  const newId = createBoard('Новая доска');
-                  openTab('board', newId, 'Новая доска');
                   setIsBoardsPopoverOpen(false);
+                  setIsCreateBoardOpen(true);
                 }}
               >
                 <Icon name="plus" size={12} />
-                <span>Новая</span>
+                <span>Создать доску</span>
               </button>
             </div>
             <div class="miro-boards-list">
-              {boards.value.filter((b) => !b.deleted).map((b) => (
+              {allBoards.value.map((b) => (
                 <div
                   key={b.id}
                   class={`miro-board-item tree-board-item ${b.id === boardId ? 'active' : ''}`}
                   onClick={() => {
-                    openTab('board', b.id, b.title);
+                    selectBoardWithScope(b.id, b.scope || 'solo', b.title);
                     setIsBoardsPopoverOpen(false);
                   }}
                 >
-                  <Icon name="layout" size={14} />
+                  <Icon
+                    name={b.scope === 'team' ? 'globe-mesh' : 'lock'}
+                    size={14}
+                    class={b.scope === 'team' ? 'text-team' : 'text-solo'}
+                  />
                   <span class="miro-board-name">{b.title}</span>
+                  <span class={`miro-scope-tag ${b.scope || 'solo'}`}>
+                    {b.scope === 'team' ? 'Общая' : 'Личная'}
+                  </span>
+                  <button
+                    type="button"
+                    class="miro-board-item-settings-btn"
+                    title="Настройка доски"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSettingsTargetBoard({
+                        id: b.id,
+                        scope: b.scope || 'solo',
+                        title: b.title
+                      });
+                      setIsBoardSettingsOpen(true);
+                      setIsBoardsPopoverOpen(false);
+                    }}
+                  >
+                    <Icon name="settings" size={12} />
+                  </button>
                   {b.id === boardId && <span class="miro-active-dot" />}
                 </div>
               ))}
             </div>
-            <div class="miro-popover-divider" />
-            <button
-              class="miro-template-btn"
-              onClick={() => {
-                seedDefaultBoard(boardDoc, agentStatus.value?.memberName || 'Вы');
-                setIsBoardsPopoverOpen(false);
-              }}
-            >
-              <Icon name="sparkles" size={13} />
-              <span>Заполнить шаблоном задач</span>
-            </button>
-            <button
-              class="miro-template-btn"
-              onClick={() => {
-                handleOpenTransferModal();
-                setIsBoardsPopoverOpen(false);
-              }}
-              title="Перенести карточки между пространствами"
-            >
-              <Icon name="share" size={13} />
-              <span>Перенос карточек в другое пространство...</span>
-            </button>
           </div>
         )}
 
@@ -3391,6 +3365,12 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
         class="miro-creation-dock-container"
         onMouseDown={(e) => e.stopPropagation()}
         onClick={(e) => e.stopPropagation()}
+        style={{
+          opacity: isBoardsPopoverOpen ? 0 : 1,
+          pointerEvents: isBoardsPopoverOpen ? 'none' : 'auto',
+          transform: isBoardsPopoverOpen ? 'translateY(-50%) translateX(-14px)' : 'translateY(-50%) translateX(0)',
+          transition: 'all 0.16s ease'
+        }}
       >
         <div class="miro-creation-dock liquid-glass-surface">
           {/* 1. Select (V) */}
@@ -5990,6 +5970,43 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
         fromScope={effectiveScope}
         boardId={boardId}
         nodeIds={transferNodeIds}
+      />
+
+      <CreateBoardModal
+        isOpen={isCreateBoardOpen}
+        onClose={() => setIsCreateBoardOpen(false)}
+      />
+
+      <BoardSettingsModal
+        isOpen={isBoardSettingsOpen}
+        onClose={() => {
+          setIsBoardSettingsOpen(false);
+          setSettingsTargetBoard(null);
+        }}
+        boardId={settingsTargetBoard?.id || boardId}
+        scope={settingsTargetBoard?.scope || (currentBoardMeta?.scope || effectiveScope)}
+        boardTitle={settingsTargetBoard?.title || currentBoardMeta?.title || 'Доска'}
+        onClearBoard={() => {
+          let count = 0;
+          boardDoc.transact(() => {
+            yNodes.forEach((nodeMap) => {
+              if (!nodeMap.get('locked') && !nodeMap.get('deleted')) {
+                nodeMap.set('deleted', true);
+                nodeMap.set('deletedAt', Date.now());
+                count++;
+              }
+            });
+          }, 'clear-board');
+          if (count > 0) {
+            showToast(`Холст очищен (${count} объектов удалено, нажмите Ctrl+Z для отмены)`, 'info');
+          } else {
+            showToast('Холст уже пуст', 'info');
+          }
+        }}
+        onSeedTemplate={() => {
+          seedDefaultBoard(boardDoc, agentStatus.value?.memberName || 'Вы');
+          showToast('Шаблон задач загружен на доску', 'success');
+        }}
       />
 
       <AutoDiagramModal

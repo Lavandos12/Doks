@@ -298,19 +298,25 @@ test.describe('F12: Playwright E2E Scenarios for Doks', () => {
 
   test('Scenario 7: Scope Switcher & Cross-Scope Bridge Promotion', async ({ page }) => {
     await page.goto(`http://127.0.0.1:${port1}`);
-
-    // Verify scope switcher pill exists
-    const soloBtn = page.locator('.scope-pill-btn.solo, .scope-pill-btn:has-text("Моя доска"), .scope-pill-btn:has-text("Соло")').first();
-    const teamBtn = page.locator('.scope-pill-btn.team, .scope-pill-btn:has-text("Общая доска"), .scope-pill-btn:has-text("Команда")').first();
-    await expect(soloBtn).toBeVisible();
-    await expect(teamBtn).toBeVisible();
-
-    // Switch to Solo
-    await soloBtn.click();
-    await expect(soloBtn).toHaveClass(/active/);
-
-    // Open board in Solo
     await openBoard(page);
+
+    // Verify scope pill badge exists in top bar
+    const scopePill = page.locator('.miro-scope-status-pill').first();
+    await expect(scopePill).toBeVisible();
+
+    // Verify board selector opens unified boards popover
+    const boardSelectorBtn = page.locator('.miro-board-selector-btn').first();
+    await boardSelectorBtn.click();
+    const boardsPopover = page.locator('.miro-boards-popover').first();
+    await expect(boardsPopover).toBeVisible();
+
+    // Select or ensure Solo board is active
+    const soloBoardItem = page.locator('.miro-board-item:has(.miro-scope-tag.solo), .miro-board-item:has-text("Личная"), .miro-board-item:has-text("Черновик"), .miro-board-item:has-text("Моя первая доска")').first();
+    if (await soloBoardItem.isVisible()) {
+      await soloBoardItem.click();
+    } else {
+      await boardSelectorBtn.click(); // close popover
+    }
 
     // Create a sticky note
     await page.click('button[title*="Стикер"]');
@@ -334,9 +340,13 @@ test.describe('F12: Playwright E2E Scenarios for Doks', () => {
     const toast = page.locator('.toast-card').first();
     await expect(toast).toContainText('Отправлено на Общую доску');
 
-    // Switch to Team Scope and verify transferred sticky note is present on Team board
-    await teamBtn.click();
-    await expect(teamBtn).toHaveClass(/active/);
+    // Switch to Team Board via unified board popover
+    await boardSelectorBtn.click();
+    await expect(boardsPopover).toBeVisible();
+    const teamBoardItem = page.locator('.miro-board-item:has(.miro-scope-tag.team), .miro-board-item:has-text("Общая")').first();
+    await teamBoardItem.click();
+
+    // Verify transferred sticky note is present on Team board
     const teamNodeTextarea = page.locator('.board-node-box .node-inline-textarea').first();
     await expect(teamNodeTextarea).toHaveValue('Приватная идея для переноса');
   });
