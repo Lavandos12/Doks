@@ -10,6 +10,7 @@ import {
   isSplitView,
   openTabs,
   boards,
+  allBoards,
   theme,
   isImportWizardOpen,
   agentStatus,
@@ -76,7 +77,19 @@ export function App() {
   // Fallback board ID if no tab is currently selected
   const activeBoardId = activeTab?.type === 'board'
     ? activeTab.id
-    : (boards.value.find((b) => !b.deleted)?.id || 'default');
+    : (allBoards.value.find((b) => !b.deleted)?.id || boards.value.find((b) => !b.deleted)?.id || 'default');
+
+  const currentBoard = allBoards.value.find((b) => b.id === activeBoardId) || boards.value.find((b) => b.id === activeBoardId);
+  const openBoardTitle = (currentBoard?.title || (activeTab?.type === 'board' ? activeTab.title : '') || '').trim();
+
+  // Dynamically update document title to show Doks and open board title
+  useEffect(() => {
+    if (openBoardTitle) {
+      document.title = `Doks — ${openBoardTitle}`;
+    } else {
+      document.title = 'Doks';
+    }
+  }, [openBoardTitle]);
 
   const handleDropNoteToCanvas = (noteId: string, title: string, text: string) => {
     // Notify user; BoardCanvas will capture or we can dispatch a custom event

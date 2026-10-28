@@ -181,7 +181,7 @@ namespace DoksLauncher
 
             trayIcon = new NotifyIcon();
             trayIcon.Icon = CreateBrandIcon();
-            trayIcon.Text = "Doks — Совместные заметки и доска";
+            trayIcon.Text = "Doks";
             trayIcon.ContextMenu = menu;
             trayIcon.Visible = true;
             trayIcon.DoubleClick += (s, e) => OpenUrl(webUrl);

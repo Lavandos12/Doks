@@ -704,6 +704,14 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
     return allBoards.value.find((b) => b.id === boardId) || boards.value.find((b) => b.id === boardId);
   }, [allBoards.value, boards.value, boardId]);
 
+  // Dynamically synchronize document title with open board title
+  useEffect(() => {
+    const title = currentBoardMeta?.title?.trim();
+    if (title) {
+      document.title = `Doks — ${title}`;
+    }
+  }, [currentBoardMeta?.title]);
+
   // Undo manager
   const undoManagerRef = useRef<Y.UndoManager | null>(null);
 
