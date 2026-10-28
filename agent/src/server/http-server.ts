@@ -34,7 +34,8 @@ import {
   applyTextDelta,
   type WorkspaceScope,
   generateAiContext,
-  type AiExportOptions
+  type AiExportOptions,
+  boardToJSONCanvas
 } from '@doks/shared';
 import { DocManager } from '../storage/doc-manager.js';
 import { PeerService } from '../peer/peer-service.js';
@@ -680,7 +681,8 @@ export class AgentHttpServer {
       const info = this.attachmentManager.saveAttachment(buffer, originalName);
 
       try {
-        const indexDoc = this.docManager.getOrCreateDoc(DOC_INDEX);
+        const scope = ((req.query as any)?.scope === 'solo' ? 'solo' : 'team') as WorkspaceScope;
+        const indexDoc = this.docManager.getOrCreateDoc(getScopedIndexDocName(scope));
         const { attachments } = getIndexMaps(indexDoc);
         attachments.set(info.hash, {
           hash: info.hash,
@@ -689,7 +691,8 @@ export class AgentHttpServer {
           mime: info.mimeType,
           addedBy: this.config.memberName,
           addedAt: Date.now(),
-          deleted: false
+          deleted: false,
+          scope
         });
       } catch (err) {
         console.error('[HttpServer] Failed to index attachment in Yjs:', err);
@@ -906,6 +909,10 @@ export class AgentHttpServer {
         }
       }
 
+      if (req.headers['x-as-board'] === 'true' || req.headers['x-as-board'] === '1') {
+        asBoard = true;
+      }
+
       if (Buffer.isBuffer(req.body)) {
         const ext = path.extname(fileName).toLowerCase();
         if (ext === '.docx') {
@@ -1113,41 +1120,27 @@ export class AgentHttpServer {
 
       const boardDoc = this.docManager.getOrCreateDoc(getScopedBoardDocName(scope, id));
       const { nodes, edges } = getBoardMaps(boardDoc);
-      const canvasNodes: any[] = [];
-      const canvasEdges: any[] = [];
+      const activeNodes: any[] = [];
+      const activeEdges: any[] = [];
 
       nodes.forEach((nodeMap, nodeId) => {
         const data = nodeMapToData(nodeId, nodeMap);
         if (!data.deleted) {
-          canvasNodes.push({
-            id: data.id,
-            type: data.type === 'note' ? 'file' : data.type,
-            x: data.x,
-            y: data.y,
-            width: data.w,
-            height: data.h,
-            text: data.text,
-            color: data.color,
-            author: data.author,
-            done: data.done
-          });
+          activeNodes.push(data);
         }
       });
 
       edges.forEach((edgeData, edgeId) => {
         if (!edgeData.deleted) {
-          canvasEdges.push({
-            id: edgeId,
-            fromNode: edgeData.from,
-            toNode: edgeData.to,
-            fromSide: edgeData.fromSide,
-            toSide: edgeData.toSide,
-            label: edgeData.label
+          activeEdges.push({
+            ...edgeData,
+            id: edgeData.id || edgeId
           });
         }
       });
 
-      const canvasJson = JSON.stringify({ nodes: canvasNodes, edges: canvasEdges }, null, 2);
+      const canvasObj = boardToJSONCanvas(activeNodes, activeEdges);
+      const canvasJson = JSON.stringify(canvasObj, null, 2);
       const safeTitle = encodeURIComponent(meta.title || 'board');
       reply.header('Content-Type', 'application/json; charset=utf-8');
       reply.header('Content-Disposition', `attachment; filename="${safeTitle}.canvas"`);

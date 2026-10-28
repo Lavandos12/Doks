@@ -255,7 +255,7 @@ export function NoteEditor({ noteId }: NoteEditorProps) {
       const buffer = await file.arrayBuffer();
       const fileName = file.name || 'screenshot.png';
       const fileType = file.type || 'image/png';
-      const res = await api.fetch('/api/attachments', {
+      const res = await api.fetch(`/api/attachments?scope=${encodeURIComponent(currentScope.value)}`, {
         method: 'POST',
         headers: {
           'Content-Type': fileType,

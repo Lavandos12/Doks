@@ -1,7 +1,8 @@
 import { h } from 'preact';
 import { useState, useRef } from 'preact/hooks';
 import { Icon } from '../../ui/icons.js';
-import { openTab } from '../../state/app-state.js';
+import { openTab, currentScope } from '../../state/app-state.js';
+import { api } from '../../api/client.js';
 
 interface ImportWizardModalProps {
   isOpen: boolean;
@@ -61,11 +62,12 @@ export function ImportWizardModal({ isOpen, onClose }: ImportWizardModalProps) {
     for (const item of stagedFiles) {
       try {
         const buffer = await item.file.arrayBuffer();
-        const res = await fetch('/api/import/file', {
+        const res = await api.fetch(`/api/import/file?scope=${encodeURIComponent(currentScope.value)}`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/octet-stream',
-            'x-file-name': encodeURIComponent(item.name)
+            'x-file-name': encodeURIComponent(item.name),
+            'x-as-board': item.targetType === 'board' ? 'true' : 'false'
           },
           body: buffer
         });

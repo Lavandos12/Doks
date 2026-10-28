@@ -23,6 +23,7 @@ import {
 } from '../../state/app-state.js';
 import { getScopedBoardDocName, getBoardMaps, nodeMapToData } from '@doks/shared';
 import { Icon, type IconName } from '../../ui/icons.js';
+import { api } from '../../api/client.js';
 
 interface PaletteItem {
   id: string;
@@ -216,13 +217,23 @@ export function CommandPalette() {
         }
       },
       {
+        id: 'cmd-history-trash',
+        title: 'История снимков и Корзина',
+        subtitle: 'Контрольные точки версий и восстановление',
+        icon: 'history',
+        action: () => {
+          window.dispatchEvent(new CustomEvent('doks:open-history'));
+          close();
+        }
+      },
+      {
         id: 'cmd-create-snapshot',
         title: 'Создать резервную копию (снимок)',
         subtitle: 'Мгновенный снимок всех документов',
         icon: 'history',
         action: async () => {
           try {
-            await fetch('/api/snapshots', { method: 'POST' });
+            await api.fetch('/api/snapshots', { method: 'POST' });
           } catch {}
           close();
         }

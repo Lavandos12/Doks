@@ -14,6 +14,7 @@ const AUTHOR_COLORS = [
 
 import { showConfirm, showPrompt } from '../../ui/dialogs.js';
 import { showToast } from '../../ui/toast.js';
+import { api } from '../../api/client.js';
 
 export function NetworkScreen() {
   const [status, setStatus] = useState<any>(null);
@@ -28,7 +29,7 @@ export function NetworkScreen() {
 
   const fetchStatus = async () => {
     try {
-      const res = await fetch('/api/status');
+      const res = await api.fetch('/api/status');
       if (res.ok) {
         const data = await res.json();
         setStatus(data);
@@ -49,7 +50,7 @@ export function NetworkScreen() {
   const handleSaveProfile = async () => {
     if (!editName.trim()) return;
     try {
-      const res = await fetch('/api/profile', {
+      const res = await api.fetch('/api/profile', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -68,7 +69,7 @@ export function NetworkScreen() {
     if (!newPeerAddr.trim()) return;
     setLoading(true);
     try {
-      await fetch('/api/peers', {
+      await api.fetch('/api/peers', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ address: newPeerAddr.trim() })
@@ -83,7 +84,7 @@ export function NetworkScreen() {
 
   const handleRemovePeer = async (address: string) => {
     try {
-      await fetch('/api/peers', {
+      await api.fetch('/api/peers', {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ address })
@@ -234,7 +235,7 @@ export function NetworkScreen() {
                   if (newKey !== null) {
                     const generatedKey = newKey.trim() || Array.from(crypto.getRandomValues(new Uint8Array(32))).map(b => b.toString(16).padStart(2, '0')).join('');
                     if (generatedKey.length === 64) {
-                      await fetch('/api/team-key', {
+                      await api.fetch('/api/team-key', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ teamKey: generatedKey })

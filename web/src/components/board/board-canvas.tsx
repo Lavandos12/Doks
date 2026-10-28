@@ -36,7 +36,7 @@ import {
   theme
 } from '../../state/app-state.js';
 import { NoteEditor } from '../notes/editor.js';
-import { NetworkPopover } from '../layout/network-popover.js';
+import { api } from '../../api/client.js';
 import { CanvasEdgesLayer, type CanvasEdgeModel } from '../CanvasEdgesLayer.js';
 import { useCanvasDropZone } from '../../hooks/useCanvasDropZone.js';
 import { seedDefaultBoard } from './board-seed.js';
@@ -489,7 +489,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
   const [activeFlyout, setActiveFlyout] = useState<'none' | 'sticky' | 'shape' | 'arrow' | 'draw' | 'widgets'>('none');
   const [isBoardsPopoverOpen, setIsBoardsPopoverOpen] = useState(false);
   const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
-  const [isNetworkPopoverOpen, setIsNetworkPopoverOpen] = useState(false);
+  // network popover centralized in App
   const [selectedShapeVariant, setSelectedShapeVariant] = useState<'rectangle' | 'rounded' | 'circle' | 'diamond' | 'triangle' | 'parallelogram' | 'cylinder' | 'hexagon'>('rectangle');
   const [defaultLineStyle, setDefaultLineStyle] = useState<{ curveType: 'bezier' | 'orthogonal' | 'straight'; style: 'solid' | 'dashed'; color: string }>({
     curveType: 'bezier',
@@ -576,6 +576,8 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
   // Exact cursor canvas coordinates for paste
   const lastMouseCanvasPosRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const lastPasteTimeRef = useRef<number>(0);
+  const lastInternalCopyTimeRef = useRef<number>(0);
+  const pendingConnectFromRef = useRef<{ fromNodeId: string; fromSide?: PortSide } | null>(null);
 
   // Dynamic edge reconnection dragging state
   const [reconnectEdgeState, setReconnectEdgeState] = useState<{
@@ -623,9 +625,9 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
 
   const handleExportSvg = () => {
     setIsExportMenuOpen(false);
-    const targetNodes = nodesList.filter((n) => !n.deleted && n.type !== 'drawing');
-    const allValid = targetNodes.length > 0 ? targetNodes : nodesList.filter((n) => !n.deleted);
-    if (allValid.length === 0) {
+    const allValid = nodesList.filter((n) => !n.deleted);
+    const validEdges = edgesList.filter((e) => !e.deleted);
+    if (allValid.length === 0 && validEdges.length === 0) {
       showToast('На доске нет объектов для экспорта');
       return;
     }
@@ -636,12 +638,37 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
       maxX = Math.max(maxX, n.x + n.w);
       maxY = Math.max(maxY, n.y + n.h);
     }
+    if (minX === Infinity) { minX = 0; minY = 0; maxX = 400; maxY = 300; }
     const pad = 40;
     const w = Math.max(200, maxX - minX + pad * 2);
     const h = Math.max(200, maxY - minY + pad * 2);
+
+    const edgesSvg = validEdges.map((e) => {
+      const fn = nodeLookup.get(e.from);
+      const tn = nodeLookup.get(e.to);
+      if (!fn || !tn) return '';
+      const p1 = getPortCoord(fn, e.fromSide || 'right');
+      const p2 = getPortCoord(tn, e.toSide || 'left');
+      const edgeColor = e.color || '#818cf8';
+      return `<path d="M ${p1.x} ${p1.y} C ${p1.x + 50} ${p1.y}, ${p2.x - 50} ${p2.y}, ${p2.x} ${p2.y}" fill="none" stroke="${edgeColor}" stroke-width="2" />`;
+    }).filter(Boolean).join('\n');
+
+    const nodesSvg = allValid.map((n) => {
+      if (n.type === 'drawing') {
+        const pathData = n.svgPath || '';
+        if (!pathData) return '';
+        const color = n.color || '#818cf8';
+        return `<g transform="translate(${n.x}, ${n.y})"><path d="${pathData}" fill="none" stroke="${color}" stroke-width="${n.strokeWidth || 4}" stroke-linecap="round" stroke-linejoin="round" /></g>`;
+      }
+      const color = CANVAS_COLORS[n.color || ''] || '#6366f1';
+      const safeText = (n.text || '').replace(/[<>&]/g, '');
+      return `<g><rect x="${n.x}" y="${n.y}" width="${n.w}" height="${n.h}" rx="8" fill="#181b24" stroke="${color}" stroke-width="2" /><text x="${n.x + 12}" y="${n.y + 24}" fill="#f1f5f9" font-size="14">${safeText}</text></g>`;
+    }).join('\n');
+
     const svgContent = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${minX - pad} ${minY - pad} ${w} ${h}" width="${w}" height="${h}" style="background:#090a0f;">
       <style>text { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }</style>
-      ${allValid.map((n) => `<rect x="${n.x}" y="${n.y}" width="${n.w}" height="${n.h}" rx="8" fill="#181b24" stroke="${CANVAS_COLORS[n.color || ''] || '#6366f1'}" stroke-width="2" /><text x="${n.x + 12}" y="${n.y + 24}" fill="#f1f5f9" font-size="14">${(n.text || '').replace(/[<>&]/g, '')}</text>`).join('\n')}
+      ${edgesSvg}
+      ${nodesSvg}
     </svg>`;
     const blob = new Blob([svgContent], { type: 'image/svg+xml;charset=utf-8' });
     const url = URL.createObjectURL(blob);
@@ -848,25 +875,10 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
 
     awareness.on('change', updateAwareness);
 
-    // Global listener to focus specific node from search / command palette
-    const handleFocusNode = (e: CustomEvent<{ nodeId: string }>) => {
-      const target = nodeLookup.get(e.detail.nodeId);
-      if (target && containerRef.current) {
-        setSelectedNodeIds(new Set([target.id]));
-        const rect = containerRef.current.getBoundingClientRect();
-        const targetZoom = 1.0;
-        const newX = rect.width / 2 - (target.x + target.w / 2) * targetZoom;
-        const newY = rect.height / 2 - (target.y + target.h / 2) * targetZoom;
-        animateToViewport({ x: newX, y: newY, zoom: targetZoom }, false);
-      }
-    };
-    window.addEventListener('doks-focus-node' as any, handleFocusNode);
-
     return () => {
       yNodes.unobserveDeep(updateState);
       yEdges.unobserve(updateState);
       awareness.off('change', updateAwareness);
-      window.removeEventListener('doks-focus-node' as any, handleFocusNode);
     };
   }, [docName]);
 
@@ -878,7 +890,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
         !node.extractedText &&
         (node.fileName || '').match(/\.(docx|txt|md|csv|json|js|ts|py|html|css|pdf)$/i)
       ) {
-        fetch(`/api/attachments/${node.fileHash}/content`)
+        api.fetch(`/api/attachments/${node.fileHash}/content`)
           .then((res) => (res.ok ? res.json() : null))
           .then((data) => {
             if (data?.extractedText) {
@@ -1299,6 +1311,10 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
       nodes: selectedNodes,
       edges: connectedEdges
     };
+    lastInternalCopyTimeRef.current = Date.now();
+    if (typeof navigator !== 'undefined' && navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+      navigator.clipboard.writeText('__DOKS_INTERNAL_NODES__').catch(() => {});
+    }
     showToast(`Скопировано: ${selectedNodes.length} эл.`);
   };
 
@@ -1356,27 +1372,33 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
         ? lastMouseCanvasPosRef.current
         : screenToCanvas(window.innerWidth / 2, window.innerHeight / 2);
 
-    // 1. Check if system clipboard has an image (async Clipboard API)
-    if (typeof navigator !== 'undefined' && navigator.clipboard && typeof navigator.clipboard.read === 'function') {
-      try {
-        const items = await navigator.clipboard.read();
-        for (const item of items) {
-          const imgType = item.types.find((t) => t.startsWith('image/'));
-          if (imgType) {
-            const blob = await item.getType(imgType);
-            const file = new File([blob], 'screenshot.png', { type: imgType });
-            await handleUploadFileToBoard(file, targetPos.x, targetPos.y);
-            return;
+    // If internal Doks clipboard has items and was copied recently, prioritize it over stale OS images!
+    const { nodes: clipNodes, edges: clipEdges } = clipboardRef.current;
+    const isRecentInternalCopy = clipNodes.length > 0 && (Date.now() - lastInternalCopyTimeRef.current < 120000);
+
+    if (!isRecentInternalCopy) {
+      // 1. Check if system clipboard has an image (async Clipboard API)
+      if (typeof navigator !== 'undefined' && navigator.clipboard && typeof navigator.clipboard.read === 'function') {
+        try {
+          const items = await navigator.clipboard.read();
+          for (const item of items) {
+            const imgType = item.types.find((t) => t.startsWith('image/'));
+            if (imgType) {
+              const blob = await item.getType(imgType);
+              const file = new File([blob], 'screenshot.png', { type: imgType });
+              await handleUploadFileToBoard(file, targetPos.x, targetPos.y);
+              return;
+            }
           }
+        } catch {
+          // Proceed to internal clipboard if permission denied or unavailable
         }
-      } catch {
-        // Proceed to internal clipboard if permission denied or unavailable
       }
     }
 
     // 2. Check internal Doks clipboard (nodes + edges)
-    const { nodes: clipNodes, edges: clipEdges } = clipboardRef.current;
     if (clipNodes.length > 0) {
+      lastInternalCopyTimeRef.current = Date.now();
       let offsetX = 28;
       let offsetY = 28;
 
@@ -1595,7 +1617,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
         w: defaultW,
         h: defaultH,
         text: defaultText,
-        color: (type === 'sticky' || isKanban) ? color : 'default',
+        color: (type === 'sticky' || isKanban || type === 'shape') ? color : 'default',
         author: agentStatus.value?.memberName || 'Вы',
         done: false,
         z: isFrame ? 0 : 1,
@@ -1646,6 +1668,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
 
     setSelectedNodeIds(new Set([id]));
     setActiveTool('select');
+    return id;
   };
 
   // Checklist helpers
@@ -1797,7 +1820,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
       const buffer = await file.arrayBuffer();
       const fileName = file.name || 'screenshot.png';
       const fileType = file.type || 'image/png';
-      const res = await fetch(`/api/attachments?scope=${encodeURIComponent(currentScope.value)}`, {
+      const res = await api.fetch(`/api/attachments?scope=${encodeURIComponent(currentScope.value)}`, {
         method: 'POST',
         headers: {
           'Content-Type': fileType,
@@ -1902,6 +1925,20 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
     const handleWindowPaste = async (e: ClipboardEvent) => {
       lastPasteTimeRef.current = Date.now();
 
+      // Check if internal Doks nodes were copied
+      const textPlain = e.clipboardData?.getData('text/plain');
+      const isInternalExplicit = textPlain === '__DOKS_INTERNAL_NODES__' || (clipboardRef.current.nodes.length > 0 && Date.now() - lastInternalCopyTimeRef.current < 120000);
+
+      if (isInternalExplicit && clipboardRef.current.nodes.length > 0) {
+        e.preventDefault();
+        e.stopPropagation();
+        const targetPos = (lastMouseCanvasPosRef.current && lastMouseCanvasPosRef.current.x !== 0)
+          ? lastMouseCanvasPosRef.current
+          : screenToCanvas(window.innerWidth / 2, window.innerHeight / 2);
+        pasteClipboard(targetPos.x, targetPos.y);
+        return;
+      }
+
       // 1. If clipboard contains an image (screenshot or copied picture), handle it immediately!
       const items = e.clipboardData?.items;
       if (items && items.length > 0) {
@@ -1973,18 +2010,19 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
       }
     };
 
-    const handleOpenNetwork = () => {
-      setIsNetworkPopoverOpen(true);
-    };
+    const handleExportJsonEvent = () => handleExportJsonCanvas();
+    const handleExportSvgEvent = () => handleExportSvg();
 
     window.addEventListener('doks:drop-note', handleDropNoteEvent);
     window.addEventListener('doks-focus-node', handleFocusNode);
-    window.addEventListener('doks:open-network', handleOpenNetwork);
+    window.addEventListener('doks:export-json', handleExportJsonEvent);
+    window.addEventListener('doks:export-svg', handleExportSvgEvent);
     window.addEventListener('paste', handleWindowPaste);
     return () => {
       window.removeEventListener('doks:drop-note', handleDropNoteEvent);
       window.removeEventListener('doks-focus-node', handleFocusNode);
-      window.removeEventListener('doks:open-network', handleOpenNetwork);
+      window.removeEventListener('doks:export-json', handleExportJsonEvent);
+      window.removeEventListener('doks:export-svg', handleExportSvgEvent);
       window.removeEventListener('paste', handleWindowPaste);
     };
   }, [boardDoc, yNodes, viewport, nodeLookup, containerSize]);
@@ -2002,7 +2040,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
       yNodes.set(newId, nodeMap);
       setNodeProperties(nodeMap, {
         id: newId,
-        type: sourceNode.type === 'shape' ? 'shape' : sourceNode.type === 'note' ? 'note' : 'sticky',
+        type: sourceNode.type === 'shape' ? 'shape' : 'sticky',
         shapeVariant: sourceNode.shapeVariant,
         x: Math.round(newX),
         y: Math.round(newY),
@@ -2579,12 +2617,12 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
             yNodes.set(newId, nodeMap);
             setNodeProperties(nodeMap, {
               id: newId,
-              type: fromNode.type === 'shape' ? 'shape' : fromNode.type === 'note' ? 'note' : 'sticky',
+              type: fromNode.type === 'shape' ? 'shape' : 'sticky',
               shapeVariant: fromNode.shapeVariant,
               x: Math.round(newX),
               y: Math.round(newY),
-              w: fromNode.type === 'shape' ? (fromNode.w || 200) : (fromNode.type === 'note' ? (fromNode.w || 280) : 200),
-              h: fromNode.type === 'shape' ? (fromNode.h || 130) : (fromNode.type === 'note' ? (fromNode.h || 200) : 130),
+              w: fromNode.type === 'shape' ? (fromNode.w || 200) : 200,
+              h: fromNode.type === 'shape' ? (fromNode.h || 130) : 130,
               text: '',
               color: fromNode.color || activeColor,
               z: 10,
@@ -3176,6 +3214,19 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
             <span>Команда</span>
           </button>
         </div>
+
+        {/* Export Dropdown Button */}
+        <button
+          class={`miro-board-switcher-btn miro-export-toggle-btn ${isExportMenuOpen ? 'active' : ''}`}
+          onClick={() => {
+            setIsExportMenuOpen(!isExportMenuOpen);
+            setIsBoardsPopoverOpen(false);
+          }}
+          title="Экспорт доски (.canvas, .svg, .zip, ИИ)"
+        >
+          <Icon name="download" size={14} />
+          <span>Экспорт</span>
+        </button>
 
         {/* Boards & Templates Dropdown Popover */}
         {isBoardsPopoverOpen && (
@@ -4122,6 +4173,58 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
             onClick={toggleLockSelected}
           >
             <Icon name="lock" size={15} />
+          </button>
+
+          {/* Bring to Front / Send to Back */}
+          <button
+            class="inspector-btn"
+            title="На передний план"
+            onClick={() => {
+              const maxZ = Math.max(...nodesList.map((n) => n.z || 1), 1) + 1;
+              boardDoc.transact(() => {
+                for (const id of selectedNodeIds) {
+                  const map = yNodes.get(id);
+                  if (map) map.set('z', maxZ);
+                }
+              }, 'user');
+            }}
+          >
+            <Icon name="layers" size={15} />
+          </button>
+          <button
+            class="inspector-btn"
+            title="На задний план"
+            onClick={() => {
+              const minZ = Math.min(...nodesList.map((n) => n.z || 1), 1) - 1;
+              boardDoc.transact(() => {
+                for (const id of selectedNodeIds) {
+                  const map = yNodes.get(id);
+                  if (map) map.set('z', Math.max(0, minZ));
+                }
+              }, 'user');
+            }}
+          >
+            <Icon name="arrow-down" size={15} />
+          </button>
+
+          {/* Reaction */}
+          <button
+            class="inspector-btn"
+            title="Добавить реакцию"
+            onClick={() => {
+              boardDoc.transact(() => {
+                for (const id of selectedNodeIds) {
+                  const map = yNodes.get(id);
+                  if (map) {
+                    const n = nodeLookup.get(id);
+                    const currentCount = n?.reactions?.thumbsUp || 0;
+                    map.set('reactions', { thumbsUp: currentCount + 1 });
+                  }
+                }
+              }, 'user');
+            }}
+          >
+            <Icon name="sparkles" size={15} />
           </button>
 
           {/* Duplicate */}
@@ -5481,6 +5584,43 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
                   ))}
                 </div>
               )}
+
+              {/* Node Reaction Badge */}
+              {Boolean(node.reactions && (node.reactions.thumbsUp || 0) > 0) && (
+                <div
+                  class="node-reaction-badge"
+                  style={{
+                    position: 'absolute',
+                    bottom: '-10px',
+                    right: '8px',
+                    background: 'rgba(30, 41, 59, 0.95)',
+                    border: '1px solid rgba(255, 255, 255, 0.15)',
+                    borderRadius: '12px',
+                    padding: '2px 8px',
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    color: '#fbbf24',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    zIndex: 15,
+                    cursor: 'pointer',
+                    boxShadow: '0 2px 6px rgba(0,0,0,0.3)',
+                    userSelect: 'none'
+                  }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const map = yNodes.get(node.id);
+                    if (map) {
+                      map.set('reactions', { thumbsUp: (node.reactions?.thumbsUp || 0) + 1 });
+                    }
+                  }}
+                  title="Реакция (+1)"
+                >
+                  <Icon name="sparkles" size={12} />
+                  <span>{node.reactions?.thumbsUp}</span>
+                </div>
+              )}
             </div>
           );
         })}
@@ -5628,6 +5768,10 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
           <button
             class="quick-connect-btn"
             onClick={() => {
+              pendingConnectFromRef.current = {
+                fromNodeId: quickConnect.fromNodeId,
+                fromSide: quickConnect.fromSide
+              };
               setPickerPos({ x: quickConnect.canvasX, y: quickConnect.canvasY });
               setIsNotePickerOpen(true);
               setQuickConnect(null);
@@ -5748,13 +5892,32 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
 
       <NotePickerModal
         isOpen={isNotePickerOpen}
-        onClose={() => setIsNotePickerOpen(false)}
+        onClose={() => {
+          setIsNotePickerOpen(false);
+          pendingConnectFromRef.current = null;
+        }}
         onSelectNote={(noteId) => {
           const pos = pickerPos || {
             x: (window.innerWidth / 2 - viewport.x) / viewport.zoom,
             y: (window.innerHeight / 2 - viewport.y) / viewport.zoom
           };
-          createNoteCardAt(noteId, pos.x, pos.y);
+          const newNodeId = createNoteCardAt(noteId, pos.x, pos.y);
+          if (pendingConnectFromRef.current && newNodeId) {
+            const edgeId = crypto.randomUUID();
+            yEdges.set(edgeId, {
+              id: edgeId,
+              from: pendingConnectFromRef.current.fromNodeId,
+              to: newNodeId,
+              fromSide: pendingConnectFromRef.current.fromSide || 'right',
+              toSide: 'left',
+              direction: 'forward',
+              style: defaultLineStyle.style,
+              curveType: defaultLineStyle.curveType,
+              color: defaultLineStyle.color,
+              deleted: false
+            });
+            pendingConnectFromRef.current = null;
+          }
           setIsNotePickerOpen(false);
         }}
       />
@@ -5773,11 +5936,6 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false }:
         onGenerate={handleGenerateAutoDiagram}
         defaultOriginX={Math.round((window.innerWidth / 2 - viewport.x) / viewport.zoom)}
         defaultOriginY={Math.round((window.innerHeight / 2 - viewport.y) / viewport.zoom)}
-      />
-
-      <NetworkPopover
-        isOpen={isNetworkPopoverOpen}
-        onClose={() => setIsNetworkPopoverOpen(false)}
       />
 
 

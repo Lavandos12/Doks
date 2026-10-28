@@ -3,6 +3,7 @@ import path from 'node:path';
 import * as Y from 'yjs';
 import {
   DOC_INDEX,
+  getScopedIndexDocName,
   getIndexMaps,
   getBoardMaps,
   isBoardDoc,
@@ -204,31 +205,35 @@ export class SnapshotManager {
    */
   public cleanupTrash(maxAgeDays = 30): void {
     const cutoffTime = Date.now() - maxAgeDays * 24 * 60 * 60 * 1000;
-    const indexDoc = this.docManager.getOrCreateDoc(DOC_INDEX);
-    const { notes, boards, folders } = getIndexMaps(indexDoc);
+    const targetDocNames = [DOC_INDEX, getScopedIndexDocName('solo'), getScopedIndexDocName('team')];
 
-    indexDoc.transact(() => {
-      // Clean up notes
-      notes.forEach((meta, id) => {
-        if (meta.deleted && meta.deletedAt && meta.deletedAt < cutoffTime) {
-          notes.delete(id);
-        }
-      });
+    for (const docName of targetDocNames) {
+      const indexDoc = this.docManager.getOrCreateDoc(docName);
+      const { notes, boards, folders } = getIndexMaps(indexDoc);
 
-      // Clean up boards
-      boards.forEach((meta, id) => {
-        if (meta.deleted && meta.deletedAt && meta.deletedAt < cutoffTime) {
-          boards.delete(id);
-        }
-      });
+      indexDoc.transact(() => {
+        // Clean up notes
+        notes.forEach((meta, id) => {
+          if (meta.deleted && meta.deletedAt && meta.deletedAt < cutoffTime) {
+            notes.delete(id);
+          }
+        });
 
-      // Clean up folders
-      folders.forEach((meta, id) => {
-        if (meta.deleted && meta.deletedAt && meta.deletedAt < cutoffTime) {
-          folders.delete(id);
-        }
+        // Clean up boards
+        boards.forEach((meta, id) => {
+          if (meta.deleted && meta.deletedAt && meta.deletedAt < cutoffTime) {
+            boards.delete(id);
+          }
+        });
+
+        // Clean up folders
+        folders.forEach((meta, id) => {
+          if (meta.deleted && meta.deletedAt && meta.deletedAt < cutoffTime) {
+            folders.delete(id);
+          }
+        });
       });
-    });
+    }
 
     // Clean up nodes in boards
     for (const docName of this.docManager.getAllDocNames()) {

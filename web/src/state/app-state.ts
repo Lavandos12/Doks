@@ -3,6 +3,7 @@ import type {
   NoteMeta,
   BoardMeta,
   FolderMeta,
+  AttachmentMeta,
   WorkspaceScope,
   BridgeTransferRequest,
   BridgeTransferResponse
@@ -73,6 +74,7 @@ export const searchQuery = signal<string>('');
 export const notes = signal<NoteMeta[]>([]);
 export const boards = signal<BoardMeta[]>([]);
 export const folders = signal<FolderMeta[]>([]);
+export const attachments = signal<AttachmentMeta[]>([]);
 
 // Tabs & Split View
 export const openTabs = signal<TabItem[]>([]);
@@ -194,6 +196,14 @@ function syncIndexSignals() {
   });
   folders.value = folderList;
 
+  const attList: AttachmentMeta[] = [];
+  if (activeMaps.attachments) {
+    activeMaps.attachments.forEach((val) => {
+      attList.push(val);
+    });
+  }
+  attachments.value = attList;
+
   // Sync tab titles if doc renamed
   const updatedTabs = openTabs.value.map((tab) => {
     if (tab.type === 'note') {
@@ -258,10 +268,12 @@ function syncIndexSignals() {
 soloMaps.notes.observe(() => syncIndexSignals());
 soloMaps.boards.observe(() => syncIndexSignals());
 soloMaps.folders.observe(() => syncIndexSignals());
+soloMaps.attachments.observe(() => syncIndexSignals());
 
 teamMaps.notes.observe(() => syncIndexSignals());
 teamMaps.boards.observe(() => syncIndexSignals());
 teamMaps.folders.observe(() => syncIndexSignals());
+teamMaps.attachments.observe(() => syncIndexSignals());
 
 syncIndexSignals();
 
@@ -362,10 +374,14 @@ export function createNote(title = 'Новая заметка', folder: string |
   return id;
 }
 
-export function createBoard(title = 'Новая доска', folder: string | null = null): string {
-  const scope = currentScope.value;
-  const activeDoc = getActiveIndexDoc();
-  const activeMaps = getActiveMaps();
+export function createBoard(
+  title = 'Новая доска',
+  folder: string | null = null,
+  scope: WorkspaceScope = currentScope.value,
+  shouldOpenTab = true
+): string {
+  const targetDoc = scope === 'solo' ? soloIndexDoc : teamIndexDoc;
+  const targetMaps = scope === 'solo' ? soloMaps : teamMaps;
   const id = crypto.randomUUID();
   const meta: BoardMeta = {
     id,
@@ -377,11 +393,13 @@ export function createBoard(title = 'Новая доска', folder: string | nu
     scope
   };
 
-  activeDoc.transact(() => {
-    activeMaps.boards.set(id, meta);
+  targetDoc.transact(() => {
+    targetMaps.boards.set(id, meta);
   });
 
-  openTab('board', id, title);
+  if (shouldOpenTab && scope === currentScope.value) {
+    openTab('board', id, title);
+  }
   return id;
 }
 
@@ -502,6 +520,19 @@ export function restoreNote(id: string): void {
   const existing = activeMaps.notes.get(id);
   if (existing) {
     activeMaps.notes.set(id, {
+      ...existing,
+      deleted: false,
+      deletedAt: undefined,
+      updatedAt: Date.now()
+    });
+  }
+}
+
+export function restoreBoard(id: string): void {
+  const activeMaps = getActiveMaps();
+  const existing = activeMaps.boards.get(id);
+  if (existing) {
+    activeMaps.boards.set(id, {
       ...existing,
       deleted: false,
       deletedAt: undefined,

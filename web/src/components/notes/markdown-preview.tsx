@@ -1,5 +1,5 @@
 import { h, VNode } from 'preact';
-import { openTab, notes } from '../../state/app-state.js';
+import { openTab, notes, attachments } from '../../state/app-state.js';
 import { Icon, type IconName } from '../../ui/icons.js';
 
 interface MarkdownPreviewProps {
@@ -216,7 +216,7 @@ export function MarkdownPreview({ content, onToggleCheckbox, onNavigateWikilink 
  */
 function renderInlineMarkdown(text: string, onNavigateWikilink?: (title: string) => void): (string | VNode)[] {
   const parts: (string | VNode)[] = [];
-  const regex = /(\[\[.*?\]\]|\*\*.*?\*\*|\*.*?\*|`.*?`)/g;
+  const regex = /(!\[\[.*?\]\]|\[\[.*?\]\]|!\[.*?\]\(.*?\)|\*\*.*?\*\*|\*.*?\*|`.*?`)/g;
 
   let lastIndex = 0;
   let match: RegExpExecArray | null;
@@ -227,7 +227,62 @@ function renderInlineMarkdown(text: string, onNavigateWikilink?: (title: string)
     }
 
     const token = match[0];
-    if (token.startsWith('[[') && token.endsWith(']]')) {
+    if (token.startsWith('![[') && token.endsWith(']]')) {
+      const inner = token.slice(3, -2);
+      const [targetName, alias] = inner.split('|').map((s) => s.trim());
+      const att = attachments.value.find(
+        (a) => !a.deleted && (a.name === targetName || a.hash === targetName || a.name.toLowerCase() === targetName.toLowerCase())
+      );
+      const src = att ? `/api/attachments/${att.hash}` : `/api/attachments/${encodeURIComponent(targetName)}`;
+      const isImage = !att || (att.mime ? att.mime.startsWith('image/') : /\.(png|jpe?g|gif|webp|svg)$/i.test(targetName));
+
+      if (isImage) {
+        parts.push(
+          <img
+            key={match.index}
+            src={src}
+            alt={alias || targetName}
+            class="preview-embedded-image"
+            style={{ maxWidth: '100%', borderRadius: '8px', margin: '8px 0', display: 'block' }}
+          />
+        );
+      } else {
+        parts.push(
+          <a
+            key={match.index}
+            href={src}
+            target="_blank"
+            rel="noopener noreferrer"
+            class="preview-attachment-chip"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '4px',
+              padding: '4px 8px',
+              borderRadius: '4px',
+              background: 'rgba(255,255,255,0.06)',
+              textDecoration: 'none',
+              color: 'inherit',
+              margin: '2px 0'
+            }}
+          >
+            <span class="preview-attachment-name">{alias || targetName}</span>
+          </a>
+        );
+      }
+    } else if (token.startsWith('![') && token.includes('](') && token.endsWith(')')) {
+      const alt = token.slice(2, token.indexOf(']('));
+      const url = token.slice(token.indexOf('](') + 2, -1);
+      parts.push(
+        <img
+          key={match.index}
+          src={url}
+          alt={alt}
+          class="preview-embedded-image"
+          style={{ maxWidth: '100%', borderRadius: '8px', margin: '8px 0', display: 'block' }}
+        />
+      );
+    } else if (token.startsWith('[[') && token.endsWith(']]')) {
       // Wikilink [[Title]] or [[Title|Alias]]
       const inner = token.slice(2, -2);
       const [targetTitle, alias] = inner.split('|').map((s) => s.trim());

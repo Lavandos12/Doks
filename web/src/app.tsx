@@ -1,5 +1,7 @@
 import { h } from 'preact';
-import { useState } from 'preact/hooks';
+import { useState, useEffect } from 'preact/hooks';
+import { HistoryScreen } from './components/history/history-screen.js';
+import { Icon } from './ui/icons.js';
 import {
   currentView,
   selectedBoardId,
@@ -29,6 +31,18 @@ export function App() {
   const [isNetworkOpen, setIsNetworkOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isNotesOpen, setIsNotesOpen] = useState(false);
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+
+  useEffect(() => {
+    const handleOpenHistory = () => setIsHistoryOpen(true);
+    const handleOpenNetwork = () => setIsNetworkOpen(true);
+    window.addEventListener('doks:open-history', handleOpenHistory);
+    window.addEventListener('doks:open-network', handleOpenNetwork);
+    return () => {
+      window.removeEventListener('doks:open-history', handleOpenHistory);
+      window.removeEventListener('doks:open-network', handleOpenNetwork);
+    };
+  }, []);
   const [gridType, setGridType] = useState<'dots' | 'lines' | 'none'>(() => {
     const saved = typeof localStorage !== 'undefined' ? localStorage.getItem('doks_grid_type') : null;
     return (saved === 'dots' || saved === 'lines' || saved === 'none') ? (saved as any) : 'lines';
@@ -141,14 +155,60 @@ export function App() {
           snapToGrid={snapToGrid}
           onSetSnapToGrid={setSnapToGrid}
           onExportJson={() => {
-            showToast('Экспорт JSON сформирован');
+            window.dispatchEvent(new CustomEvent('doks:export-json'));
             setIsSettingsOpen(false);
           }}
           onExportSvg={() => {
-            showToast('Экспорт SVG сформирован');
+            window.dispatchEvent(new CustomEvent('doks:export-svg'));
             setIsSettingsOpen(false);
           }}
         />
+      )}
+
+      {/* History and Trash Modal Dialog */}
+      {isHistoryOpen && (
+        <div class="modal-backdrop doks-modal-backdrop" onClick={() => setIsHistoryOpen(false)}>
+          <div
+            class="history-modal-dialog liquid-glass-surface"
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: '90vw',
+              maxWidth: '960px',
+              height: '80vh',
+              maxHeight: '720px',
+              background: '#0e1117',
+              border: '1px solid #1e293b',
+              borderRadius: '12px',
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.7)'
+            }}
+          >
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                padding: '12px 20px',
+                borderBottom: '1px solid #1e293b'
+              }}
+            >
+              <h2 style={{ margin: 0, fontSize: '16px', fontWeight: 600 }}>История снимков и Корзина</h2>
+              <button
+                class="btn-icon"
+                onClick={() => setIsHistoryOpen(false)}
+                style={{ background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer' }}
+                title="Закрыть"
+              >
+                <Icon name="x" size={18} />
+              </button>
+            </div>
+            <div style={{ flex: 1, overflow: 'auto' }}>
+              <HistoryScreen />
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Global Command Palette & Modals */}

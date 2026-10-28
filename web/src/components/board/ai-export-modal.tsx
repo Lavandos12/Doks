@@ -2,6 +2,8 @@ import { h, VNode } from 'preact';
 import { useState, useEffect } from 'preact/hooks';
 import { Icon } from '../../ui/icons.js';
 import type { AiExportResult } from '@doks/shared';
+import { api } from '../../api/client.js';
+import { currentScope } from '../../state/app-state.js';
 import { t } from '../../i18n/index.js';
 
 interface AiExportModalProps {
@@ -22,7 +24,7 @@ export function AiExportModal({ boardId, selectedNodeIds = [], onClose }: AiExpo
   const fetchExport = async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/export/ai', {
+      const res = await api.fetch('/api/export/ai', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -31,7 +33,8 @@ export function AiExportModal({ boardId, selectedNodeIds = [], onClose }: AiExpo
           selectedNodeIds: scope === 'selection' ? selectedNodeIds : undefined,
           includeNotes,
           anonymizeMembers: anonymize,
-          compactNotes: compact
+          compactNotes: compact,
+          workspaceScope: currentScope.value
         })
       });
       if (res.ok) {

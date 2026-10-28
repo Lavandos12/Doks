@@ -4,6 +4,7 @@ import { agentStatus } from '../../state/yjs-client.js';
 import { currentScope, setScope } from '../../state/app-state.js';
 import { Icon } from '../../ui/icons.js';
 import { showToast } from '../../ui/toast.js';
+import { api } from '../../api/client.js';
 
 interface NetworkPopoverProps {
   isOpen: boolean;
@@ -45,7 +46,7 @@ export function NetworkPopover({ isOpen, onClose }: NetworkPopoverProps): VNode 
     let timer: any = null;
     const fetchInfo = async () => {
       try {
-        const res = await fetch('/api/network');
+        const res = await api.fetch('/api/network');
         if (res.ok) {
           const data = await res.json();
           setNetInfo(data);
@@ -64,7 +65,7 @@ export function NetworkPopover({ isOpen, onClose }: NetworkPopoverProps): VNode 
     const nextVal = !p2pEnabled;
     setP2pEnabled(nextVal);
     try {
-      const res = await fetch('/api/network/toggle', {
+      const res = await api.fetch('/api/network/toggle', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ enabled: nextVal })
@@ -81,7 +82,7 @@ export function NetworkPopover({ isOpen, onClose }: NetworkPopoverProps): VNode 
     if (!target.trim()) return;
     setIsConnecting(true);
     try {
-      const res = await fetch('/api/peers', {
+      const res = await api.fetch('/api/peers', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ peer: target.trim() })

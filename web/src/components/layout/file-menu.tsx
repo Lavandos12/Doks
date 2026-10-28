@@ -3,6 +3,7 @@ import { useState, useRef, useEffect } from 'preact/hooks';
 import { Icon } from '../../ui/icons.js';
 import { activeTabId, openTabs } from '../../state/app-state.js';
 import { t } from '../../i18n/index.js';
+import { api } from '../../api/client.js';
 
 interface FileMenuProps {
   onOpenImportWizard: () => void;
@@ -53,7 +54,7 @@ export function FileMenu({ onOpenImportWizard }: FileMenuProps) {
   const handleCreateBackup = async () => {
     try {
       setBackupNotice(t('menu.snapshot_creating'));
-      const res = await fetch('/api/snapshots', { method: 'POST' });
+      const res = await api.fetch('/api/snapshots', { method: 'POST' });
       const data = await res.json();
       if (data.success) {
         setBackupNotice(t('menu.snapshot_done'));

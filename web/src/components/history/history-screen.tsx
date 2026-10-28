@@ -5,8 +5,10 @@ import {
   notes,
   boards,
   restoreNote,
+  restoreBoard,
   openTab
 } from '../../state/app-state.js';
+import { api } from '../../api/client.js';
 import { Icon } from '../../ui/icons.js';
 
 import { showConfirm } from '../../ui/dialogs.js';
@@ -23,7 +25,7 @@ export function HistoryScreen() {
 
   const fetchSnapshots = async () => {
     try {
-      const res = await fetch('/api/snapshots');
+      const res = await api.fetch('/api/snapshots');
       if (res.ok) {
         const data = await res.json();
         setSnapshots(data);
@@ -38,7 +40,7 @@ export function HistoryScreen() {
   const handleCreateSnapshot = async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/snapshots', { method: 'POST' });
+      const res = await api.fetch('/api/snapshots', { method: 'POST' });
       if (res.ok) {
         setMessage('Снимок успешно создан');
         fetchSnapshots();
@@ -61,7 +63,7 @@ export function HistoryScreen() {
     if (!ok) return;
     setLoading(true);
     try {
-      const res = await fetch('/api/snapshots/restore', {
+      const res = await api.fetch('/api/snapshots/restore', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ snapshotId: id })
@@ -193,7 +195,7 @@ export function HistoryScreen() {
                     <button
                       class="btn-restore"
                       onClick={() => {
-                        b.deleted = false;
+                        restoreBoard(b.id);
                         openTab('board', b.id, b.title);
                       }}
                     >

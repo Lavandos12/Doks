@@ -3,6 +3,7 @@ import { useState, useEffect } from 'preact/hooks';
 import { theme, agentStatus, currentScope } from '../../state/app-state.js';
 import { Icon } from '../../ui/icons.js';
 import { showToast } from '../../ui/toast.js';
+import { api } from '../../api/client.js';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -64,7 +65,7 @@ export function SettingsModal({
 
   const handleExportZip = async () => {
     try {
-      const res = await fetch(`/api/export/vault?scope=${currentScope.value}`);
+      const res = await api.fetch(`/api/export/vault?scope=${currentScope.value}`);
       if (!res.ok) throw new Error('Ошибка экспорта архива');
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
@@ -233,6 +234,24 @@ export function SettingsModal({
                 <button class="btn-primary" onClick={handleExportZip}>
                   <Icon name="download" size={14} />
                   <span>Скачать полный ZIP-бэкап</span>
+                </button>
+              </div>
+
+              <div class="settings-section-card">
+                <label style={{ fontWeight: 600, color: '#f1f5f9', marginBottom: '6px' }}>История снимков и Корзина</label>
+                <p style={{ fontSize: '12px', color: '#94a3b8', margin: '0 0 10px 0' }}>
+                  Просмотр контрольных точек версий, восстановление удаленных заметок и досок.
+                </p>
+                <button
+                  class="btn-secondary"
+                  onClick={() => {
+                    window.dispatchEvent(new CustomEvent('doks:open-history'));
+                    onClose();
+                  }}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '8px 14px' }}
+                >
+                  <Icon name="history" size={14} />
+                  <span>Открыть историю и Корзину</span>
                 </button>
               </div>
             </div>
