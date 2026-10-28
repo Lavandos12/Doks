@@ -1,5 +1,7 @@
 **/node_modules/
 **/dist/
+release/
+*.exe
 **/*.tsbuildinfo
 **/test-results/
 **/playwright-report/

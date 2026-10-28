@@ -27,6 +27,9 @@ export interface AgentStatusResponse {
   keyFingerprint?: string;
   inviteLink?: string;
   token?: string;
+  viewerMode?: boolean;
+  allowSolo?: boolean;
+  bridge?: any;
 }
 
 class ApiClient {

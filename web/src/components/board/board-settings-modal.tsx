@@ -295,6 +295,31 @@ export function BoardSettingsModal({
                   <span>{copiedLink ? 'Скопировано' : 'Копировать'}</span>
                 </button>
               </div>
+              <button
+                type="button"
+                class="btn-secondary"
+                onClick={() => {
+                  window.dispatchEvent(new CustomEvent('doks:open-bridge'));
+                  onClose();
+                }}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 6,
+                  padding: '8px 12px',
+                  borderRadius: 6,
+                  background: 'rgba(99, 102, 241, 0.15)',
+                  border: '1px solid rgba(99, 102, 241, 0.4)',
+                  color: '#a5b4fc',
+                  fontSize: 12,
+                  fontWeight: 600,
+                  cursor: 'pointer'
+                }}
+              >
+                <Icon name="share" size={13} />
+                <span>Показать QR-код для телефона (Режим моста)</span>
+              </button>
             </div>
           )}
 

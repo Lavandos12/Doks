@@ -26,7 +26,15 @@ export * from './peer/peer-service.js';
 export * from './server/http-server.js';
 
 // If run directly from CLI
-if (import.meta.url === pathToFileURL(process.argv[1] || '').href) {
+const isCliEntry =
+  (typeof require !== 'undefined' && typeof module !== 'undefined' && require.main === module) ||
+  (typeof process !== 'undefined' && Boolean(process.argv[1]) && (
+    process.argv[1].endsWith('doks-server.cjs') ||
+    process.argv[1].endsWith('index.js') ||
+    process.argv[1].endsWith('doks')
+  ));
+
+if (isCliEntry) {
   const args = process.argv.slice(2);
 
   if (args.includes('--help') || args.includes('-h')) {

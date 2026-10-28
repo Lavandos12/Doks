@@ -11,12 +11,14 @@ import {
   openTabs,
   boards,
   theme,
-  isImportWizardOpen
+  isImportWizardOpen,
+  agentStatus
 } from './state/app-state.js';
 import { TopRightBar } from './components/layout/top-right-bar.js';
 import { NotesDrawer } from './components/layout/notes-drawer.js';
 import { NetworkPopover } from './components/layout/network-popover.js';
 import { SettingsModal } from './components/layout/settings-modal.js';
+import { BridgeModal } from './components/layout/bridge-modal.js';
 import { CommandPalette } from './components/layout/command-palette.js';
 import { ImportWizardModal } from './components/board/import-wizard-modal.js';
 import { AiExportModal } from './components/board/ai-export-modal.js';
@@ -30,17 +32,27 @@ export function App() {
   const [isAiExportOpen, setIsAiExportOpen] = useState(false);
   const [isNetworkOpen, setIsNetworkOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isBridgeOpen, setIsBridgeOpen] = useState(false);
   const [isNotesOpen, setIsNotesOpen] = useState(false);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
 
   useEffect(() => {
     const handleOpenHistory = () => setIsHistoryOpen(true);
     const handleOpenNetwork = () => setIsNetworkOpen(true);
+    const handleOpenBridge = () => setIsBridgeOpen(true);
     window.addEventListener('doks:open-history', handleOpenHistory);
     window.addEventListener('doks:open-network', handleOpenNetwork);
+    window.addEventListener('doks:open-bridge', handleOpenBridge);
+
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('openBridge') === '1') {
+      setIsBridgeOpen(true);
+    }
+
     return () => {
       window.removeEventListener('doks:open-history', handleOpenHistory);
       window.removeEventListener('doks:open-network', handleOpenNetwork);
+      window.removeEventListener('doks:open-bridge', handleOpenBridge);
     };
   }, []);
   const [gridType, setGridType] = useState<'dots' | 'lines' | 'none'>(() => {
@@ -75,6 +87,35 @@ export function App() {
 
   return (
     <div class={`app-layout theme-${theme.value} view-board-canvas`}>
+      {/* Read-Only Viewer Banner for Phone/Bridge sessions */}
+      {agentStatus.value?.viewerMode && (
+        <div
+          class="bridge-viewer-banner"
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            zIndex: 9999,
+            background: 'rgba(99, 102, 241, 0.95)',
+            color: '#ffffff',
+            padding: '5px 12px',
+            fontSize: 12,
+            fontWeight: 600,
+            textAlign: 'center',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 8,
+            backdropFilter: 'blur(8px)',
+            boxShadow: '0 2px 10px rgba(0, 0, 0, 0.3)'
+          }}
+        >
+          <Icon name="lock" size={14} />
+          <span>Режим чтения (Мост): синхронизация в реальном времени. Редактирование отключено.</span>
+        </div>
+      )}
+
       {/* Miro 100vw × 100vh Unified Workspace */}
       <main class="main-viewport" style={{ width: '100vw', height: '100vh', overflow: 'hidden' }}>
         {isSplitMode ? (
@@ -119,6 +160,7 @@ export function App() {
         onOpenAiExport={() => setIsAiExportOpen(true)}
         onOpenNetwork={() => setIsNetworkOpen(true)}
         onOpenSettings={() => setIsSettingsOpen(true)}
+        onOpenBridge={() => setIsBridgeOpen(true)}
         isNotesOpen={isNotesOpen}
         isSplitMode={isSplitMode}
       />
@@ -143,6 +185,14 @@ export function App() {
         <NetworkPopover
           isOpen={isNetworkOpen}
           onClose={() => setIsNetworkOpen(false)}
+        />
+      )}
+
+      {/* Bridge (Phone QR) Modal */}
+      {isBridgeOpen && (
+        <BridgeModal
+          isOpen={isBridgeOpen}
+          onClose={() => setIsBridgeOpen(false)}
         />
       )}
 

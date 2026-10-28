@@ -11,6 +11,7 @@ interface TopRightBarProps {
   onOpenAiExport: () => void;
   onOpenNetwork: () => void;
   onOpenSettings: () => void;
+  onOpenBridge?: () => void;
   isNotesOpen?: boolean;
   isSplitMode?: boolean;
 }
@@ -20,6 +21,7 @@ export function TopRightBar({
   onOpenAiExport,
   onOpenNetwork,
   onOpenSettings,
+  onOpenBridge,
   isNotesOpen = false,
   isSplitMode = false
 }: TopRightBarProps): VNode {
@@ -69,6 +71,19 @@ export function TopRightBar({
         <span class={`status-dot ${isRadminFound ? 'green' : 'gray'}`} />
         <span>{isRadminFound ? `Radmin: ${status?.radminIp || effectiveIp}` : 'Локально'}</span>
       </div>
+
+      {/* [ Мост (QR) ] */}
+      {onOpenBridge && (
+        <button
+          class="miro-action-pill"
+          data-testid="bridge-toggle-btn"
+          onClick={onOpenBridge}
+          title="Режим моста (QR-код для смартфона)"
+        >
+          <Icon name="share" size={13} />
+          <span>Мост</span>
+        </button>
+      )}
 
       {/* [ Settings / Настройки ] */}
       <button

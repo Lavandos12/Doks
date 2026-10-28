@@ -50,15 +50,30 @@ import {
   detectNetworkOverview
 } from '../network.js';
 import { saveConfig } from '../config.js';
+import { BridgeService } from './bridge-service.js';
 
 function resolveWebDist(custom?: string): string {
   if (custom && fs.existsSync(custom)) return custom;
+  let currentDir = process.cwd();
+  if (typeof __dirname !== 'undefined') {
+    currentDir = __dirname;
+  } else {
+    try {
+      if (typeof import.meta !== 'undefined' && import.meta?.url) {
+        currentDir = path.dirname(fileURLToPath(import.meta.url));
+      }
+    } catch {}
+  }
   const candidates = [
     path.resolve(process.cwd(), 'web/dist'),
+    path.resolve(process.cwd(), 'release/web/dist'),
     path.resolve(process.cwd(), '../web/dist'),
     path.resolve(process.cwd(), '../../web/dist'),
-    path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../web/dist'),
-    path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../../web/dist')
+    path.resolve(currentDir, './web/dist'),
+    path.resolve(currentDir, '../web/dist'),
+    path.resolve(currentDir, '../../web/dist'),
+    path.resolve(currentDir, '../../../web/dist'),
+    path.resolve(currentDir, '../../../../web/dist')
   ];
   for (const c of candidates) {
     if (fs.existsSync(c)) return c;
@@ -85,6 +100,7 @@ export class AgentHttpServer {
   private sessionToken: string;
   private webDistPath: string;
   private p2pMeshEnabled = true;
+  private bridgeService: BridgeService;
 
   constructor(options: HttpServerOptions) {
     this.config = options.config;
@@ -94,6 +110,7 @@ export class AgentHttpServer {
     this.attachmentManager = options.attachmentManager;
     this.sessionToken = generateSessionToken();
     this.webDistPath = resolveWebDist(options.webDistPath);
+    this.bridgeService = new BridgeService(this.config.webPort || 3000, this.config.statePath);
 
     this.fastify = Fastify({
       logger: false,
@@ -207,7 +224,10 @@ export class AgentHttpServer {
             originPort === 3000 ||
             (!originUrl.port && (this.config.webPort === 80 || this.config.webPort === 443));
 
-          if (!isAllowedOriginHost || !isAllowedOriginPort) {
+          const isCloudflareOrigin = this.bridgeService.getStatus().enabled && originUrl.hostname.endsWith('.trycloudflare.com');
+          if (isCloudflareOrigin) {
+            // Allowed origin for active Cloudflare tunnel
+          } else if (!isAllowedOriginHost || !isAllowedOriginPort) {
             reply.code(403).send({ error: 'Forbidden: Invalid Origin header' });
             return;
           }
@@ -217,20 +237,47 @@ export class AgentHttpServer {
         }
       }
 
+      // Check query parameter for bridge token /?b=... or /?bridge=...
+      const queryBridgeToken = (req.query as any)?.b || (req.query as any)?.bridge;
+      if (queryBridgeToken && typeof queryBridgeToken === 'string' && this.bridgeService.isValidBridgeToken(queryBridgeToken)) {
+        reply.setCookie('doks_bridge', queryBridgeToken, {
+          path: '/',
+          httpOnly: true,
+          sameSite: 'lax'
+        });
+      }
+
       // Check route authentication
       const urlPath = req.url.split('?')[0];
       const isApiOrWs = urlPath.startsWith('/api') || urlPath.startsWith('/ws');
       const isAttachmentContentGet = req.method === 'GET' && urlPath.endsWith('/content');
       const isAttachmentGet = req.method === 'GET' && urlPath.startsWith('/api/attachments/') && !isAttachmentContentGet;
 
+      const isViewer = this.isViewerSession(req);
+
+      // If client is in Bridge Viewer Mode:
+      if (isViewer) {
+        // Enforce STRICT Read-Only on bridge viewer: reject any state mutation
+        if (req.method !== 'GET' && req.method !== 'HEAD' && req.method !== 'OPTIONS') {
+          reply.code(403).send({ error: 'Read-Only Bridge Mode' });
+          return;
+        }
+      }
+
       if (isApiOrWs && !isAttachmentGet) {
-        if (!this.isValidSession(req)) {
+        const isBridgeViewerAllowed =
+          isViewer &&
+          req.method === 'GET' &&
+          !urlPath.startsWith('/api/bridge/enable') &&
+          !urlPath.startsWith('/api/bridge/disable');
+
+        if (!this.isValidSession(req) && !isBridgeViewerAllowed) {
           reply.code(401).send({ error: 'Unauthorized: Valid doks_session cookie required' });
           return;
         }
       } else {
-        // Issue session cookie for static routes if missing
-        if (!req.cookies?.doks_session) {
+        // Issue session cookie for static routes if missing and not in viewer mode
+        if (!req.cookies?.doks_session && !isViewer) {
           reply.setCookie('doks_session', this.sessionToken, {
             path: '/',
             httpOnly: true,
@@ -239,6 +286,17 @@ export class AgentHttpServer {
         }
       }
     });
+  }
+
+  public getBridgeService(): BridgeService {
+    return this.bridgeService;
+  }
+
+  private isViewerSession(req: any): boolean {
+    const bridgeCookie = req.cookies?.doks_bridge;
+    const queryBridgeToken = (req.query as any)?.b || (req.query as any)?.bridge;
+    const token = bridgeCookie || queryBridgeToken;
+    return typeof token === 'string' && this.bridgeService.isValidBridgeToken(token);
   }
 
   private isValidSession(req: any): boolean {
@@ -362,7 +420,10 @@ export class AgentHttpServer {
                 .replace(/^(.{4})(.{4})$/, '$1-$2')
             : undefined,
         inviteLink: networkOverview.inviteUri,
-        inviteUri: networkOverview.inviteUri
+        inviteUri: networkOverview.inviteUri,
+        viewerMode: this.isViewerSession(req),
+        allowSolo: this.isViewerSession(req) ? this.bridgeService.isSoloAllowed() : true,
+        bridge: this.bridgeService.getStatus()
       };
     });
 
@@ -394,6 +455,26 @@ export class AgentHttpServer {
         success: true,
         p2pEnabled: this.p2pMeshEnabled
       };
+    });
+
+    // API: Bridge Service Status & Control
+    this.fastify.get('/api/bridge/status', async () => {
+      return this.bridgeService.getStatus();
+    });
+
+    this.fastify.post('/api/bridge/enable', async (req, reply) => {
+      if (!this.isValidSession(req)) {
+        return reply.code(401).send({ error: 'Unauthorized: Admin session required' });
+      }
+      const body = (req.body as any) || {};
+      return await this.bridgeService.enableBridge(body);
+    });
+
+    this.fastify.post('/api/bridge/disable', async (req, reply) => {
+      if (!this.isValidSession(req)) {
+        return reply.code(401).send({ error: 'Unauthorized: Admin session required' });
+      }
+      return this.bridgeService.disableBridge();
     });
 
     // API: Change team key (with automatic backup snapshot)
@@ -832,7 +913,9 @@ export class AgentHttpServer {
         const teamIndex = this.docManager.getDoc(getScopedIndexDocName('team'));
         const isSolo = soloIndex ? getIndexMaps(soloIndex).attachments.has(hash) : false;
         const isTeam = teamIndex ? getIndexMaps(teamIndex).attachments.has(hash) : false;
-        if (isSolo && !isTeam) {
+        const isViewer = this.isViewerSession(req);
+        const allowSolo = isViewer && this.bridgeService.isSoloAllowed();
+        if (isSolo && !isTeam && !allowSolo) {
           return reply.code(401).send({ error: 'Unauthorized: Solo attachment requires session authentication' });
         }
       }
@@ -1252,10 +1335,16 @@ export class AgentHttpServer {
     this.fastify.register(async (fastify) => {
       fastify.get('/ws', { websocket: true }, (socket, req) => {
         const queryScope = ((req.query as any)?.scope === 'solo' ? 'solo' : 'team') as WorkspaceScope;
+        const isViewer = this.isViewerSession(req);
+        const allowSolo = !isViewer || this.bridgeService.isSoloAllowed();
+
         // B21: Selective doc subscription set per socket
         const subscribedDocs = new Set<string>();
 
         const isDocSubscribed = (docName: string) => {
+          if (isViewer && docName.startsWith('solo:') && !allowSolo) {
+            return false;
+          }
           return (
             subscribedDocs.size === 0 ||
             subscribedDocs.has(docName) ||
@@ -1274,10 +1363,26 @@ export class AgentHttpServer {
 
             if (msg.type === 'sync') {
               const data = base64ToUint8Array(msg.data);
+
+              // If socket is in read-only viewer mode:
+              if (isViewer) {
+                // If it's a solo doc and solo is not allowed, ignore
+                if (msg.docName?.startsWith('solo:') && !allowSolo) {
+                  return;
+                }
+                // Check Yjs message type (first byte): syncStep1 = 0, syncStep2 = 1, syncUpdate = 2
+                // A read-only viewer must only send syncStep1
+                const syncType = data[0];
+                if (syncType === 2 || syncType === 1) {
+                  // Ignore mutations from read-only bridge viewer
+                  return;
+                }
+              }
+
               const response = this.docManager.handleSyncMessage(
                 msg.docName,
                 data,
-                'client'
+                isViewer ? 'viewer' : 'client'
               );
               if (response) {
                 socket.send(
@@ -1289,6 +1394,10 @@ export class AgentHttpServer {
                 );
               }
             } else if (msg.type === 'awareness') {
+              if (isViewer) {
+                // Ignore awareness writes from viewer
+                return;
+              }
               // Apply browser awareness state and broadcast to mesh if not solo
               const data = base64ToUint8Array(msg.data);
               const isSolo = msg.docName?.startsWith('solo:');
@@ -1302,6 +1411,9 @@ export class AgentHttpServer {
                 this.peerService.broadcastAwareness(msg.docName, data);
               }
             } else if (msg.type === 'subscribe') {
+              if (isViewer && msg.docName?.startsWith('solo:') && !allowSolo) {
+                return;
+              }
               // B21: selective subscription
               subscribedDocs.add(msg.docName);
             } else if (msg.type === 'unsubscribe') {
@@ -1317,6 +1429,7 @@ export class AgentHttpServer {
         // Forward doc updates to the browser
         const updateListener = ({ scope: docScope, docName, update, origin }: any) => {
           if (origin === 'client' || socket.readyState !== socket.OPEN) return;
+          if (isViewer && docName.startsWith('solo:') && !allowSolo) return;
 
           if (isDocSubscribed(docName)) {
             const syncMsg = this.docManager.createUpdateSyncMessage(update);
