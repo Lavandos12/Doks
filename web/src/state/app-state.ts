@@ -57,13 +57,38 @@ const initialViewer = typeof window !== 'undefined' && (
   window.location.search.includes('bridge=')
 );
 export const isViewerMode = signal<boolean>(initialViewer);
+export const isViewerAllowSolo = signal<boolean>(false);
+
+export const appState = computed(() => ({
+  viewerMode: isViewerMode.value,
+  viewerAllowSolo: isViewerAllowSolo.value || Boolean(agentStatus.value?.allowSolo)
+}));
+
+export function setViewerMode(enabled: boolean, allowSolo = false): void {
+  isViewerMode.value = enabled;
+  isViewerAllowSolo.value = allowSolo;
+  if (enabled && allowSolo) {
+    yjsClient.subscribeDoc(getScopedIndexDocName('solo'));
+    yjsClient.subscribeDoc(getScopedIndexDocName('team'));
+  }
+}
+
+export function initAppState(): void {
+  yjsClient.subscribeDoc(getScopedIndexDocName(currentScope.value));
+  if (appState.value.viewerMode && appState.value.viewerAllowSolo) {
+    yjsClient.subscribeDoc(getScopedIndexDocName('solo'));
+    yjsClient.subscribeDoc(getScopedIndexDocName('team'));
+  }
+}
 
 if (typeof window !== 'undefined') {
   agentStatus.subscribe((st) => {
     if (st?.viewerMode || initialViewer) {
-      isViewerMode.value = true;
+      const allowSolo = Boolean(st?.allowSolo);
+      setViewerMode(true, allowSolo);
     }
   });
+  initAppState();
 }
 
 export const isSidebarCollapsed = signal<boolean>(false);

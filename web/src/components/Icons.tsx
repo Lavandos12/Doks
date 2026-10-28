@@ -119,7 +119,8 @@ export type IconName =
   | 'checklist'
   | 'chart'
   | 'bar-chart'
-  | 'pie-chart';
+  | 'pie-chart'
+  | 'doks-cat';
 
 export function Icon({
   name,
@@ -130,6 +131,30 @@ export function Icon({
   strokeWidth = 1.75,
   style
 }: IconProps & { name: IconName }): VNode {
+  if (name === 'doks-cat') {
+    return (
+      <svg
+        width={size}
+        height={size}
+        viewBox="0 0 64 64"
+        fill="none"
+        className={`doks-icon ${cls} ${className}`.trim()}
+        style={{ flexShrink: 0, borderRadius: 6, ...style }}
+        aria-hidden="true"
+      >
+        <rect width="64" height="64" rx="16" fill="#5B21B6" />
+        <path
+          d="M12 58 C12 49 16 44 20 40 C15 36 13 30 14 23 L14 11 C14 9.5 15.8 8.8 17 9.8 L25 17.5 C27.2 16.8 29.6 16.5 32 16.5 C34.4 16.5 36.8 16.8 39 17.5 L47 9.8 C48.2 8.8 50 9.5 50 11 L50 23 C51 30 49 36 44 40 C48 44 52 49 52 58 Z"
+          fill="#FFFFFF"
+        />
+        <path d="M17.5 14.5 L23 20 C20.2 21.2 18.2 23.2 17.5 25.5 Z" fill="#5B21B6" />
+        <path d="M46.5 14.5 L41 20 C43.8 21.2 45.8 23.2 46.5 25.5 Z" fill="#5B21B6" />
+        <path d="M19 29 C21.5 32.2 25.8 33.2 29 31.8 C26.8 35.2 21.5 35 19 29 Z" fill="#5B21B6" />
+        <path d="M45 29 C42.5 32.2 38.2 33.2 35 31.8 C37.2 35.2 42.5 35 45 29 Z" fill="#5B21B6" />
+      </svg>
+    );
+  }
+
   const combinedClass = `lucide-icon doks-svg-icon ${cls} ${className}`.trim();
 
   const renderPath = () => {

@@ -27,19 +27,54 @@ namespace DoksLauncher
 
         private Icon CreateBrandIcon()
         {
-            Bitmap bmp = new Bitmap(32, 32);
+            Bitmap bmp = new Bitmap(64, 64);
             using (Graphics g = Graphics.FromImage(bmp))
             {
                 g.SmoothingMode = SmoothingMode.AntiAlias;
-                using (SolidBrush bg = new SolidBrush(Color.FromArgb(99, 102, 241)))
+                g.Clear(Color.Transparent);
+
+                Color purpleBg = Color.FromArgb(91, 33, 182); // #5B21B6
+                using (GraphicsPath bgPath = new GraphicsPath())
                 {
-                    g.FillEllipse(bg, 1, 1, 30, 30);
+                    int r = 18;
+                    bgPath.AddArc(2, 2, r, r, 180, 90);
+                    bgPath.AddArc(62 - r, 2, r, r, 270, 90);
+                    bgPath.AddArc(62 - r, 62 - r, r, r, 0, 90);
+                    bgPath.AddArc(2, 62 - r, r, r, 90, 90);
+                    bgPath.CloseFigure();
+                    using (SolidBrush bgBrush = new SolidBrush(purpleBg))
+                    {
+                        g.FillPath(bgBrush, bgPath);
+                    }
                 }
-                using (Font f = new Font("Segoe UI", 16, FontStyle.Bold, GraphicsUnit.Pixel))
-                using (SolidBrush fg = new SolidBrush(Color.White))
+
+                // White cat head silhouette + ears + neck
+                using (SolidBrush whiteBrush = new SolidBrush(Color.White))
                 {
-                    SizeF sz = g.MeasureString("D", f);
-                    g.DrawString("D", f, fg, (32 - sz.Width) / 2, (32 - sz.Height) / 2);
+                    PointF[] leftEar = new PointF[] { new PointF(14, 26), new PointF(14, 10), new PointF(27, 18) };
+                    PointF[] rightEar = new PointF[] { new PointF(50, 26), new PointF(50, 10), new PointF(37, 18) };
+                    g.FillPolygon(whiteBrush, leftEar);
+                    g.FillPolygon(whiteBrush, rightEar);
+                    g.FillEllipse(whiteBrush, 13, 16, 38, 28);
+                    PointF[] body = new PointF[] {
+                        new PointF(20, 39), new PointF(44, 39),
+                        new PointF(52, 58), new PointF(12, 58)
+                    };
+                    g.FillPolygon(whiteBrush, body);
+                }
+
+                // Purple inner ear cutouts and squinted eyes
+                using (SolidBrush cutBrush = new SolidBrush(purpleBg))
+                {
+                    PointF[] leftInnerEar = new PointF[] { new PointF(17, 23), new PointF(17, 14), new PointF(24, 19) };
+                    PointF[] rightInnerEar = new PointF[] { new PointF(47, 23), new PointF(47, 14), new PointF(40, 19) };
+                    g.FillPolygon(cutBrush, leftInnerEar);
+                    g.FillPolygon(cutBrush, rightInnerEar);
+
+                    PointF[] leftEye = new PointF[] { new PointF(19, 28), new PointF(29, 31), new PointF(22, 34) };
+                    PointF[] rightEye = new PointF[] { new PointF(45, 28), new PointF(35, 31), new PointF(42, 34) };
+                    g.FillPolygon(cutBrush, leftEye);
+                    g.FillPolygon(cutBrush, rightEye);
                 }
             }
             return Icon.FromHandle(bmp.GetHicon());

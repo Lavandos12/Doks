@@ -3141,6 +3141,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
 
   // Toggle checkbox inside note card
   const toggleNoteCheckbox = (noteId: string, lineIndex: number) => {
+    if (isViewerMode.value) return;
     const noteDoc = yjsClient.getOrCreateDoc(getScopedNoteDocName(effectiveScope, noteId));
     const yText = noteDoc.getText('text');
     const content = yText.toString();
@@ -3312,6 +3313,10 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
         onMouseDown={(e) => e.stopPropagation()}
         onClick={(e) => e.stopPropagation()}
       >
+        <div class="miro-brand-logo" style={{ display: 'inline-flex', alignItems: 'center', marginRight: '2px' }} title="Doks">
+          <Icon name="doks-cat" size={26} />
+        </div>
+
         {/* 1. Board Switcher Button */}
         <button
           class="miro-board-selector-btn"
@@ -4923,7 +4928,11 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                                 <input
                                   type="checkbox"
                                   checked={isChecked}
-                                  onChange={() => toggleNoteCheckbox(node.noteId!, lineIdx)}
+                                  disabled={isViewerMode.value}
+                                  onChange={() => {
+                                    if (isViewerMode.value) return;
+                                    toggleNoteCheckbox(node.noteId!, lineIdx);
+                                  }}
                                 />
                                 <span>{labelText}</span>
                               </div>
@@ -5489,46 +5498,53 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                           class="chart-title-input"
                           value={node.text || 'Диаграмма долей'}
                           placeholder="Название диаграммы"
+                          readOnly={isViewerMode.value}
                           onMouseDown={(e) => e.stopPropagation()}
                           onInput={(e) => {
+                            if (isViewerMode.value) return;
                             const map = yNodes.get(node.id);
                             if (map) setNodeProperties(map, { text: (e.target as HTMLInputElement).value });
                           }}
+                          onChange={() => {
+                            if (isViewerMode.value) return;
+                          }}
                         />
-                        <div class="chart-mode-pill-group" onMouseDown={(e) => e.stopPropagation()}>
-                          <button
-                            type="button"
-                            class={`chart-mode-btn ${chartType === 'pie' ? 'active' : ''}`}
-                            onClick={() => setChartMode('pie')}
-                            title="Круговая"
-                          >
-                            Круг
-                          </button>
-                          <button
-                            type="button"
-                            class={`chart-mode-btn ${chartType === 'donut' ? 'active' : ''}`}
-                            onClick={() => setChartMode('donut')}
-                            title="Кольцевая"
-                          >
-                            Кольцо
-                          </button>
-                          <button
-                            type="button"
-                            class={`chart-mode-btn ${chartType === 'square' ? 'active' : ''}`}
-                            onClick={() => setChartMode('square')}
-                            title="100% блок"
-                          >
-                            Блок
-                          </button>
-                          <button
-                            type="button"
-                            class={`chart-mode-btn ${chartType === 'bar' ? 'active' : ''}`}
-                            onClick={() => setChartMode('bar')}
-                            title="Столбцы"
-                          >
-                            Столбцы
-                          </button>
-                        </div>
+                        {!isViewerMode.value && (
+                          <div class="chart-mode-pill-group" onMouseDown={(e) => e.stopPropagation()}>
+                            <button
+                              type="button"
+                              class={`chart-mode-btn ${chartType === 'pie' ? 'active' : ''}`}
+                              onClick={() => setChartMode('pie')}
+                              title="Круговая"
+                            >
+                              Круг
+                            </button>
+                            <button
+                              type="button"
+                              class={`chart-mode-btn ${chartType === 'donut' ? 'active' : ''}`}
+                              onClick={() => setChartMode('donut')}
+                              title="Кольцевая"
+                            >
+                              Кольцо
+                            </button>
+                            <button
+                              type="button"
+                              class={`chart-mode-btn ${chartType === 'square' ? 'active' : ''}`}
+                              onClick={() => setChartMode('square')}
+                              title="100% блок"
+                            >
+                              Блок
+                            </button>
+                            <button
+                              type="button"
+                              class={`chart-mode-btn ${chartType === 'bar' ? 'active' : ''}`}
+                              onClick={() => setChartMode('bar')}
+                              title="Столбцы"
+                            >
+                              Столбцы
+                            </button>
+                          </div>
+                        )}
                       </div>
 
                       <div class="chart-visual-area">
@@ -5644,6 +5660,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                                 style={{ background: seg.color }}
                                 title="Сменить цвет"
                                 onClick={() => {
+                                  if (isViewerMode.value) return;
                                   const colorIdx = palette.indexOf(seg.color);
                                   const nextColor = palette[(colorIdx + 1) % palette.length];
                                   const updated = data.map((d) => (d.id === seg.id ? { ...d, color: nextColor } : d));
@@ -5654,10 +5671,15 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                                 class="chart-row-input label"
                                 value={seg.label}
                                 placeholder="Категория"
+                                readOnly={isViewerMode.value}
                                 onInput={(e) => {
+                                  if (isViewerMode.value) return;
                                   const newLabel = (e.target as HTMLInputElement).value;
                                   const updated = data.map((d) => (d.id === seg.id ? { ...d, label: newLabel } : d));
                                   updateData(updated);
+                                }}
+                                onChange={() => {
+                                  if (isViewerMode.value) return;
                                 }}
                               />
                               <input
@@ -5665,50 +5687,59 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                                 type="number"
                                 min="0"
                                 value={seg.value}
+                                readOnly={isViewerMode.value}
                                 onInput={(e) => {
+                                  if (isViewerMode.value) return;
                                   const newVal = Number((e.target as HTMLInputElement).value) || 0;
                                   const updated = data.map((d) => (d.id === seg.id ? { ...d, value: newVal } : d));
                                   updateData(updated);
                                 }}
+                                onChange={() => {
+                                  if (isViewerMode.value) return;
+                                }}
                               />
                               <span class="chart-pct-badge">{pct}%</span>
-                              <button
-                                type="button"
-                                class="chart-del-btn"
-                                title="Удалить сектор"
-                                disabled={data.length <= 1}
-                                style={{ opacity: data.length <= 1 ? 0.3 : 1 }}
-                                onClick={() => {
-                                  if (data.length <= 1) return;
-                                  const updated = data.filter((d) => d.id !== seg.id);
-                                  updateData(updated);
-                                }}
-                              >
-                                &times;
-                              </button>
+                              {!isViewerMode.value && (
+                                <button
+                                  type="button"
+                                  class="chart-del-btn"
+                                  title="Удалить сектор"
+                                  disabled={data.length <= 1}
+                                  style={{ opacity: data.length <= 1 ? 0.3 : 1 }}
+                                  onClick={() => {
+                                    if (data.length <= 1) return;
+                                    const updated = data.filter((d) => d.id !== seg.id);
+                                    updateData(updated);
+                                  }}
+                                >
+                                  &times;
+                                </button>
+                              )}
                             </div>
                           );
                         })}
-                        <button
-                          type="button"
-                          class="chart-add-row-btn"
-                          onClick={() => {
-                            const newId = String(Date.now());
-                            const nextColor = palette[data.length % palette.length];
-                            const updated = [...data, { id: newId, label: `Сектор ${data.length + 1}`, value: 10, color: nextColor }];
-                            updateData(updated);
-                            const map = yNodes.get(node.id);
-                            if (map) {
-                              const minRequiredH = 260 + updated.length * 36;
-                              if (node.h < minRequiredH) {
-                                map.set('h', minRequiredH);
+                        {!isViewerMode.value && (
+                          <button
+                            type="button"
+                            class="chart-add-row-btn"
+                            onClick={() => {
+                              const newId = String(Date.now());
+                              const nextColor = palette[data.length % palette.length];
+                              const updated = [...data, { id: newId, label: `Сектор ${data.length + 1}`, value: 10, color: nextColor }];
+                              updateData(updated);
+                              const map = yNodes.get(node.id);
+                              if (map) {
+                                const minRequiredH = 260 + updated.length * 36;
+                                if (node.h < minRequiredH) {
+                                  map.set('h', minRequiredH);
+                                }
                               }
-                            }
-                          }}
-                        >
-                          <Icon name="plus" size={12} />
-                          <span>Добавить сектор</span>
-                        </button>
+                            }}
+                          >
+                            <Icon name="plus" size={12} />
+                            <span>Добавить сектор</span>
+                          </button>
+                        )}
                       </div>
                     </div>
                   );
@@ -5817,6 +5848,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                   }}
                   onClick={(e) => {
                     e.stopPropagation();
+                    if (isViewerMode.value) return;
                     const map = yNodes.get(node.id);
                     if (map) {
                       map.set('reactions', { thumbsUp: (node.reactions?.thumbsUp || 0) + 1 });
