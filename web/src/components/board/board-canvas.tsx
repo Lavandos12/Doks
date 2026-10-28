@@ -1184,6 +1184,28 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
         }
       }
 
+      // In read-only viewer mode: ignore mutations, tool hotkeys and copy/paste
+      if (isViewerMode.value) {
+        if (
+          e.code === 'Delete' ||
+          e.code === 'Backspace' ||
+          e.code === 'KeyS' ||
+          e.code === 'KeyT' ||
+          e.code === 'KeyR' ||
+          e.code === 'KeyP' ||
+          e.code === 'KeyE' ||
+          e.code === 'KeyF' ||
+          e.code === 'KeyM' ||
+          e.code === 'KeyC' ||
+          e.code === 'KeyL' ||
+          e.code === 'KeyV' ||
+          ((e.ctrlKey || e.metaKey) && ['KeyV', 'KeyD', 'KeyG', 'KeyZ', 'KeyY'].includes(e.code))
+        ) {
+          e.preventDefault();
+          return;
+        }
+      }
+
       // Global Undo / Redo: Executed EVEN IF focus is inside an input/textarea of a card
       if (matchShortcut(e, 'mod+z')) {
         e.preventDefault();
@@ -2939,6 +2961,14 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
   const handleNodePointerDown = (node: BoardNodeData, e: MouseEvent | PointerEvent) => {
     if (e.button !== 0) return;
     if (dragState) return;
+
+    if (isViewerMode.value) {
+      const target = e.target as HTMLElement | null;
+      if (target && target.closest('.node-open-note-btn, .file-download-link, a, button')) {
+        return;
+      }
+      return;
+    }
 
     // If Hand tool (H) is active, do NOT intercept click - let it pan the canvas!
     if (activeTool === 'hand') {
@@ -4771,26 +4801,30 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
               }}
               onMouseDown={(e) => handleNodePointerDown(node, e as any)}
               onDblClick={() => {
-                startEditingNode(node.id, false);
+                if (!isViewerMode.value) startEditingNode(node.id, false);
               }}
             >
               {/* 4 Magnetic Connector Ports */}
-              <div
-                class="magnetic-port port-top"
-                onMouseDown={(e) => handlePortPointerDown(node.id, 'top', e as any)}
-              />
-              <div
-                class="magnetic-port port-right"
-                onMouseDown={(e) => handlePortPointerDown(node.id, 'right', e as any)}
-              />
-              <div
-                class="magnetic-port port-bottom"
-                onMouseDown={(e) => handlePortPointerDown(node.id, 'bottom', e as any)}
-              />
-              <div
-                class="magnetic-port port-left"
-                onMouseDown={(e) => handlePortPointerDown(node.id, 'left', e as any)}
-              />
+              {!isViewerMode.value && (
+                <>
+                  <div
+                    class="magnetic-port port-top"
+                    onMouseDown={(e) => handlePortPointerDown(node.id, 'top', e as any)}
+                  />
+                  <div
+                    class="magnetic-port port-right"
+                    onMouseDown={(e) => handlePortPointerDown(node.id, 'right', e as any)}
+                  />
+                  <div
+                    class="magnetic-port port-bottom"
+                    onMouseDown={(e) => handlePortPointerDown(node.id, 'bottom', e as any)}
+                  />
+                  <div
+                    class="magnetic-port port-left"
+                    onMouseDown={(e) => handlePortPointerDown(node.id, 'left', e as any)}
+                  />
+                </>
+              )}
 
               {/* Top drag bar for sticky notes */}
               {node.type === 'sticky' && (
@@ -4800,6 +4834,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                       type="checkbox"
                       class="sticky-checkbox"
                       checked={node.done || false}
+                      disabled={isViewerMode.value}
                       onChange={(e) => {
                         const map = yNodes.get(node.id);
                         if (map) map.set('done', (e.target as HTMLInputElement).checked);
@@ -5131,8 +5166,10 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                           class="checklist-title-input"
                           value={node.fileName || 'Чек-лист'}
                           placeholder="Заголовок чек-листа..."
+                          readOnly={isViewerMode.value}
                           onMouseDown={(e) => e.stopPropagation()}
                           onInput={(e) => {
+                            if (isViewerMode.value) return;
                             const map = yNodes.get(node.id);
                             if (map) setNodeProperties(map, { fileName: (e.target as HTMLInputElement).value });
                           }}
@@ -5150,9 +5187,10 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                             <button
                               type="button"
                               class={`checklist-checkbox-btn ${item.done ? 'checked' : ''}`}
+                              disabled={isViewerMode.value}
                               onClick={(e) => {
                                 e.stopPropagation();
-                                handleToggleChecklistItem(node, idx);
+                                if (!isViewerMode.value) handleToggleChecklistItem(node, idx);
                               }}
                             >
                               {item.done && <Icon name="check" size={11} color="#ffffff" />}
@@ -5161,32 +5199,39 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                               type="text"
                               class={`checklist-item-input ${item.done ? 'done' : ''}`}
                               value={item.text}
+                              readOnly={isViewerMode.value}
                               onMouseDown={(e) => e.stopPropagation()}
-                              onInput={(e) => handleUpdateChecklistText(node, idx, (e.target as HTMLInputElement).value)}
-                            />
-                            <button
-                              type="button"
-                              class="checklist-item-del-btn"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleDeleteChecklistItem(node, idx);
+                              onInput={(e) => {
+                                if (!isViewerMode.value) handleUpdateChecklistText(node, idx, (e.target as HTMLInputElement).value);
                               }}
-                              title="Удалить пункт"
-                            >
-                              <Icon name="x" size={12} />
-                            </button>
+                            />
+                            {!isViewerMode.value && (
+                              <button
+                                type="button"
+                                class="checklist-item-del-btn"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDeleteChecklistItem(node, idx);
+                                }}
+                                title="Удалить пункт"
+                              >
+                                <Icon name="x" size={12} />
+                              </button>
+                            )}
                           </div>
                         ))}
                       </div>
-                      <button
-                        type="button"
-                        class="checklist-add-row-btn"
-                        onMouseDown={(e) => e.stopPropagation()}
-                        onClick={() => handleAddChecklistItem(node)}
-                      >
-                        <Icon name="plus" size={13} />
-                        <span>Добавить пункт</span>
-                      </button>
+                      {!isViewerMode.value && (
+                        <button
+                          type="button"
+                          class="checklist-add-row-btn"
+                          onMouseDown={(e) => e.stopPropagation()}
+                          onClick={() => handleAddChecklistItem(node)}
+                        >
+                          <Icon name="plus" size={13} />
+                          <span>Добавить пункт</span>
+                        </button>
+                      )}
                     </div>
                   );
                 })()
@@ -5209,12 +5254,14 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                           <Icon name="grip-vertical" size={14} />
                         </div>
                         <span style={{ fontSize: '12px', fontWeight: 600, color: '#94a3b8', marginRight: 'auto' }}>Таблица</span>
-                        <div class="card-header-actions" onMouseDown={(e) => e.stopPropagation()} style={{ display: 'flex', gap: '4px' }}>
-                          <button type="button" class="table-tool-btn" onClick={() => handleAddTableRow(node)}>+ Строка</button>
-                          <button type="button" class="table-tool-btn" onClick={() => handleDelTableRow(node)}>- Строка</button>
-                          <button type="button" class="table-tool-btn" onClick={() => handleAddTableCol(node)}>+ Столбец</button>
-                          <button type="button" class="table-tool-btn" onClick={() => handleDelTableCol(node)}>- Столбец</button>
-                        </div>
+                        {!isViewerMode.value && (
+                          <div class="card-header-actions" onMouseDown={(e) => e.stopPropagation()} style={{ display: 'flex', gap: '4px' }}>
+                            <button type="button" class="table-tool-btn" onClick={() => handleAddTableRow(node)}>+ Строка</button>
+                            <button type="button" class="table-tool-btn" onClick={() => handleDelTableRow(node)}>- Строка</button>
+                            <button type="button" class="table-tool-btn" onClick={() => handleAddTableCol(node)}>+ Столбец</button>
+                            <button type="button" class="table-tool-btn" onClick={() => handleDelTableCol(node)}>- Столбец</button>
+                          </div>
+                        )}
                       </div>
                       <div class="node-table-grid scrollable-card-content" style={{ gridTemplateColumns: `repeat(${table[0]?.length || 3}, minmax(80px, 1fr))` }} onWheel={(e) => { if (!e.ctrlKey && !e.metaKey) e.stopPropagation(); }}>
                         {table.map((row, rIdx) =>
@@ -5223,9 +5270,12 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                               <input
                                 type="text"
                                 value={cell}
+                                readOnly={isViewerMode.value}
                                 placeholder={rIdx === 0 ? `Колонка ${cIdx + 1}` : ''}
                                 onMouseDown={(e) => e.stopPropagation()}
-                                onInput={(e) => handleUpdateTableCell(node, rIdx, cIdx, (e.target as HTMLInputElement).value)}
+                                onInput={(e) => {
+                                  if (!isViewerMode.value) handleUpdateTableCell(node, rIdx, cIdx, (e.target as HTMLInputElement).value);
+                                }}
                               />
                             </div>
                           ))
@@ -5259,8 +5309,10 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                             class="kanban-title"
                             style={{ background: 'transparent', border: 'none', outline: 'none', width: '100%' }}
                             value={node.text || 'К выполнению'}
+                            readOnly={isViewerMode.value}
                             onMouseDown={(e) => e.stopPropagation()}
                             onInput={(e) => {
+                              if (isViewerMode.value) return;
                               const map = yNodes.get(node.id);
                               if (map) setNodeProperties(map, { text: (e.target as HTMLInputElement).value });
                             }}
@@ -5275,32 +5327,39 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                               type="text"
                               class="checklist-item-input"
                               value={card}
+                              readOnly={isViewerMode.value}
                               onMouseDown={(e) => e.stopPropagation()}
-                              onInput={(e) => handleUpdateKanbanCard(node, idx, (e.target as HTMLInputElement).value)}
-                            />
-                            <button
-                              type="button"
-                              class="checklist-item-del-btn"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleDeleteKanbanCard(node, idx);
+                              onInput={(e) => {
+                                if (!isViewerMode.value) handleUpdateKanbanCard(node, idx, (e.target as HTMLInputElement).value);
                               }}
-                              title="Удалить карточку"
-                            >
-                              <Icon name="x" size={12} />
-                            </button>
+                            />
+                            {!isViewerMode.value && (
+                              <button
+                                type="button"
+                                class="checklist-item-del-btn"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDeleteKanbanCard(node, idx);
+                                }}
+                                title="Удалить карточку"
+                              >
+                                <Icon name="x" size={12} />
+                              </button>
+                            )}
                           </div>
                         ))}
                       </div>
-                      <button
-                        type="button"
-                        class="kanban-add-card-btn"
-                        onMouseDown={(e) => e.stopPropagation()}
-                        onClick={() => handleAddKanbanCard(node)}
-                      >
-                        <Icon name="plus" size={13} />
-                        <span>Карточка</span>
-                      </button>
+                      {!isViewerMode.value && (
+                        <button
+                          type="button"
+                          class="kanban-add-card-btn"
+                          onMouseDown={(e) => e.stopPropagation()}
+                          onClick={() => handleAddKanbanCard(node)}
+                        >
+                          <Icon name="plus" size={13} />
+                          <span>Карточка</span>
+                        </button>
+                      )}
                     </div>
                   );
                 })()
@@ -5326,7 +5385,9 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                           <select
                             class="code-lang-selector"
                             value={lang}
+                            disabled={isViewerMode.value}
                             onChange={(e) => {
+                              if (isViewerMode.value) return;
                               const map = yNodes.get(node.id);
                               if (map) map.set('codeLanguage', (e.target as HTMLSelectElement).value);
                             }}
@@ -5357,16 +5418,19 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                       <textarea
                         class="code-textarea-editor"
                         value={node.text}
+                        readOnly={isViewerMode.value}
                         placeholder="// Напишите код здесь..."
                         spellcheck={false}
                         onWheel={(e) => {
                           if (!e.ctrlKey && !e.metaKey) e.stopPropagation();
                         }}
                         onInput={(e) => {
+                          if (isViewerMode.value) return;
                           const map = yNodes.get(node.id);
                           if (map) setNodeProperties(map, { text: (e.target as HTMLTextAreaElement).value });
                         }}
                         onKeyDown={(e) => {
+                          if (isViewerMode.value) return;
                           if (e.key === 'Tab') {
                             e.preventDefault();
                             const ta = e.currentTarget;
@@ -5704,7 +5768,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
               )}
 
               {/* 8-Point Resize Handles (nw, n, ne, e, se, s, sw, w) */}
-              {isSelected && !node.locked && (
+              {isSelected && !node.locked && !isViewerMode.value && (
                 <div class="node-resize-handles-layer">
                   {(['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'] as ResizeHandle[]).map((handle) => (
                     <div

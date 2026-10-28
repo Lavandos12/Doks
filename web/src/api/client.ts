@@ -34,6 +34,7 @@ export interface AgentStatusResponse {
 
 class ApiClient {
   private sessionToken: string = '';
+  private bridgeToken: string = '';
   private tokenPromise: Promise<string> | null = null;
 
   constructor() {
@@ -46,6 +47,23 @@ class ApiClient {
     if (match && match[1]) {
       this.sessionToken = decodeURIComponent(match[1]);
     }
+    const peerMatch = document.cookie.match(/(?:^|;\s*)doks_peer=([^;]+)/);
+    if (peerMatch && peerMatch[1] && !this.sessionToken) {
+      this.sessionToken = decodeURIComponent(peerMatch[1]);
+    }
+    const bridgeMatch = document.cookie.match(/(?:^|;\s*)doks_bridge=([^;]+)/);
+    if (bridgeMatch && bridgeMatch[1] && !this.bridgeToken) {
+      this.bridgeToken = decodeURIComponent(bridgeMatch[1]);
+    }
+
+    if (typeof window !== 'undefined') {
+      const sp = new URLSearchParams(window.location.search);
+      const bt = sp.get('b') || sp.get('bridge') || sessionStorage.getItem('doks_bridge_token') || '';
+      if (bt) {
+        this.bridgeToken = bt;
+        try { sessionStorage.setItem('doks_bridge_token', bt); } catch {}
+      }
+    }
   }
 
   public async ensureAuthenticated(): Promise<string> {
@@ -56,14 +74,18 @@ class ApiClient {
       try {
         this.extractCookieToken();
         if (!this.sessionToken && typeof window !== 'undefined') {
-          // Fetch root to obtain doks_session cookie
+          // Fetch root to obtain doks_session or doks_peer cookie
           await fetch('/', { credentials: 'include' }).catch(() => {});
           this.extractCookieToken();
         }
 
+        const headers: Record<string, string> = {};
+        if (this.sessionToken) headers['X-Doks-Token'] = this.sessionToken;
+        if (this.bridgeToken) headers['X-Doks-Bridge'] = this.bridgeToken;
+
         const res = await fetch('/api/status', {
           credentials: 'include',
-          headers: this.sessionToken ? { 'X-Doks-Token': this.sessionToken } : {}
+          headers
         });
 
         if (res.ok) {
@@ -89,6 +111,11 @@ class ApiClient {
     return this.sessionToken;
   }
 
+  public getBridgeToken(): string {
+    if (!this.bridgeToken) this.extractCookieToken();
+    return this.bridgeToken;
+  }
+
   public setSessionToken(token: string): void {
     this.sessionToken = token;
   }
@@ -99,6 +126,9 @@ class ApiClient {
     const headers = new Headers(init.headers || {});
     if (this.sessionToken && !headers.has('X-Doks-Token')) {
       headers.set('X-Doks-Token', this.sessionToken);
+    }
+    if (this.bridgeToken && !headers.has('X-Doks-Bridge')) {
+      headers.set('X-Doks-Bridge', this.bridgeToken);
     }
 
     const response = await fetch(url, {
@@ -116,7 +146,8 @@ class ApiClient {
     const host = window.location.host || '127.0.0.1:3000';
     const token = this.getSessionToken();
     const tokenParam = token ? `&token=${encodeURIComponent(token)}` : '';
-    return `${protocol}//${host}/ws?scope=${encodeURIComponent(scope)}${tokenParam}`;
+    const bridgeParam = this.bridgeToken ? `&b=${encodeURIComponent(this.bridgeToken)}` : '';
+    return `${protocol}//${host}/ws?scope=${encodeURIComponent(scope)}${tokenParam}${bridgeParam}`;
   }
 
   // --- API Methods ---

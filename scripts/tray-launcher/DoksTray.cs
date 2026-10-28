@@ -74,11 +74,20 @@ namespace DoksLauncher
             };
         }
 
+        private void OpenUrl(string url)
+        {
+            try
+            {
+                Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
+            }
+            catch { }
+        }
+
         private void InitializeTrayIcon()
         {
             ContextMenu menu = new ContextMenu();
-            menu.MenuItems.Add("Открыть Doks в браузере", (s, e) => Process.Start(webUrl));
-            menu.MenuItems.Add("Режим моста (QR для телефона)", (s, e) => Process.Start(webUrl + "/?openBridge=1"));
+            menu.MenuItems.Add("Открыть Doks в браузере", (s, e) => OpenUrl(webUrl));
+            menu.MenuItems.Add("Режим моста (QR для телефона)", (s, e) => OpenUrl(webUrl + "/?openBridge=1"));
             menu.MenuItems.Add("-");
             menu.MenuItems.Add("Показать / Скрыть терминал", (s, e) => ToggleLogWindow());
             menu.MenuItems.Add("Открыть папку хранилища (~/Doks)", (s, e) =>
@@ -100,7 +109,7 @@ namespace DoksLauncher
             trayIcon.Text = "Doks — Локальное рабочее пространство";
             trayIcon.ContextMenu = menu;
             trayIcon.Visible = true;
-            trayIcon.DoubleClick += (s, e) => Process.Start(webUrl);
+            trayIcon.DoubleClick += (s, e) => OpenUrl(webUrl);
         }
 
         private void ToggleLogWindow()
@@ -169,8 +178,11 @@ namespace DoksLauncher
             {
                 if (agentProcess != null && !agentProcess.HasExited)
                 {
-                    agentProcess.Kill();
-                    agentProcess.WaitForExit(2000);
+                    ProcessStartInfo killPsi = new ProcessStartInfo("taskkill", "/F /T /PID " + agentProcess.Id);
+                    killPsi.CreateNoWindow = true;
+                    killPsi.UseShellExecute = false;
+                    Process killProc = Process.Start(killPsi);
+                    if (killProc != null) killProc.WaitForExit(2000);
                 }
             }
             catch { }

@@ -49,6 +49,9 @@ export class Agent {
   }
 
   public async stop(): Promise<void> {
+    try {
+      this.httpServer.getBridgeService().disableBridge();
+    } catch {}
     await this.httpServer.stop();
     await this.peerService.stop();
     await this.fileWatcher.stop();

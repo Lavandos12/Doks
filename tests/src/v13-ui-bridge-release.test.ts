@@ -116,6 +116,82 @@ describe('Doks v13: Complete UI Polish, Bridge Mode & Release Verification', () 
       expect(delRes.statusCode).toBe(403);
       expect(JSON.parse(delRes.body).error).toContain('Read-Only Bridge Mode');
     });
+
+    it('verifies private network collaborator (26.10.20.30) role isolation', async () => {
+      // 1. Static request from private network receives doks_peer cookie
+      const staticRes = await (server as any).fastify.inject({
+        method: 'GET',
+        url: '/',
+        remoteAddress: '26.10.20.30',
+        headers: {
+          host: `26.10.20.30:${webPort}`
+        }
+      });
+      const setCookie = staticRes.headers['set-cookie'];
+      expect(setCookie).toBeDefined();
+      expect(String(setCookie)).toContain('doks_peer=');
+
+      // Extract peer token from cookie
+      const match = String(setCookie).match(/doks_peer=([^;]+)/);
+      expect(match).toBeTruthy();
+      const peerToken = match![1];
+
+      // 2. GET /api/status provides peer token but teamKey is undefined
+      const statusRes = await (server as any).fastify.inject({
+        method: 'GET',
+        url: '/api/status',
+        remoteAddress: '26.10.20.30',
+        headers: {
+          host: `26.10.20.30:${webPort}`,
+          cookie: `doks_peer=${peerToken}`
+        }
+      });
+      expect(statusRes.statusCode).toBe(200);
+      const statusData = JSON.parse(statusRes.body);
+      expect(statusData.token).toBe(peerToken);
+      expect(statusData.teamKey).toBeUndefined();
+      expect(statusData.isPeer).toBe(true);
+      expect(statusData.isHost).toBe(false);
+
+      // 3. Team scope access is permitted
+      const teamBoardsRes = await (server as any).fastify.inject({
+        method: 'GET',
+        url: '/api/boards?scope=team',
+        remoteAddress: '26.10.20.30',
+        headers: {
+          host: `26.10.20.30:${webPort}`,
+          cookie: `doks_peer=${peerToken}`
+        }
+      });
+      expect(teamBoardsRes.statusCode).toBe(200);
+
+      // 4. Solo scope access is strictly forbidden (403)
+      const soloBoardsRes = await (server as any).fastify.inject({
+        method: 'GET',
+        url: '/api/boards?scope=solo',
+        remoteAddress: '26.10.20.30',
+        headers: {
+          host: `26.10.20.30:${webPort}`,
+          cookie: `doks_peer=${peerToken}`
+        }
+      });
+      expect(soloBoardsRes.statusCode).toBe(403);
+      expect(JSON.parse(soloBoardsRes.body).error).toContain('Solo workspace is private to host');
+
+      // 5. Host admin endpoints return 403
+      const enableBridgeRes = await (server as any).fastify.inject({
+        method: 'POST',
+        url: '/api/bridge/enable',
+        remoteAddress: '26.10.20.30',
+        headers: {
+          host: `26.10.20.30:${webPort}`,
+          cookie: `doks_peer=${peerToken}`,
+          'content-type': 'application/json'
+        },
+        payload: { allowSolo: false }
+      });
+      expect(enableBridgeRes.statusCode).toBe(403);
+    });
   });
 
   describe('Part 2: Pure TypeScript ISO/IEC 18004 QR Code Generation', () => {
@@ -159,11 +235,27 @@ describe('Doks v13: Complete UI Polish, Bridge Mode & Release Verification', () 
         '.hexagon-preview',
         '.drawing-color-swatch',
         '.ai-export-checkbox-label',
-        '.checkbox-row-label'
+        '.checkbox-row-label',
+        '.modal-title',
+        '.dialog-message',
+        '.close-split-btn',
+        '.card-drag-grip',
+        '.is-viewer-mode .miro-board-bar'
       ];
 
       for (const sel of requiredSelectors) {
         expect(cssContent).toContain(sel);
+      }
+    });
+  });
+
+  describe('Part 4: Protected Release Bundle Verification', () => {
+    it('verifies that encoded release/doks-server.cjs responds to --version', () => {
+      const releaseBundle = path.resolve(process.cwd(), 'release/doks-server.cjs');
+      if (fs.existsSync(releaseBundle)) {
+        const { execSync } = require('node:child_process');
+        const output = execSync(`node "${releaseBundle}" --version`, { encoding: 'utf8' }).trim();
+        expect(output).toContain('1.0.0');
       }
     });
   });

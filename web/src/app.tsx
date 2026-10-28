@@ -12,7 +12,8 @@ import {
   boards,
   theme,
   isImportWizardOpen,
-  agentStatus
+  agentStatus,
+  isViewerMode
 } from './state/app-state.js';
 import { TopRightBar } from './components/layout/top-right-bar.js';
 import { NotesDrawer } from './components/layout/notes-drawer.js';
@@ -85,10 +86,12 @@ export function App() {
     window.dispatchEvent(event);
   };
 
+  const isViewer = Boolean(isViewerMode.value || agentStatus.value?.viewerMode);
+
   return (
-    <div class={`app-layout theme-${theme.value} view-board-canvas`}>
+    <div class={`app-layout theme-${theme.value} view-board-canvas ${isViewer ? 'is-viewer-mode' : ''}`}>
       {/* Read-Only Viewer Banner for Phone/Bridge sessions */}
-      {agentStatus.value?.viewerMode && (
+      {isViewer && (
         <div
           class="bridge-viewer-banner"
           style={{

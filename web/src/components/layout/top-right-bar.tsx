@@ -2,7 +2,8 @@ import { h, VNode } from 'preact';
 import {
   workspaceMode,
   setWorkspaceMode,
-  agentStatus
+  agentStatus,
+  isViewerMode
 } from '../../state/app-state.js';
 import { Icon } from '../../ui/icons.js';
 
@@ -26,6 +27,7 @@ export function TopRightBar({
   isSplitMode = false
 }: TopRightBarProps): VNode {
   const status = agentStatus.value;
+  const isViewer = Boolean(isViewerMode.value || status?.viewerMode);
   const isRadminFound = Boolean(status?.radminFound || status?.radminIp);
   const effectiveIp = status?.effectiveIp || '127.0.0.1';
 
@@ -50,50 +52,54 @@ export function TopRightBar({
         <span>Заметки</span>
       </button>
 
-      {/* [ ИИ-Контекст ] */}
-      <button
-        class="miro-action-pill"
-        data-testid="ai-export-btn"
-        onClick={onOpenAiExport}
-        title="Экспорт контекста доски для ИИ"
-      >
-        <Icon name="sparkles" size={14} />
-        <span>ИИ-Контекст</span>
-      </button>
+      {!isViewer && (
+        <>
+          {/* [ ИИ-Контекст ] */}
+          <button
+            class="miro-action-pill"
+            data-testid="ai-export-btn"
+            onClick={onOpenAiExport}
+            title="Экспорт контекста доски для ИИ"
+          >
+            <Icon name="sparkles" size={14} />
+            <span>ИИ-Контекст</span>
+          </button>
 
-      {/* [ ● Radmin / Локально ] */}
-      <div
-        class="miro-network-pill"
-        onClick={onOpenNetwork}
-        title="Сетевые подключения и Radmin VPN"
-        style={{ cursor: 'pointer' }}
-      >
-        <span class={`status-dot ${isRadminFound ? 'green' : 'gray'}`} />
-        <span>{isRadminFound ? `Radmin: ${status?.radminIp || effectiveIp}` : 'Локально'}</span>
-      </div>
+          {/* [ ● Radmin / Локально ] */}
+          <div
+            class="miro-network-pill"
+            onClick={onOpenNetwork}
+            title="Сетевые подключения и Radmin VPN"
+            style={{ cursor: 'pointer' }}
+          >
+            <span class={`status-dot ${isRadminFound ? 'green' : 'gray'}`} />
+            <span>{isRadminFound ? `Radmin: ${status?.radminIp || effectiveIp}` : 'Локально'}</span>
+          </div>
 
-      {/* [ Мост (QR) ] */}
-      {onOpenBridge && (
-        <button
-          class="miro-action-pill"
-          data-testid="bridge-toggle-btn"
-          onClick={onOpenBridge}
-          title="Режим моста (QR-код для смартфона)"
-        >
-          <Icon name="smartphone" size={13} />
-          <span>Мост</span>
-        </button>
+          {/* [ Мост (QR) ] */}
+          {onOpenBridge && (
+            <button
+              class="miro-action-pill"
+              data-testid="bridge-toggle-btn"
+              onClick={onOpenBridge}
+              title="Режим моста (QR-код для смартфона)"
+            >
+              <Icon name="smartphone" size={13} />
+              <span>Мост</span>
+            </button>
+          )}
+
+          {/* [ Settings / Настройки ] */}
+          <button
+            class="miro-action-pill settings-trigger-btn"
+            onClick={onOpenSettings}
+            title="Настройки холста, профиля и бэкапов"
+            style={{ padding: '5px 8px' }}
+          >
+            <Icon name="settings" size={15} />
+          </button>
+        </>
       )}
-
-      {/* [ Settings / Настройки ] */}
-      <button
-        class="miro-action-pill settings-trigger-btn"
-        onClick={onOpenSettings}
-        title="Настройки холста, профиля и бэкапов"
-        style={{ padding: '5px 8px' }}
-      >
-        <Icon name="settings" size={15} />
-      </button>
     </div>
   );
 }

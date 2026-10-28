@@ -7249,3 +7249,80 @@ button.settings-color-btn.selected {
   font-size: 13px;
   color: #cbd5e1;
 }
+
+
+/* --- Doks v14 CSS Polish --- */
+.modal-title {
+  margin: 0 !important;
+  font-size: 16.5px !important;
+  font-weight: 600 !important;
+  color: #f8fafc !important;
+  line-height: 1.3 !important;
+}
+
+.modal-body,
+.dialog-content {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.modal-header-icon {
+  color: #818cf8;
+  flex-shrink: 0;
+}
+
+.dialog-message {
+  font-size: 13.5px;
+  color: #cbd5e1;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.close-split-btn {
+  background: rgba(239, 68, 68, 0.14) !important;
+  border-color: rgba(239, 68, 68, 0.35) !important;
+  color: #fca5a5 !important;
+}
+
+.close-split-btn:hover {
+  background: rgba(239, 68, 68, 0.25) !important;
+  color: #ffffff !important;
+}
+
+.snapshots-list,
+.trash-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.snap-date,
+.trash-title {
+  font-weight: 600;
+  color: #f1f5f9;
+}
+
+.snap-size,
+.trash-date {
+  font-size: 12px;
+  color: #94a3b8;
+  margin-left: auto;
+}
+
+.trash-icon {
+  color: #94a3b8;
+  flex-shrink: 0;
+}
+
+.card-drag-grip {
+  color: #64748b;
+  display: inline-flex;
+  align-items: center;
+  cursor: grab;
+}
+
+.is-viewer-mode .miro-board-bar,
+.is-viewer-mode .miro-actions-bar {
+  top: 42px !important;
+}

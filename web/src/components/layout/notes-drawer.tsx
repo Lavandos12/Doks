@@ -7,7 +7,8 @@ import {
   deleteNote,
   currentScope,
   yjsClient,
-  getScopedNoteDocName
+  getScopedNoteDocName,
+  isViewerMode
 } from '../../state/app-state.js';
 import { MarkdownPreview } from '../notes/markdown-preview.js';
 import { Icon } from '../../ui/icons.js';
@@ -27,6 +28,7 @@ export function NotesDrawer({
   if (!isOpen) return null;
 
   const activeNotes = notes.value.filter((n) => !n.deleted);
+  const isViewer = Boolean(isViewerMode.value);
   const [selectedId, setSelectedId] = useState<string>(() => {
     return activeNotes[0]?.id || '';
   });
@@ -34,6 +36,7 @@ export function NotesDrawer({
   const [noteTitle, setNoteTitle] = useState('');
   const [noteText, setNoteText] = useState('');
   const [previewMode, setPreviewMode] = useState(false);
+  const effectivePreview = isViewer ? true : previewMode;
 
   // If selectedId changed or list changed, sync current note data
   useEffect(() => {
@@ -114,7 +117,7 @@ export function NotesDrawer({
           <span>Заметки ({currentScope.value === 'solo' ? 'Соло' : 'Команда'})</span>
         </div>
         <div class="notes-drawer-actions">
-          {selectedId && (
+          {selectedId && !isViewer && (
             <>
               <button
                 class={`btn-ghost-xs ${previewMode ? 'active' : ''}`}
@@ -132,10 +135,12 @@ export function NotesDrawer({
               </button>
             </>
           )}
-          <button class="btn-primary-xs" onClick={handleCreateNew} title="Создать заметку">
-            <Icon name="plus" size={13} />
-            <span>Новая</span>
-          </button>
+          {!isViewer && (
+            <button class="btn-primary-xs" onClick={handleCreateNew} title="Создать заметку">
+              <Icon name="plus" size={13} />
+              <span>Новая</span>
+            </button>
+          )}
           <button class="modal-close-btn" onClick={onClose} aria-label="Закрыть">
             <Icon name="x" size={16} />
           </button>
@@ -183,14 +188,16 @@ export function NotesDrawer({
               type="text"
               class="notes-drawer-note-title"
               value={noteTitle}
+              readOnly={isViewer}
               onInput={(e) => {
+                if (isViewer) return;
                 const newVal = (e.target as HTMLInputElement).value;
                 setNoteTitle(newVal);
                 renameNote(selectedId, newVal);
               }}
               placeholder="Название заметки..."
             />
-            {previewMode ? (
+            {effectivePreview ? (
               <div class="notes-drawer-editor-body preview-scroll" style={{ overflowY: 'auto' }}>
                 <MarkdownPreview content={noteText} />
               </div>
@@ -207,9 +214,11 @@ export function NotesDrawer({
           <div class="miro-empty-notes">
             <Icon name="file-text" size={32} />
             <p>Нет заметок в этом пространстве</p>
-            <button class="btn-primary-sm" onClick={handleCreateNew}>
-              Создать первую заметку
-            </button>
+            {!isViewer && (
+              <button class="btn-primary-sm" onClick={handleCreateNew}>
+                Создать первую заметку
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -220,10 +229,12 @@ export function NotesDrawer({
           <span style={{ fontSize: '11px', color: '#94a3b8' }}>
             Автосохранение в Markdown
           </span>
-          <button class="btn-drop-to-canvas" onClick={handleDropToCanvas} title="Поместить заметку на холст">
-            <Icon name="plus" size={13} />
-            <span>На доску</span>
-          </button>
+          {!isViewer && (
+            <button class="btn-drop-to-canvas" onClick={handleDropToCanvas} title="Поместить заметку на холст">
+              <Icon name="plus" size={13} />
+              <span>На доску</span>
+            </button>
+          )}
         </div>
       )}
     </div>

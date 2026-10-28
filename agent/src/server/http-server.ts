@@ -98,6 +98,7 @@ export class AgentHttpServer {
   private snapshotManager?: any;
   private attachmentManager?: AttachmentManager;
   private sessionToken: string;
+  private peerSessionToken: string = generateSessionToken();
   private webDistPath: string;
   private p2pMeshEnabled = true;
   private bridgeService: BridgeService;
@@ -272,18 +273,25 @@ export class AgentHttpServer {
           !urlPath.startsWith('/api/bridge/disable');
 
         if (!this.isValidSession(req) && !isBridgeViewerAllowed) {
-          reply.code(401).send({ error: 'Unauthorized: Valid doks_session cookie required' });
+          reply.code(401).send({ error: 'Unauthorized: Valid doks_session or doks_peer cookie required' });
           return;
         }
       } else {
-        // Issue session cookie for static routes if missing and not in viewer mode (loopback only)
-        const isLoopback = req.ip === '127.0.0.1' || req.ip === '::1' || req.hostname === 'localhost' || req.hostname === '127.0.0.1';
-        if (!req.cookies?.doks_session && !isViewer && isLoopback) {
-          reply.setCookie('doks_session', this.sessionToken, {
-            path: '/',
-            httpOnly: true,
-            sameSite: 'lax'
-          });
+        // Issue session cookie for static routes if missing and not in viewer mode
+        if (!isViewer) {
+          if (this.isLoopbackRequest(req) && !req.cookies?.doks_session) {
+            reply.setCookie('doks_session', this.sessionToken, {
+              path: '/',
+              httpOnly: true,
+              sameSite: 'lax'
+            });
+          } else if (this.isPrivateNetworkRequest(req) && !req.cookies?.doks_peer) {
+            reply.setCookie('doks_peer', this.peerSessionToken, {
+              path: '/',
+              httpOnly: true,
+              sameSite: 'lax'
+            });
+          }
         }
       }
     });
@@ -293,14 +301,25 @@ export class AgentHttpServer {
     return this.bridgeService;
   }
 
-  private isViewerSession(req: any): boolean {
-    const bridgeCookie = req.cookies?.doks_bridge;
-    const queryBridgeToken = (req.query as any)?.b || (req.query as any)?.bridge;
-    const token = bridgeCookie || queryBridgeToken;
-    return typeof token === 'string' && this.bridgeService.isValidBridgeToken(token);
+  private isLoopbackRequest(req: any): boolean {
+    const ip = (req.ip || req.raw?.socket?.remoteAddress || req.socket?.remoteAddress || '').replace(/^::ffff:/, '');
+    return ip === '127.0.0.1' || ip === '::1';
   }
 
-  private isValidSession(req: any): boolean {
+  private isPrivateNetworkRequest(req: any): boolean {
+    const ip = (req.ip || req.raw?.socket?.remoteAddress || req.socket?.remoteAddress || '').replace(/^::ffff:/, '');
+    if (ip.startsWith('26.')) return true;
+    if (ip.startsWith('192.168.')) return true;
+    if (ip.startsWith('10.')) return true;
+    const match = ip.match(/^172\.(\d+)\./);
+    if (match) {
+      const octet = parseInt(match[1], 10);
+      if (octet >= 16 && octet <= 31) return true;
+    }
+    return false;
+  }
+
+  private isHostSession(req: any): boolean {
     const cookieToken = req.cookies?.doks_session;
     const authHeader = req.headers?.authorization;
     const bearerToken = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : undefined;
@@ -313,6 +332,31 @@ export class AgentHttpServer {
     const expectedBuf = Buffer.from(this.sessionToken);
     if (tokenBuf.length !== expectedBuf.length) return false;
     return crypto.timingSafeEqual(tokenBuf, expectedBuf);
+  }
+
+  private isPeerCollabSession(req: any): boolean {
+    const cookieToken = req.cookies?.doks_peer;
+    const xDoksToken = req.headers?.['x-doks-token'];
+    const queryToken = (req.query as any)?.token;
+    const token = cookieToken || xDoksToken || queryToken;
+    if (!token || typeof token !== 'string') return false;
+
+    const tokenBuf = Buffer.from(token);
+    const expectedBuf = Buffer.from(this.peerSessionToken);
+    if (tokenBuf.length !== expectedBuf.length) return false;
+    return crypto.timingSafeEqual(tokenBuf, expectedBuf);
+  }
+
+  private isViewerSession(req: any): boolean {
+    const bridgeCookie = req.cookies?.doks_bridge;
+    const bridgeHeader = req.headers?.['x-doks-bridge'];
+    const queryBridgeToken = (req.query as any)?.b || (req.query as any)?.bridge;
+    const token = bridgeCookie || bridgeHeader || queryBridgeToken;
+    return typeof token === 'string' && this.bridgeService.isValidBridgeToken(token);
+  }
+
+  private isValidSession(req: any): boolean {
+    return this.isHostSession(req) || this.isPeerCollabSession(req);
   }
 
   private isValidPeerOrigin(originStr: string): boolean {
@@ -379,10 +423,9 @@ export class AgentHttpServer {
     this.fastify.get('/api/status', async (req) => {
       const radminIp = detectRadminIp();
       const preferred = detectPreferredMeshIp();
-      const hasAuth = this.isValidSession(req);
       const isViewer = this.isViewerSession(req);
-      const isLoopback = req.ip === '127.0.0.1' || req.ip === '::1' || req.hostname === 'localhost' || req.hostname === '127.0.0.1';
-      const isAuthorized = !isViewer && (hasAuth || isLoopback);
+      const isHost = !isViewer && (this.isHostSession(req) || this.isLoopbackRequest(req));
+      const isPeer = !isViewer && !isHost && (this.isPeerCollabSession(req) || this.isPrivateNetworkRequest(req));
 
       const networkOverview = detectNetworkOverview({
         p2pEnabled: this.p2pMeshEnabled,
@@ -390,6 +433,13 @@ export class AgentHttpServer {
         port: this.config.peerPort,
         peerId: this.config.agentId
       });
+
+      let token: string | undefined = undefined;
+      if (isHost) {
+        token = this.sessionToken;
+      } else if (isPeer) {
+        token = this.peerSessionToken;
+      }
 
       return {
         agentId: this.config.agentId,
@@ -409,11 +459,13 @@ export class AgentHttpServer {
         peers: this.peerService.getPeersStatus(),
         connectedCount: this.peerService.getConnectedCount(),
         discoveredLanRooms: this.peerService.getDiscoveredLanRooms(),
-        token: isAuthorized ? this.sessionToken : undefined,
-        // B17: Do not expose raw teamKey without session authentication
-        teamKey: isAuthorized ? this.config.teamKey : undefined,
+        token,
+        isHost,
+        isPeer,
+        // B17: Do not expose raw teamKey without session authentication (host only)
+        teamKey: isHost ? this.config.teamKey : undefined,
         keyFingerprint:
-          isAuthorized && this.config.teamKey
+          isHost && this.config.teamKey
             ? crypto
                 .createHash('sha256')
                 .update(this.config.teamKey)
@@ -423,8 +475,8 @@ export class AgentHttpServer {
             : undefined,
         inviteLink: networkOverview.inviteUri,
         inviteUri: networkOverview.inviteUri,
-        viewerMode: this.isViewerSession(req),
-        allowSolo: this.isViewerSession(req) ? this.bridgeService.isSoloAllowed() : true,
+        viewerMode: isViewer,
+        allowSolo: isViewer ? this.bridgeService.isSoloAllowed() : isHost,
         bridge: this.bridgeService.getStatus()
       };
     });
@@ -465,22 +517,25 @@ export class AgentHttpServer {
     });
 
     this.fastify.post('/api/bridge/enable', async (req, reply) => {
-      if (!this.isValidSession(req)) {
-        return reply.code(401).send({ error: 'Unauthorized: Admin session required' });
+      if (!this.isHostSession(req)) {
+        return reply.code(403).send({ error: 'Forbidden: Bridge management requires host privileges' });
       }
       const body = (req.body as any) || {};
       return await this.bridgeService.enableBridge(body);
     });
 
     this.fastify.post('/api/bridge/disable', async (req, reply) => {
-      if (!this.isValidSession(req)) {
-        return reply.code(401).send({ error: 'Unauthorized: Admin session required' });
+      if (!this.isHostSession(req)) {
+        return reply.code(403).send({ error: 'Forbidden: Bridge management requires host privileges' });
       }
       return this.bridgeService.disableBridge();
     });
 
     // API: Change team key (with automatic backup snapshot)
     this.fastify.post('/api/team-key', async (req, reply) => {
+      if (!this.isHostSession(req)) {
+        return reply.code(403).send({ error: 'Forbidden: Team key configuration requires host privileges' });
+      }
       const body = req.body as { teamKey?: string };
       if (!body?.teamKey || body.teamKey.trim().length !== 64) {
         return reply.code(400).send({ error: 'Valid 64-character hex team key is required' });
@@ -568,9 +623,13 @@ export class AgentHttpServer {
     });
 
     // API: List boards with scope metadata
-    this.fastify.get('/api/boards', async (req) => {
+    this.fastify.get('/api/boards', async (req, reply) => {
       const scopeQuery = (req.query as any)?.scope;
-      const soloBoards = this.docManager.listBoards('solo');
+      const isHost = this.isHostSession(req);
+      if (scopeQuery === 'solo' && !isHost) {
+        return reply.code(403).send({ error: 'Forbidden: Solo workspace is private to host' });
+      }
+      const soloBoards = isHost ? this.docManager.listBoards('solo') : [];
       const teamBoards = this.docManager.listBoards('team');
       if (scopeQuery === 'solo') return soloBoards;
       if (scopeQuery === 'team') return teamBoards;
@@ -578,9 +637,12 @@ export class AgentHttpServer {
     });
 
     // API: Create board
-    this.fastify.post('/api/boards', async (req) => {
+    this.fastify.post('/api/boards', async (req, reply) => {
       const body = (req.body as any) || {};
       const scope = (body.scope === 'solo' ? 'solo' : 'team') as WorkspaceScope;
+      if (scope === 'solo' && !this.isHostSession(req)) {
+        return reply.code(403).send({ error: 'Forbidden: Solo workspace is private to host' });
+      }
       const title = (body.title || 'Новая доска').trim();
       const folder = body.folder || null;
       const boardId = crypto.randomUUID();
@@ -607,6 +669,9 @@ export class AgentHttpServer {
       const { id } = req.params as { id: string };
       const body = (req.body as any) || {};
       const scope = (body.scope === 'solo' ? 'solo' : 'team') as WorkspaceScope;
+      if (scope === 'solo' && !this.isHostSession(req)) {
+        return reply.code(403).send({ error: 'Forbidden: Solo workspace is private to host' });
+      }
       const indexDoc = this.docManager.getOrCreateDoc(getScopedIndexDocName(scope));
       const { boards } = getIndexMaps(indexDoc);
       const existing = boards.get(id);
@@ -629,6 +694,9 @@ export class AgentHttpServer {
       const { id } = req.params as { id: string };
       const scopeQuery = (req.query as any)?.scope;
       const scope = (scopeQuery === 'solo' ? 'solo' : 'team') as WorkspaceScope;
+      if (scope === 'solo' && !this.isHostSession(req)) {
+        return reply.code(403).send({ error: 'Forbidden: Solo workspace is private to host' });
+      }
       const indexDoc = this.docManager.getOrCreateDoc(getScopedIndexDocName(scope));
       const { boards } = getIndexMaps(indexDoc);
       const existing = boards.get(id);
@@ -647,8 +715,12 @@ export class AgentHttpServer {
     });
 
     // API: List notes
-    this.fastify.get('/api/notes', async (req) => {
+    this.fastify.get('/api/notes', async (req, reply) => {
       const scopeQuery = (req.query as any)?.scope;
+      const isHost = this.isHostSession(req);
+      if (scopeQuery === 'solo' && !isHost) {
+        return reply.code(403).send({ error: 'Forbidden: Solo workspace is private to host' });
+      }
       const scope = (scopeQuery === 'solo' ? 'solo' : 'team') as WorkspaceScope;
       const indexDoc = this.docManager.getOrCreateDoc(getScopedIndexDocName(scope));
       const { notes } = getIndexMaps(indexDoc);
@@ -660,9 +732,12 @@ export class AgentHttpServer {
     });
 
     // API: Create note
-    this.fastify.post('/api/notes', async (req) => {
+    this.fastify.post('/api/notes', async (req, reply) => {
       const body = (req.body as any) || {};
       const scope = (body.scope === 'solo' ? 'solo' : 'team') as WorkspaceScope;
+      if (scope === 'solo' && !this.isHostSession(req)) {
+        return reply.code(403).send({ error: 'Forbidden: Solo workspace is private to host' });
+      }
       const title = (body.title || 'Новая заметка').trim();
       const folder = body.folder || null;
       const noteId = crypto.randomUUID();
@@ -689,6 +764,9 @@ export class AgentHttpServer {
       const { id } = req.params as { id: string };
       const body = (req.body as any) || {};
       const scope = (body.scope === 'solo' ? 'solo' : 'team') as WorkspaceScope;
+      if (scope === 'solo' && !this.isHostSession(req)) {
+        return reply.code(403).send({ error: 'Forbidden: Solo workspace is private to host' });
+      }
       const indexDoc = this.docManager.getOrCreateDoc(getScopedIndexDocName(scope));
       const { notes } = getIndexMaps(indexDoc);
       const existing = notes.get(id);
@@ -716,6 +794,9 @@ export class AgentHttpServer {
       const { id } = req.params as { id: string };
       const scopeQuery = (req.query as any)?.scope;
       const scope = (scopeQuery === 'solo' ? 'solo' : 'team') as WorkspaceScope;
+      if (scope === 'solo' && !this.isHostSession(req)) {
+        return reply.code(403).send({ error: 'Forbidden: Solo workspace is private to host' });
+      }
       const indexDoc = this.docManager.getOrCreateDoc(getScopedIndexDocName(scope));
       const { notes } = getIndexMaps(indexDoc);
       const existing = notes.get(id);
@@ -735,6 +816,12 @@ export class AgentHttpServer {
 
     // API: Cross-scope bridge transfer (Promote to Team / Fork to Solo)
     this.fastify.post('/api/bridge/transfer', async (req, reply) => {
+      if (!this.isHostSession(req)) {
+        return reply.code(403).send({
+          success: false,
+          error: 'Forbidden: Cross-scope bridge transfer requires host privileges'
+        });
+      }
       const body = req.body as any;
       if (!body || !body.fromScope || !body.toScope || !body.boardId || !body.targetBoardId || !Array.isArray(body.nodeIds)) {
         return reply.code(400).send({
@@ -771,6 +858,9 @@ export class AgentHttpServer {
 
     // API: Restore snapshot
     this.fastify.post('/api/snapshots/restore', async (req, reply) => {
+      if (!this.isHostSession(req)) {
+        return reply.code(403).send({ error: 'Forbidden: Restoring snapshots requires host privileges' });
+      }
       if (!this.snapshotManager) return reply.code(400).send({ error: 'Snapshots disabled' });
       const body = req.body as { snapshotId?: string; docName?: string };
       if (!body?.snapshotId) {
@@ -781,6 +871,9 @@ export class AgentHttpServer {
     });
 
     this.fastify.post('/api/snapshots/:id/restore', async (req, reply) => {
+      if (!this.isHostSession(req)) {
+        return reply.code(403).send({ error: 'Forbidden: Restoring snapshots requires host privileges' });
+      }
       if (!this.snapshotManager) return reply.code(400).send({ error: 'Snapshots disabled' });
       const { id } = req.params as { id: string };
       const body = (req.body as any) || {};
@@ -1225,6 +1318,9 @@ export class AgentHttpServer {
     // API: Export Vault as .zip (Streaming ZIP without execSync - F10)
     const handleVaultZipExport = async (req: any, reply: any) => {
       const scope = (req.query as any)?.scope;
+      if (scope === 'solo' && !this.isHostSession(req)) {
+        return reply.code(403).send({ error: 'Forbidden: Solo workspace is private to host' });
+      }
       let vaultDir = this.config.vaultPath;
       if (scope === 'solo') {
         const soloDir = path.join(vaultDir, 'solo');
@@ -1252,6 +1348,9 @@ export class AgentHttpServer {
     this.fastify.get('/api/export/note/:id', async (req, reply) => {
       const { id } = req.params as { id: string };
       const scope = ((req.query as any)?.scope === 'solo' ? 'solo' : 'team') as WorkspaceScope;
+      if (scope === 'solo' && !this.isHostSession(req)) {
+        return reply.code(403).send({ error: 'Forbidden: Solo workspace is private to host' });
+      }
       const indexDoc = this.docManager.getOrCreateDoc(getScopedIndexDocName(scope));
       const { notes } = getIndexMaps(indexDoc);
       const meta = notes.get(id);
@@ -1271,6 +1370,9 @@ export class AgentHttpServer {
     this.fastify.get('/api/export/board/:id', async (req, reply) => {
       const { id } = req.params as { id: string };
       const scope = ((req.query as any)?.scope === 'solo' ? 'solo' : 'team') as WorkspaceScope;
+      if (scope === 'solo' && !this.isHostSession(req)) {
+        return reply.code(403).send({ error: 'Forbidden: Solo workspace is private to host' });
+      }
       const indexDoc = this.docManager.getOrCreateDoc(getScopedIndexDocName(scope));
       const { boards } = getIndexMaps(indexDoc);
       const meta = boards.get(id);
@@ -1338,13 +1440,19 @@ export class AgentHttpServer {
       fastify.get('/ws', { websocket: true }, (socket, req) => {
         const queryScope = ((req.query as any)?.scope === 'solo' ? 'solo' : 'team') as WorkspaceScope;
         const isViewer = this.isViewerSession(req);
-        const allowSolo = !isViewer || this.bridgeService.isSoloAllowed();
+        const isHost = !isViewer && (this.isHostSession(req) || this.isLoopbackRequest(req));
+        const allowSolo = isHost || (isViewer && this.bridgeService.isSoloAllowed());
+
+        if (queryScope === 'solo' && !isHost && !allowSolo) {
+          socket.close(4403, 'Forbidden: Solo scope is restricted to host');
+          return;
+        }
 
         // B21: Selective doc subscription set per socket
         const subscribedDocs = new Set<string>();
 
         const isDocSubscribed = (docName: string) => {
-          if (isViewer && docName.startsWith('solo:') && !allowSolo) {
+          if (!isHost && docName.startsWith('solo:') && !allowSolo) {
             return false;
           }
           return (
@@ -1366,12 +1474,12 @@ export class AgentHttpServer {
             if (msg.type === 'sync') {
               const data = base64ToUint8Array(msg.data);
 
+              if (msg.docName?.startsWith('solo:') && !allowSolo) {
+                return;
+              }
+
               // If socket is in read-only viewer mode:
               if (isViewer) {
-                // If it's a solo doc and solo is not allowed, ignore
-                if (msg.docName?.startsWith('solo:') && !allowSolo) {
-                  return;
-                }
                 // Check Yjs message type (first byte): syncStep1 = 0, syncStep2 = 1, syncUpdate = 2
                 // A read-only viewer must only send syncStep1
                 const syncType = data[0];
@@ -1400,9 +1508,12 @@ export class AgentHttpServer {
                 // Ignore awareness writes from viewer
                 return;
               }
+              const isSolo = msg.docName?.startsWith('solo:');
+              if (isSolo && !isHost) {
+                return;
+              }
               // Apply browser awareness state and broadcast to mesh if not solo
               const data = base64ToUint8Array(msg.data);
-              const isSolo = msg.docName?.startsWith('solo:');
               const awarenessScope = isSolo ? 'solo' : 'team';
               try {
                 awarenessProtocol.applyAwarenessUpdate(this.docManager.getAwareness(awarenessScope), data, 'client');
@@ -1413,7 +1524,7 @@ export class AgentHttpServer {
                 this.peerService.broadcastAwareness(msg.docName, data);
               }
             } else if (msg.type === 'subscribe') {
-              if (isViewer && msg.docName?.startsWith('solo:') && !allowSolo) {
+              if (msg.docName?.startsWith('solo:') && !allowSolo) {
                 return;
               }
               // B21: selective subscription
@@ -1431,7 +1542,7 @@ export class AgentHttpServer {
         // Forward doc updates to the browser
         const updateListener = ({ scope: docScope, docName, update, origin }: any) => {
           if (origin === 'client' || socket.readyState !== socket.OPEN) return;
-          if (isViewer && docName.startsWith('solo:') && !allowSolo) return;
+          if (docName.startsWith('solo:') && !allowSolo) return;
 
           if (isDocSubscribed(docName)) {
             const syncMsg = this.docManager.createUpdateSyncMessage(update);
