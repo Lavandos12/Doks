@@ -192,6 +192,10 @@ describe('V5 Calligraphic Brushes, Textarea Stability, 22px Ports, Percentage Ch
         w: 380,
         h: 360,
         text: 'План релиза',
+        color: '#3b82f6',
+        author: 'tester',
+        z: 1,
+        deleted: false,
         chartType: 'donut',
         chartData: [
           { id: '1', label: 'Frontend', value: 60, color: '#6366f1' },

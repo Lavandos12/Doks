@@ -45,10 +45,10 @@ export function extractTextFromPdfBuffer(buf: Buffer): string {
 
       // Try zlib inflate
       try {
-        decompressed = zlib.inflateSync(streamBinary).toString('utf8');
+        decompressed = zlib.inflateSync(streamBinary, { maxOutputLength: 15 * 1024 * 1024 }).toString('utf8');
       } catch {
         try {
-          decompressed = zlib.inflateRawSync(streamBinary).toString('utf8');
+          decompressed = zlib.inflateRawSync(streamBinary, { maxOutputLength: 15 * 1024 * 1024 }).toString('utf8');
         } catch {
           // If not compressed, use as raw utf8/latin1
           decompressed = streamBinary.toString('utf8');

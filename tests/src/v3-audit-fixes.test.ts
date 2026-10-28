@@ -841,6 +841,7 @@ Doks v3.0
 
     it('discovered LAN rooms list maintains beacons with displayName and webPort, expiring stale ones (>15s)', () => {
       const discovery = new PeerDiscoveryService({
+        wsPort: 4747,
         port: 4747,
         peerId: 'local-test-peer',
         teamKey: 'abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789',

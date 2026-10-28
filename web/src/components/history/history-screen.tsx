@@ -2,8 +2,8 @@ import { h } from 'preact';
 import { useState, useEffect } from 'preact/hooks';
 import type { SnapshotMeta } from '@doks/shared';
 import {
-  notes,
-  boards,
+  allTrashNotes,
+  allTrashBoards,
   restoreNote,
   restoreBoard,
   openTab
@@ -20,8 +20,8 @@ export function HistoryScreen() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
-  const deletedNotes = notes.value.filter((n) => n.deleted);
-  const deletedBoards = boards.value.filter((b) => b.deleted);
+  const deletedNotes = allTrashNotes.value;
+  const deletedBoards = allTrashBoards.value;
 
   const fetchSnapshots = async () => {
     try {
@@ -167,6 +167,20 @@ export function HistoryScreen() {
                     <div class="trash-card-info">
                       <Icon name="file-text" size={16} class="trash-icon" />
                       <span class="trash-title">{note.title}</span>
+                      <span
+                        class={`miro-scope-badge ${note.scope || 'solo'}`}
+                        style={{
+                          fontSize: 10,
+                          fontWeight: 600,
+                          padding: '1px 6px',
+                          borderRadius: 4,
+                          marginLeft: 6,
+                          color: note.scope === 'team' ? '#34d399' : '#60a5fa',
+                          background: note.scope === 'team' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(59, 130, 246, 0.15)'
+                        }}
+                      >
+                        {note.scope === 'team' ? 'Общая' : 'Личная'}
+                      </span>
                       <span class="trash-date">
                         Удалено: {note.deletedAt ? new Date(note.deletedAt).toLocaleString('ru-RU') : 'недавно'}
                       </span>
@@ -174,7 +188,7 @@ export function HistoryScreen() {
                     <button
                       class="btn-restore"
                       onClick={() => {
-                        restoreNote(note.id);
+                        restoreNote(note.id, note.scope);
                         openTab('note', note.id, note.title);
                       }}
                     >
@@ -188,6 +202,20 @@ export function HistoryScreen() {
                     <div class="trash-card-info">
                       <Icon name="layout" size={16} class="trash-icon" />
                       <span class="trash-title">{b.title}</span>
+                      <span
+                        class={`miro-scope-badge ${b.scope || 'solo'}`}
+                        style={{
+                          fontSize: 10,
+                          fontWeight: 600,
+                          padding: '1px 6px',
+                          borderRadius: 4,
+                          marginLeft: 6,
+                          color: b.scope === 'team' ? '#34d399' : '#60a5fa',
+                          background: b.scope === 'team' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(59, 130, 246, 0.15)'
+                        }}
+                      >
+                        {b.scope === 'team' ? 'Общая' : 'Личная'}
+                      </span>
                       <span class="trash-date">
                         Удалено: {b.deletedAt ? new Date(b.deletedAt).toLocaleString('ru-RU') : 'недавно'}
                       </span>
@@ -195,7 +223,7 @@ export function HistoryScreen() {
                     <button
                       class="btn-restore"
                       onClick={() => {
-                        restoreBoard(b.id);
+                        restoreBoard(b.id, b.scope);
                         openTab('board', b.id, b.title);
                       }}
                     >

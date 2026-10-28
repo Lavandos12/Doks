@@ -36,7 +36,7 @@ export function extractTextFromDocxBuffer(buf: Buffer): string {
           const lExtraLen = buf.readUInt16LE(localHeaderOffset + 28);
           const dataStart = localHeaderOffset + 30 + lNameLen + lExtraLen;
           const slice = buf.subarray(dataStart, dataStart + compSize);
-          const xmlBuf = method === 8 ? zlib.inflateRawSync(slice) : slice;
+          const xmlBuf = method === 8 ? zlib.inflateRawSync(slice, { maxOutputLength: 15 * 1024 * 1024 }) : slice;
           return cleanWordXmlToText(xmlBuf.toString('utf8'));
         }
 
@@ -54,7 +54,7 @@ export function extractTextFromDocxBuffer(buf: Buffer): string {
       const extraLen = buf.readUInt16LE(headerOffset + 28);
       const dataStart = headerOffset + 30 + nameLen + extraLen;
       const rawSlice = buf.subarray(dataStart);
-      const xmlBuf = method === 8 ? zlib.inflateRawSync(rawSlice) : rawSlice;
+      const xmlBuf = method === 8 ? zlib.inflateRawSync(rawSlice, { maxOutputLength: 15 * 1024 * 1024 }) : rawSlice;
       return cleanWordXmlToText(xmlBuf.toString('utf8'));
     }
   } catch {

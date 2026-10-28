@@ -263,6 +263,15 @@ export class DocManager extends EventEmitter {
       const sourceScope = req.fromScope;
       const targetScope = req.toScope;
 
+      if (sourceScope === targetScope && req.boardId === req.targetBoardId) {
+        return {
+          success: false,
+          transferredNodeCount: 0,
+          transferredNoteCount: 0,
+          error: 'Cannot transfer elements to the same board'
+        };
+      }
+
       const sourceBoardDoc = this.getOrCreateDoc(getScopedBoardDocName(sourceScope, req.boardId));
       const targetBoardDoc = this.getOrCreateDoc(getScopedBoardDocName(targetScope, req.targetBoardId));
 

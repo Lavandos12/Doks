@@ -5906,6 +5906,17 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
             <Icon name={effectiveScope === 'solo' ? 'promote' : 'fork'} size={14} />
             <span>{effectiveScope === 'solo' ? 'На общую доску ->' : '<- В мой черновик'}</span>
           </div>
+          <div
+            class="context-menu-item"
+            onClick={() => {
+              const ids = Array.from(selectedNodeIds).length > 0 ? Array.from(selectedNodeIds) : nodesList.filter((n) => !n.deleted).map((n) => n.id);
+              handleOpenTransferModal(ids);
+              setContextMenu(null);
+            }}
+          >
+            <Icon name="share" size={14} />
+            <span>Выбрать доску для переноса...</span>
+          </div>
           {contextMenu.nodeId && (
             <>
               <div class="context-menu-divider" />
@@ -5987,9 +5998,15 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
         scope={settingsTargetBoard?.scope || (currentBoardMeta?.scope || effectiveScope)}
         boardTitle={settingsTargetBoard?.title || currentBoardMeta?.title || 'Доска'}
         onClearBoard={() => {
+          const targetId = settingsTargetBoard?.id || boardId;
+          const targetScope = settingsTargetBoard?.scope || (currentBoardMeta?.scope || effectiveScope);
+          const targetDoc = (targetId === boardId && targetScope === effectiveScope)
+            ? boardDoc
+            : yjsClient.getOrCreateDoc(getScopedBoardDocName(targetScope, targetId));
+          const targetNodes = targetDoc.getMap<Y.Map<any>>('nodes');
           let count = 0;
-          boardDoc.transact(() => {
-            yNodes.forEach((nodeMap) => {
+          targetDoc.transact(() => {
+            targetNodes.forEach((nodeMap: any) => {
               if (!nodeMap.get('locked') && !nodeMap.get('deleted')) {
                 nodeMap.set('deleted', true);
                 nodeMap.set('deletedAt', Date.now());
@@ -5998,13 +6015,18 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
             });
           }, 'clear-board');
           if (count > 0) {
-            showToast(`Холст очищен (${count} объектов удалено, нажмите Ctrl+Z для отмены)`, 'info');
+            showToast(`Холст очищен (${count} объектов удалено)`, 'info');
           } else {
             showToast('Холст уже пуст', 'info');
           }
         }}
         onSeedTemplate={() => {
-          seedDefaultBoard(boardDoc, agentStatus.value?.memberName || 'Вы');
+          const targetId = settingsTargetBoard?.id || boardId;
+          const targetScope = settingsTargetBoard?.scope || (currentBoardMeta?.scope || effectiveScope);
+          const targetDoc = (targetId === boardId && targetScope === effectiveScope)
+            ? boardDoc
+            : yjsClient.getOrCreateDoc(getScopedBoardDocName(targetScope, targetId));
+          seedDefaultBoard(targetDoc, agentStatus.value?.memberName || 'Вы');
           showToast('Шаблон задач загружен на доску', 'success');
         }}
       />

@@ -215,6 +215,8 @@ export function getActiveMaps() {
 
 // Unified signal merging boards from BOTH scopes
 export const allBoards = signal<BoardMeta[]>([]);
+export const allTrashNotes = signal<NoteMeta[]>([]);
+export const allTrashBoards = signal<BoardMeta[]>([]);
 
 // Proxied maps property for backward compatibility with components expecting active scope maps
 export const maps = new Proxy({} as ReturnType<typeof getIndexMaps>, {
@@ -241,6 +243,27 @@ function syncIndexSignals() {
   });
   mergedBoards.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
   allBoards.value = mergedBoards;
+
+  // Unified trash lists across both scopes
+  const deletedNotesList: NoteMeta[] = [];
+  soloMaps.notes.forEach((val) => {
+    if (val.deleted) deletedNotesList.push({ ...val, scope: 'solo' });
+  });
+  teamMaps.notes.forEach((val) => {
+    if (val.deleted) deletedNotesList.push({ ...val, scope: 'team' });
+  });
+  deletedNotesList.sort((a, b) => (b.deletedAt || 0) - (a.deletedAt || 0));
+  allTrashNotes.value = deletedNotesList;
+
+  const deletedBoardsList: BoardMeta[] = [];
+  soloMaps.boards.forEach((val) => {
+    if (val.deleted) deletedBoardsList.push({ ...val, scope: 'solo' });
+  });
+  teamMaps.boards.forEach((val) => {
+    if (val.deleted) deletedBoardsList.push({ ...val, scope: 'team' });
+  });
+  deletedBoardsList.sort((a, b) => (b.deletedAt || 0) - (a.deletedAt || 0));
+  allTrashBoards.value = deletedBoardsList;
 
   const noteList: NoteMeta[] = [];
   activeMaps.notes.forEach((val) => {
@@ -590,29 +613,41 @@ export function deleteNote(id: string): void {
   }
 }
 
-export function restoreNote(id: string): void {
-  const activeMaps = getActiveMaps();
-  const existing = activeMaps.notes.get(id);
-  if (existing) {
-    activeMaps.notes.set(id, {
-      ...existing,
-      deleted: false,
-      deletedAt: undefined,
-      updatedAt: Date.now()
-    });
+export function restoreNote(id: string, scopeHint?: WorkspaceScope): void {
+  const scopesToTry: WorkspaceScope[] = scopeHint
+    ? [scopeHint, scopeHint === 'solo' ? 'team' : 'solo']
+    : [currentScope.value, currentScope.value === 'solo' ? 'team' : 'solo'];
+  for (const s of scopesToTry) {
+    const sMaps = s === 'solo' ? soloMaps : teamMaps;
+    const existing = sMaps.notes.get(id);
+    if (existing) {
+      sMaps.notes.set(id, {
+        ...existing,
+        deleted: false,
+        deletedAt: undefined,
+        updatedAt: Date.now()
+      });
+      break;
+    }
   }
 }
 
-export function restoreBoard(id: string): void {
-  const activeMaps = getActiveMaps();
-  const existing = activeMaps.boards.get(id);
-  if (existing) {
-    activeMaps.boards.set(id, {
-      ...existing,
-      deleted: false,
-      deletedAt: undefined,
-      updatedAt: Date.now()
-    });
+export function restoreBoard(id: string, scopeHint?: WorkspaceScope): void {
+  const scopesToTry: WorkspaceScope[] = scopeHint
+    ? [scopeHint, scopeHint === 'solo' ? 'team' : 'solo']
+    : [currentScope.value, currentScope.value === 'solo' ? 'team' : 'solo'];
+  for (const s of scopesToTry) {
+    const sMaps = s === 'solo' ? soloMaps : teamMaps;
+    const existing = sMaps.boards.get(id);
+    if (existing) {
+      sMaps.boards.set(id, {
+        ...existing,
+        deleted: false,
+        deletedAt: undefined,
+        updatedAt: Date.now()
+      });
+      break;
+    }
   }
 }
 

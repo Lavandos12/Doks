@@ -6,7 +6,6 @@ import path from 'node:path';
 import fs from 'node:fs';
 import os from 'node:os';
 import crypto from 'node:crypto';
-import { execSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { streamDirectoryAsZip } from '../storage/zip-stream.js';
 import * as Y from 'yjs';
@@ -20,7 +19,6 @@ import {
   base64ToUint8Array,
   csvToMarkdown,
   htmlToMarkdown,
-  docxXmlToMarkdown,
   DOC_INDEX,
   getIndexMaps,
   getBoardMaps,
@@ -222,7 +220,8 @@ export class AgentHttpServer {
       // Check route authentication
       const urlPath = req.url.split('?')[0];
       const isApiOrWs = urlPath.startsWith('/api') || urlPath.startsWith('/ws');
-      const isAttachmentGet = req.method === 'GET' && urlPath.startsWith('/api/attachments/');
+      const isAttachmentContentGet = req.method === 'GET' && urlPath.endsWith('/content');
+      const isAttachmentGet = req.method === 'GET' && urlPath.startsWith('/api/attachments/') && !isAttachmentContentGet;
 
       if (isApiOrWs && !isAttachmentGet) {
         if (!this.isValidSession(req)) {
@@ -255,6 +254,65 @@ export class AgentHttpServer {
     const expectedBuf = Buffer.from(this.sessionToken);
     if (tokenBuf.length !== expectedBuf.length) return false;
     return crypto.timingSafeEqual(tokenBuf, expectedBuf);
+  }
+
+  private isValidPeerOrigin(originStr: string): boolean {
+    try {
+      const parsed = new URL(originStr);
+      if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return false;
+      const hostname = parsed.hostname.toLowerCase();
+
+      // Block metadata / cloud internals / link-local / wildcards
+      if (
+        hostname === '169.254.169.254' ||
+        hostname === 'metadata.google.internal' ||
+        hostname === '0.0.0.0'
+      ) {
+        return false;
+      }
+
+      // Check port
+      const portNum = parsed.port ? parseInt(parsed.port, 10) : (parsed.protocol === 'https:' ? 443 : 80);
+      if (isNaN(portNum) || portNum < 1 || portNum > 65535) return false;
+
+      // Localhost / Loopback is valid
+      if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1') {
+        return true;
+      }
+
+      // Allow known peers & LAN rooms from peer service
+      if (this.peerService) {
+        for (const p of this.peerService.getPeersStatus()) {
+          if (p.address && p.address.split(':')[0].toLowerCase() === hostname) {
+            return true;
+          }
+        }
+        for (const room of this.peerService.getDiscoveredLanRooms()) {
+          if (room.host && room.host.toLowerCase() === hostname) {
+            return true;
+          }
+        }
+      }
+
+      // Allow RFC1918 private IPv4 and Radmin VPN (26.0.0.0/8)
+      const ipv4Regex = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/;
+      const m = hostname.match(ipv4Regex);
+      if (m) {
+        const o1 = parseInt(m[1], 10);
+        const o2 = parseInt(m[2], 10);
+        const o3 = parseInt(m[3], 10);
+        const o4 = parseInt(m[4], 10);
+        if (o1 > 255 || o2 > 255 || o3 > 255 || o4 > 255) return false;
+        if (o1 === 10) return true;
+        if (o1 === 172 && o2 >= 16 && o2 <= 31) return true;
+        if (o1 === 192 && o2 === 168) return true;
+        if (o1 === 26) return true;
+      }
+
+      return false;
+    } catch {
+      return false;
+    }
   }
 
   private setupRoutes(): void {
@@ -710,6 +768,9 @@ export class AgentHttpServer {
 
     // API: Get attachment metadata and extracted text
     this.fastify.get('/api/attachments/:hash/content', async (req, reply) => {
+      if (!this.isValidSession(req)) {
+        return reply.code(401).send({ error: 'Unauthorized: Valid doks_session required' });
+      }
       if (!this.attachmentManager) {
         return reply.code(500).send({ error: 'Attachment manager not available' });
       }
@@ -765,13 +826,27 @@ export class AgentHttpServer {
         return reply.code(400).send({ error: 'Invalid attachment hash format' });
       }
 
+      // Check solo attachment unauthorized leak
+      if (!this.isValidSession(req)) {
+        const soloIndex = this.docManager.getDoc(getScopedIndexDocName('solo'));
+        const teamIndex = this.docManager.getDoc(getScopedIndexDocName('team'));
+        const isSolo = soloIndex ? getIndexMaps(soloIndex).attachments.has(hash) : false;
+        const isTeam = teamIndex ? getIndexMaps(teamIndex).attachments.has(hash) : false;
+        if (isSolo && !isTeam) {
+          return reply.code(401).send({ error: 'Unauthorized: Solo attachment requires session authentication' });
+        }
+      }
+
       let att = this.attachmentManager.getAttachment(hash);
       if (!att || !fs.existsSync(att.filePath)) {
         // Multi-User P2P Attachment Auto-Fetch on Cache Miss
         const originQuery = (req.query as { origin?: string })?.origin;
         const candidateOrigins: string[] = [];
         if (originQuery && originQuery.startsWith('http')) {
-          candidateOrigins.push(originQuery.replace(/\/$/, ''));
+          const originTrimmed = originQuery.replace(/\/$/, '');
+          if (this.isValidPeerOrigin(originTrimmed)) {
+            candidateOrigins.push(originTrimmed);
+          }
         }
         if (this.peerService) {
           for (const p of this.peerService.getPeersStatus()) {

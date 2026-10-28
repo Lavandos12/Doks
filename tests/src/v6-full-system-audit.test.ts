@@ -87,6 +87,9 @@ describe('V6 Full System Audit & Master Fix Suite', () => {
           h: 220,
           text: 'Сводка спринта',
           color: '#10b981',
+          author: 'tester',
+          z: 1,
+          deleted: false,
           chartType: 'bar',
           chartData: [{ id: 'a', label: 'Задачи', value: 80, color: '#10b981' }],
           codeLanguage: 'python',
@@ -297,6 +300,7 @@ describe('V6 Full System Audit & Master Fix Suite', () => {
       const discovery = new PeerDiscoveryService({
         teamKey: 'super-secret-password-12345',
         peerId: 'peer-alice-777',
+        wsPort: 49999,
         port: 49999
       });
 

@@ -8,8 +8,8 @@ Doks takes the security and privacy of user data seriously. As a local-first app
 
 | Version | Supported |
 |---|---|
-| 0.2.x | ✅ Supported |
-| < 0.2.0 | ❌ End of life |
+| 1.0.x | Yes |
+| < 1.0.0 | No |
 
 ---
 

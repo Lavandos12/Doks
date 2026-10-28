@@ -77,7 +77,7 @@ export function BoardSettingsModal({
 
   const status = agentStatus.value;
   const effectiveIp = status?.radminIp || status?.effectiveIp || '127.0.0.1';
-  const webPort = window.location.port || '4100';
+  const webPort = (status as any)?.webPort || window.location.port || '3000';
   const browserLink = `http://${effectiveIp}:${webPort}`;
 
   const handleCopyLink = () => {

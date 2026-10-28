@@ -515,7 +515,7 @@ export class PeerService extends EventEmitter {
       const doksDir = path.dirname(this.config.statePath);
       const configPath = path.join(doksDir, 'config.json');
       try {
-        fs.writeFileSync(configPath, JSON.stringify(this.config, null, 2), 'utf8');
+        fs.writeFileSync(configPath, JSON.stringify(this.config, null, 2), { encoding: 'utf8', mode: 0o600 });
       } catch {}
       logger.info('[PeerService] Adopted teamKey from invite for peer mesh');
     }

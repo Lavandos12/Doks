@@ -50,7 +50,7 @@ export class AttachmentManager {
   private blobsDir: string;
   private metadataPath: string;
   private metadata = new Map<string, AttachmentMetadataRecord>();
-  private incomingChunks = new Map<string, { totalChunks: number; chunks: Map<number, Buffer>; originalName: string }>();
+  private incomingChunks = new Map<string, { totalChunks: number; chunks: Map<number, Buffer>; originalName: string; lastActivity: number }>();
 
   constructor(vaultPath: string, blobsDir?: string) {
     this.attachmentsDir = path.join(vaultPath, 'attachments');
@@ -313,10 +313,37 @@ export class AttachmentManager {
     chunkData: Buffer,
     originalName = 'attachment.bin'
   ): AttachmentInfo | null {
+    // Validate inputs to prevent memory abuse
+    if (totalChunks <= 0 || totalChunks > 500) {
+      return null;
+    }
+    if (chunkIndex < 0 || chunkIndex >= totalChunks) {
+      return null;
+    }
+    if (!chunkData || chunkData.length > 512 * 1024) {
+      return null;
+    }
+
+    const now = Date.now();
+    // Prune stale transfers older than 60s
+    for (const [key, item] of this.incomingChunks.entries()) {
+      if (now - item.lastActivity > 60_000) {
+        this.incomingChunks.delete(key);
+      }
+    }
+
     let entry = this.incomingChunks.get(hash);
     if (!entry) {
-      entry = { totalChunks, chunks: new Map(), originalName };
+      if (this.incomingChunks.size >= 20) {
+        return null;
+      }
+      entry = { totalChunks, chunks: new Map(), originalName, lastActivity: now };
       this.incomingChunks.set(hash, entry);
+    } else {
+      entry.lastActivity = now;
+      if (entry.totalChunks !== totalChunks) {
+        return null;
+      }
     }
 
     entry.chunks.set(chunkIndex, chunkData);

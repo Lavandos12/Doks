@@ -75,6 +75,9 @@ describe('V8 Final Surgical Fix Audit Suite', () => {
         drawMode: 'brush',
         strokeWidth: 6,
         color: '#10b981',
+        text: '',
+        author: 'Alice',
+        z: 4,
         deleted: false
       }
     ];

@@ -126,5 +126,5 @@ export function loadOrCreateConfig(options: ConfigOptions = {}): AgentConfig {
 export function saveConfig(config: AgentConfig): void {
   const doksDir = path.dirname(config.statePath);
   const configPath = path.join(doksDir, 'config.json');
-  fs.writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf8');
+  fs.writeFileSync(configPath, JSON.stringify(config, null, 2), { encoding: 'utf8', mode: 0o600 });
 }

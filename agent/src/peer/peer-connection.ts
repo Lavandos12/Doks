@@ -91,6 +91,12 @@ export class PeerConnection extends EventEmitter {
           this.trafficKey
         ) {
           const nonce = raw.subarray(4, 16);
+          const seq = nonce.readBigUInt64BE(4);
+          if (seq <= this.inboundCounter) {
+            throw new Error(`Replay attack detected or duplicate frame: seq=${seq} <= current=${this.inboundCounter}`);
+          }
+          this.inboundCounter = seq;
+
           const frame = raw.subarray(16);
           const decrypted = decryptAeadFrame(this.trafficKey, nonce, frame);
           text = decrypted.toString('utf8');
