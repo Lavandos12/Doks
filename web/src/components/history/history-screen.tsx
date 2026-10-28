@@ -14,7 +14,11 @@ import { Icon } from '../../ui/icons.js';
 import { showConfirm } from '../../ui/dialogs.js';
 import { showToast } from '../../ui/toast.js';
 
-export function HistoryScreen() {
+interface HistoryScreenProps {
+  onClose?: () => void;
+}
+
+export function HistoryScreen({ onClose }: HistoryScreenProps = {}) {
   const [tab, setTab] = useState<'snapshots' | 'trash'>('snapshots');
   const [snapshots, setSnapshots] = useState<SnapshotMeta[]>([]);
   const [loading, setLoading] = useState(false);
@@ -86,21 +90,33 @@ export function HistoryScreen() {
           <h2>История и Корзина</h2>
           <span class="screen-subtitle">Резервные копии и мягкое удаление объектов</span>
         </div>
-        <div class="history-tabs">
-          <button
-            class={`history-tab-btn ${tab === 'snapshots' ? 'active' : ''}`}
-            onClick={() => setTab('snapshots')}
-          >
-            <Icon name="history" size={14} />
-            <span>Снимки ({snapshots.length})</span>
-          </button>
-          <button
-            class={`history-tab-btn ${tab === 'trash' ? 'active' : ''}`}
-            onClick={() => setTab('trash')}
-          >
-            <Icon name="trash" size={14} />
-            <span>Корзина ({deletedNotes.length + deletedBoards.length})</span>
-          </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div class="history-tabs">
+            <button
+              class={`history-tab-btn ${tab === 'snapshots' ? 'active' : ''}`}
+              onClick={() => setTab('snapshots')}
+            >
+              <Icon name="history" size={14} />
+              <span>Снимки ({snapshots.length})</span>
+            </button>
+            <button
+              class={`history-tab-btn ${tab === 'trash' ? 'active' : ''}`}
+              onClick={() => setTab('trash')}
+            >
+              <Icon name="trash" size={14} />
+              <span>Корзина ({deletedNotes.length + deletedBoards.length})</span>
+            </button>
+          </div>
+          {onClose && (
+            <button
+              class="modal-close-btn"
+              onClick={onClose}
+              title="Закрыть"
+              aria-label="Закрыть"
+            >
+              <Icon name="x" size={16} />
+            </button>
+          )}
         </div>
       </div>
 

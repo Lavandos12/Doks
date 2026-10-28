@@ -276,8 +276,9 @@ export class AgentHttpServer {
           return;
         }
       } else {
-        // Issue session cookie for static routes if missing and not in viewer mode
-        if (!req.cookies?.doks_session && !isViewer) {
+        // Issue session cookie for static routes if missing and not in viewer mode (loopback only)
+        const isLoopback = req.ip === '127.0.0.1' || req.ip === '::1' || req.hostname === 'localhost' || req.hostname === '127.0.0.1';
+        if (!req.cookies?.doks_session && !isViewer && isLoopback) {
           reply.setCookie('doks_session', this.sessionToken, {
             path: '/',
             httpOnly: true,
@@ -379,8 +380,9 @@ export class AgentHttpServer {
       const radminIp = detectRadminIp();
       const preferred = detectPreferredMeshIp();
       const hasAuth = this.isValidSession(req);
+      const isViewer = this.isViewerSession(req);
       const isLoopback = req.ip === '127.0.0.1' || req.ip === '::1' || req.hostname === 'localhost' || req.hostname === '127.0.0.1';
-      const isAuthorized = hasAuth || isLoopback;
+      const isAuthorized = !isViewer && (hasAuth || isLoopback);
 
       const networkOverview = detectNetworkOverview({
         p2pEnabled: this.p2pMeshEnabled,

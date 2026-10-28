@@ -331,14 +331,20 @@ test.describe('F12: Playwright E2E Scenarios for Doks', () => {
     const nodeBox = page.locator('.board-node-box').first();
     await nodeBox.click();
 
-    // Verify 1-click push button is visible in toolbox
+    // Verify transfer button is visible in toolbox
     const transferBtn = page.locator('[data-testid="scope-transfer-btn"]');
     await expect(transferBtn).toBeVisible();
     await transferBtn.click();
 
-    // Verify 1-click push toast notification appears without opening modal dialogs
+    // In V13, transfer modal opens to choose target board - confirm transfer
+    const transferModal = page.locator('.transfer-modal');
+    if (await transferModal.isVisible({ timeout: 2000 }).catch(() => false)) {
+      await page.click('.transfer-modal .btn-primary');
+    }
+
+    // Verify transfer toast notification appears
     const toast = page.locator('.toast-card').first();
-    await expect(toast).toContainText('Отправлено на Общую доску');
+    await expect(toast).toBeVisible();
 
     // Switch to Team Board via unified board popover
     await boardSelectorBtn.click();

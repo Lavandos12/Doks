@@ -52,6 +52,20 @@ export const globalBoardClipboard: {
 const savedScope = typeof localStorage !== 'undefined' ? (localStorage.getItem('doks_scope') as WorkspaceScope) : null;
 export const currentScope = signal<WorkspaceScope>(savedScope || 'solo');
 
+const initialViewer = typeof window !== 'undefined' && (
+  window.location.search.includes('b=') ||
+  window.location.search.includes('bridge=')
+);
+export const isViewerMode = signal<boolean>(initialViewer);
+
+if (typeof window !== 'undefined') {
+  agentStatus.subscribe((st) => {
+    if (st?.viewerMode || initialViewer) {
+      isViewerMode.value = true;
+    }
+  });
+}
+
 export const isSidebarCollapsed = signal<boolean>(false);
 export function toggleSidebar(): void {
   isSidebarCollapsed.value = !isSidebarCollapsed.value;

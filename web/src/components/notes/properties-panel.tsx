@@ -84,11 +84,6 @@ export function PropertiesPanel({ yText, noteId }: PropertiesPanelProps) {
       {isOpen && (
         <div class="properties-content">
           <div class="property-row">
-            <span class="prop-label">ID:</span>
-            <code class="prop-id-value">{noteId.slice(0, 8)}</code>
-          </div>
-
-          <div class="property-row">
             <span class="prop-label">Теги:</span>
             <div class="tags-chips-list">
               {tags.map((t) => (

@@ -8,6 +8,7 @@ import {
   openTabs,
   notes,
   boards,
+  allBoards,
   openTab,
   createNote,
   createBoard,
@@ -56,7 +57,7 @@ export function CommandPalette() {
   };
 
   const activeNotes = notes.value.filter((n) => !n.deleted);
-  const activeBoards = boards.value.filter((b) => !b.deleted);
+  const activeBoards = allBoards.value.filter((b) => !b.deleted);
 
   let items: PaletteItem[] = [];
 
@@ -152,7 +153,7 @@ export function CommandPalette() {
         subtitle: 'Бесконечный холст JSON Canvas',
         icon: 'layout',
         action: () => {
-          createBoard();
+          window.dispatchEvent(new CustomEvent('doks:open-create-board'));
           close();
         }
       },

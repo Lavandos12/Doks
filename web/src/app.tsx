@@ -236,27 +236,8 @@ export function App() {
               boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.7)'
             }}
           >
-            <div
-              style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                padding: '12px 20px',
-                borderBottom: '1px solid #1e293b'
-              }}
-            >
-              <h2 style={{ margin: 0, fontSize: '16px', fontWeight: 600 }}>История снимков и Корзина</h2>
-              <button
-                class="btn-icon"
-                onClick={() => setIsHistoryOpen(false)}
-                style={{ background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer' }}
-                title="Закрыть"
-              >
-                <Icon name="x" size={18} />
-              </button>
-            </div>
             <div style={{ flex: 1, overflow: 'auto' }}>
-              <HistoryScreen />
+              <HistoryScreen onClose={() => setIsHistoryOpen(false)} />
             </div>
           </div>
         </div>

@@ -299,6 +299,31 @@ export function BoardSettingsModal({
                 type="button"
                 class="btn-secondary"
                 onClick={() => {
+                  window.dispatchEvent(new CustomEvent('doks:open-network'));
+                  onClose();
+                }}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 6,
+                  padding: '8px 12px',
+                  borderRadius: 6,
+                  background: 'rgba(255, 255, 255, 0.05)',
+                  border: '1px solid rgba(255, 255, 255, 0.12)',
+                  color: 'var(--text-primary)',
+                  fontSize: 12,
+                  fontWeight: 500,
+                  cursor: 'pointer'
+                }}
+              >
+                <Icon name="network" size={13} />
+                <span>Открыть настройки Radmin VPN и список комнат</span>
+              </button>
+              <button
+                type="button"
+                class="btn-secondary"
+                onClick={() => {
                   window.dispatchEvent(new CustomEvent('doks:open-bridge'));
                   onClose();
                 }}

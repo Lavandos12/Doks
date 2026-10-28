@@ -31,6 +31,10 @@ export type IconName =
   | 'globe-mesh'
   | 'wifi'
   | 'wifi-off'
+  | 'smartphone'
+  | 'monitor'
+  | 'network'
+  | 'refresh'
   | 'key'
   | 'users'
   | 'promote'
@@ -244,6 +248,7 @@ export function Icon({
             <path d="M7 11V7a5 5 0 0 1 9.9-1" />
           </>
         );
+      case 'network':
       case 'globe-mesh':
         return (
           <>
@@ -707,6 +712,7 @@ export function Icon({
           </>
         );
       case 'redo':
+      case 'refresh':
       case 'rotate-cw':
         return (
           <>
@@ -775,6 +781,21 @@ export function Icon({
           <>
             <path d="M21.21 15.89A10 10 0 1 1 8 2.83" />
             <path d="M22 12A10 10 0 0 0 12 2v10z" />
+          </>
+        );
+      case 'smartphone':
+        return (
+          <>
+            <rect x="5" y="2" width="14" height="20" rx="2" ry="2" />
+            <line x1="12" y1="18" x2="12.01" y2="18" />
+          </>
+        );
+      case 'monitor':
+        return (
+          <>
+            <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
+            <line x1="8" y1="21" x2="16" y2="21" />
+            <line x1="12" y1="17" x2="12" y2="21" />
           </>
         );
       default:

@@ -28,14 +28,18 @@ export function TransferModal({
 
   const candidateBoards = allBoards.value.filter((b) => b.id !== boardId && !b.deleted);
 
-  const [destinationType, setDestinationType] = useState<'new' | 'existing'>('existing');
+  const [destinationType, setDestinationType] = useState<'new' | 'existing'>(
+    candidateBoards.length > 0 ? 'existing' : 'new'
+  );
   const [selectedTargetBoardId, setSelectedTargetBoardId] = useState<string>(
     candidateBoards[0]?.id || ''
   );
   const [newBoardScope, setNewBoardScope] = useState<WorkspaceScope>(fromScope === 'solo' ? 'team' : 'solo');
   const [transferMode, setTransferMode] = useState<'copy' | 'move'>('copy');
 
-  const [newBoardTitle, setNewBoardTitle] = useState<string>('Новая доска');
+  const [newBoardTitle, setNewBoardTitle] = useState<string>(
+    fromScope === 'solo' ? 'Общая доска' : 'Черновик'
+  );
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 

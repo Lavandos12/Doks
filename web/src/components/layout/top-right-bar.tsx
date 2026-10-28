@@ -80,7 +80,7 @@ export function TopRightBar({
           onClick={onOpenBridge}
           title="Режим моста (QR-код для смартфона)"
         >
-          <Icon name="share" size={13} />
+          <Icon name="smartphone" size={13} />
           <span>Мост</span>
         </button>
       )}

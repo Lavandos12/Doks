@@ -36,6 +36,7 @@ import {
   isCommandPaletteOpen,
   theme,
   allBoards,
+  isViewerMode,
   selectBoardWithScope,
   globalBoardClipboard,
   quickPushNodesToOppositeScope
@@ -1059,6 +1060,88 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
     }
   };
 
+  // Mobile / Touch gestures (1-finger pan, 2-finger pinch-zoom via Math.hypot)
+  const touchStateRef = useRef<{
+    initialDist: number | null;
+    initialZoom: number;
+    lastX: number;
+    lastY: number;
+    isPinching: boolean;
+  }>({
+    initialDist: null,
+    initialZoom: 1,
+    lastX: 0,
+    lastY: 0,
+    isPinching: false
+  });
+
+  const handleTouchStart = (e: TouchEvent) => {
+    if (e.touches.length === 1) {
+      touchStateRef.current = {
+        initialDist: null,
+        initialZoom: targetViewportRef.current.zoom,
+        lastX: e.touches[0].clientX,
+        lastY: e.touches[0].clientY,
+        isPinching: false
+      };
+    } else if (e.touches.length === 2) {
+      const p1 = e.touches[0];
+      const p2 = e.touches[1];
+      const dist = Math.hypot(p1.clientX - p2.clientX, p1.clientY - p2.clientY);
+      touchStateRef.current = {
+        initialDist: dist,
+        initialZoom: targetViewportRef.current.zoom,
+        lastX: (p1.clientX + p2.clientX) / 2,
+        lastY: (p1.clientY + p2.clientY) / 2,
+        isPinching: true
+      };
+    }
+  };
+
+  const handleTouchMove = (e: TouchEvent) => {
+    if (e.touches.length === 1 && !touchStateRef.current.isPinching) {
+      const touch = e.touches[0];
+      const dx = touch.clientX - touchStateRef.current.lastX;
+      const dy = touch.clientY - touchStateRef.current.lastY;
+      touchStateRef.current.lastX = touch.clientX;
+      touchStateRef.current.lastY = touch.clientY;
+
+      animateToViewport({
+        x: targetViewportRef.current.x + dx,
+        y: targetViewportRef.current.y + dy
+      }, true);
+    } else if (e.touches.length === 2 && touchStateRef.current.initialDist) {
+      if (e.cancelable) e.preventDefault();
+      const p1 = e.touches[0];
+      const p2 = e.touches[1];
+      const dist = Math.hypot(p1.clientX - p2.clientX, p1.clientY - p2.clientY);
+      if (dist > 10) {
+        const scale = dist / touchStateRef.current.initialDist;
+        const newZoom = Math.min(Math.max(touchStateRef.current.initialZoom * scale, 0.1), 4.0);
+
+        const midX = (p1.clientX + p2.clientX) / 2;
+        const midY = (p1.clientY + p2.clientY) / 2;
+        const curZoom = targetViewportRef.current.zoom;
+        const newX = midX - (midX - targetViewportRef.current.x) * (newZoom / curZoom);
+        const newY = midY - (midY - targetViewportRef.current.y) * (newZoom / curZoom);
+
+        animateToViewport({ x: newX, y: newY, zoom: newZoom }, true);
+      }
+    }
+  };
+
+  const handleTouchEnd = (e: TouchEvent) => {
+    if (e.touches.length === 0) {
+      touchStateRef.current.initialDist = null;
+      touchStateRef.current.isPinching = false;
+    } else if (e.touches.length === 1) {
+      touchStateRef.current.initialDist = null;
+      touchStateRef.current.isPinching = false;
+      touchStateRef.current.lastX = e.touches[0].clientX;
+      touchStateRef.current.lastY = e.touches[0].clientY;
+    }
+  };
+
   // Native non-passive window wheel listener to prevent native browser page zoom hijacking (Ctrl + Wheel)
   useEffect(() => {
     const preventBrowserZoom = (e: WheelEvent) => {
@@ -2026,17 +2109,20 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
 
     const handleExportJsonEvent = () => handleExportJsonCanvas();
     const handleExportSvgEvent = () => handleExportSvg();
+    const handleOpenCreateBoardEvent = () => setIsCreateBoardOpen(true);
 
     window.addEventListener('doks:drop-note', handleDropNoteEvent);
     window.addEventListener('doks-focus-node', handleFocusNode);
     window.addEventListener('doks:export-json', handleExportJsonEvent);
     window.addEventListener('doks:export-svg', handleExportSvgEvent);
+    window.addEventListener('doks:open-create-board', handleOpenCreateBoardEvent);
     window.addEventListener('paste', handleWindowPaste);
     return () => {
       window.removeEventListener('doks:drop-note', handleDropNoteEvent);
       window.removeEventListener('doks-focus-node', handleFocusNode);
       window.removeEventListener('doks:export-json', handleExportJsonEvent);
       window.removeEventListener('doks:export-svg', handleExportSvgEvent);
+      window.removeEventListener('doks:open-create-board', handleOpenCreateBoardEvent);
       window.removeEventListener('paste', handleWindowPaste);
     };
   }, [boardDoc, yNodes, viewport, nodeLookup, containerSize]);
@@ -3114,7 +3200,10 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
       onPointerLeave={() => setCursorScreenPos(null)}
       onMouseLeave={() => setCursorScreenPos(null)}
       onMouseDown={handleBackgroundPointerDown}
-      onContextMenu={handleContextMenu}
+      onContextMenu={isViewerMode.value ? (e) => e.preventDefault() : handleContextMenu}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
       onDragOver={(e) => {
         handleDragOver(e);
       }}
@@ -3208,40 +3297,47 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
         </button>
 
         {/* 2. Board Access & Settings Pill Button */}
-        {(currentBoardMeta?.scope || effectiveScope) === 'solo' ? (
-          <button
-            class="miro-scope-status-pill solo"
-            onClick={() => {
-              setSettingsTargetBoard({
-                id: boardId,
-                scope: 'solo',
-                title: currentBoardMeta?.title || 'Доска'
-              });
-              setIsBoardSettingsOpen(true);
-            }}
-            title="Настроить доступ и параметры доски"
-          >
-            <Icon name="lock" size={12} />
-            <span>Личная</span>
-            <Icon name="settings" size={11} style={{ opacity: 0.7 }} />
-          </button>
+        {!isViewerMode.value ? (
+          (currentBoardMeta?.scope || effectiveScope) === 'solo' ? (
+            <button
+              class="miro-scope-status-pill solo"
+              onClick={() => {
+                setSettingsTargetBoard({
+                  id: boardId,
+                  scope: 'solo',
+                  title: currentBoardMeta?.title || 'Доска'
+                });
+                setIsBoardSettingsOpen(true);
+              }}
+              title="Настроить доступ и параметры доски"
+            >
+              <Icon name="lock" size={12} />
+              <span>Личная</span>
+              <Icon name="settings" size={11} style={{ opacity: 0.7 }} />
+            </button>
+          ) : (
+            <button
+              class="miro-scope-status-pill team"
+              onClick={() => {
+                setSettingsTargetBoard({
+                  id: boardId,
+                  scope: 'team',
+                  title: currentBoardMeta?.title || 'Доска'
+                });
+                setIsBoardSettingsOpen(true);
+              }}
+              title="Настроить общий доступ и сеть Radmin VPN"
+            >
+              <Icon name="globe-mesh" size={12} />
+              <span>Общая</span>
+              <Icon name="settings" size={11} style={{ opacity: 0.7 }} />
+            </button>
+          )
         ) : (
-          <button
-            class="miro-scope-status-pill team"
-            onClick={() => {
-              setSettingsTargetBoard({
-                id: boardId,
-                scope: 'team',
-                title: currentBoardMeta?.title || 'Доска'
-              });
-              setIsBoardSettingsOpen(true);
-            }}
-            title="Настроить общий доступ и сеть Radmin VPN"
-          >
-            <Icon name="globe-mesh" size={12} />
-            <span>Общая</span>
-            <Icon name="settings" size={11} style={{ opacity: 0.7 }} />
-          </button>
+          <div class={`miro-scope-status-pill ${(currentBoardMeta?.scope || effectiveScope) === 'solo' ? 'solo' : 'team'}`} style={{ cursor: 'default' }}>
+            <Icon name={(currentBoardMeta?.scope || effectiveScope) === 'solo' ? 'lock' : 'globe-mesh'} size={12} />
+            <span>{(currentBoardMeta?.scope || effectiveScope) === 'solo' ? 'Личная' : 'Общая'}</span>
+          </div>
         )}
 
         {/* 3. Export Dropdown Button */}
@@ -3262,17 +3358,19 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
           <div class="miro-boards-popover liquid-glass-surface">
             <div class="miro-popover-header">
               <span class="miro-popover-title">МОИ ДОСКИ ({allBoards.value.length})</span>
-              <button
-                class="btn-primary-xs"
-                title="Создать новую доску"
-                onClick={() => {
-                  setIsBoardsPopoverOpen(false);
-                  setIsCreateBoardOpen(true);
-                }}
-              >
-                <Icon name="plus" size={12} />
-                <span>Создать доску</span>
-              </button>
+              {!isViewerMode.value && (
+                <button
+                  class="btn-primary-xs"
+                  title="Создать новую доску"
+                  onClick={() => {
+                    setIsBoardsPopoverOpen(false);
+                    setIsCreateBoardOpen(true);
+                  }}
+                >
+                  <Icon name="plus" size={12} />
+                  <span>Создать доску</span>
+                </button>
+              )}
             </div>
             <div class="miro-boards-list">
               {allBoards.value.map((b) => (
@@ -3293,23 +3391,25 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                   <span class={`miro-scope-tag ${b.scope || 'solo'}`}>
                     {b.scope === 'team' ? 'Общая' : 'Личная'}
                   </span>
-                  <button
-                    type="button"
-                    class="miro-board-item-settings-btn"
-                    title="Настройка доски"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setSettingsTargetBoard({
-                        id: b.id,
-                        scope: b.scope || 'solo',
-                        title: b.title
-                      });
-                      setIsBoardSettingsOpen(true);
-                      setIsBoardsPopoverOpen(false);
-                    }}
-                  >
-                    <Icon name="settings" size={12} />
-                  </button>
+                  {!isViewerMode.value && (
+                    <button
+                      type="button"
+                      class="miro-board-item-settings-btn"
+                      title="Настройка доски"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSettingsTargetBoard({
+                          id: b.id,
+                          scope: b.scope || 'solo',
+                          title: b.title
+                        });
+                        setIsBoardSettingsOpen(true);
+                        setIsBoardsPopoverOpen(false);
+                      }}
+                    >
+                      <Icon name="settings" size={12} />
+                    </button>
+                  )}
                   {b.id === boardId && <span class="miro-active-dot" />}
                 </div>
               ))}
@@ -3361,8 +3461,9 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
       {/* =========================================================================
           ISLAND 2: LEFT-CENTER VERTICAL MIRO CREATION DOCK
           ========================================================================= */}
-      <div
-        class="miro-creation-dock-container"
+      {!isViewerMode.value && (
+        <div
+          class="miro-creation-dock-container"
         onMouseDown={(e) => e.stopPropagation()}
         onClick={(e) => e.stopPropagation()}
         style={{
@@ -3827,9 +3928,10 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
           </button>
         </div>
       </div>
+      )}
 
       {/* Freehand Drawing Sub-Bar */}
-      {activeTool === 'draw' && (
+      {!isViewerMode.value && activeTool === 'draw' && (
         <div
           class="floating-draw-subbar liquid-glass-surface"
           onMouseDown={(e) => e.stopPropagation()}
@@ -3897,7 +3999,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
       )}
 
       {/* Miro Multi-Select Alignment Bar */}
-      {selectedNodeIds.size > 1 && (
+      {!isViewerMode.value && selectedNodeIds.size > 1 && (
         <div class="align-toolbar liquid-glass-surface" onClick={(e) => e.stopPropagation()}>
           <button class="align-toolbar-btn" onClick={() => alignSelectedNodes('left')} title="Выровнять по левому краю">
             <span>Слева</span>
@@ -3934,7 +4036,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
       )}
 
       {/* 2. Floating Context Inspector Bar */}
-      {selectionBounds && selectedNodeIds.size > 0 && (() => {
+      {!isViewerMode.value && selectionBounds && selectedNodeIds.size > 0 && (() => {
         const isToolbarFlipped = selectionBounds.y - 54 < 80;
         return (
           <div
@@ -4272,13 +4374,13 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
             <Icon name="copy" size={15} />
           </button>
 
-          {/* 1-Click Push: Personal Sketchpad <-> Shared Team Board */}
+          {/* Scope Transfer: Open modal to pick target board */}
           <button
             class="inspector-btn"
             data-testid="scope-transfer-btn"
-            title={effectiveScope === 'solo' ? 'На общую доску ->' : '<- В мой черновик'}
-            onClick={async () => {
-              await quickPushNodesToOppositeScope(effectiveScope, boardId, Array.from(selectedNodeIds), false);
+            title={effectiveScope === 'solo' ? 'Перенести на общую доску...' : 'Перенести в личный черновик...'}
+            onClick={() => {
+              handleOpenTransferModal(Array.from(selectedNodeIds));
             }}
           >
             <Icon name={effectiveScope === 'solo' ? 'promote' : 'fork'} size={15} />
@@ -5758,7 +5860,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
       </div>
 
       {/* Quick Connect Drop Mini-Menu on Empty Space */}
-      {quickConnect && (
+      {!isViewerMode.value && quickConnect && (
         <div
           class="quick-connect-menu liquid-glass-surface"
           style={{ left: `${quickConnect.x}px`, top: `${quickConnect.y}px` }}
@@ -5835,7 +5937,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
       )}
 
       {/* Custom Right-Click Context Menu */}
-      {contextMenu && (
+      {!isViewerMode.value && contextMenu && (
         <div
           class="canvas-context-menu liquid-glass-surface"
           style={{ left: `${contextMenu.x}px`, top: `${contextMenu.y}px` }}
@@ -5897,25 +5999,14 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
           </div>
           <div
             class="context-menu-item"
-            onClick={async () => {
-              const ids = Array.from(selectedNodeIds).length > 0 ? Array.from(selectedNodeIds) : nodesList.filter((n) => !n.deleted).map((n) => n.id);
-              await quickPushNodesToOppositeScope(effectiveScope, boardId, ids, false);
-              setContextMenu(null);
-            }}
-          >
-            <Icon name={effectiveScope === 'solo' ? 'promote' : 'fork'} size={14} />
-            <span>{effectiveScope === 'solo' ? 'На общую доску ->' : '<- В мой черновик'}</span>
-          </div>
-          <div
-            class="context-menu-item"
             onClick={() => {
               const ids = Array.from(selectedNodeIds).length > 0 ? Array.from(selectedNodeIds) : nodesList.filter((n) => !n.deleted).map((n) => n.id);
               handleOpenTransferModal(ids);
               setContextMenu(null);
             }}
           >
-            <Icon name="share" size={14} />
-            <span>Выбрать доску для переноса...</span>
+            <Icon name={effectiveScope === 'solo' ? 'promote' : 'fork'} size={14} />
+            <span>{effectiveScope === 'solo' ? 'Перенести на общую доску...' : 'Перенести в личный черновик...'}</span>
           </div>
           {contextMenu.nodeId && (
             <>
