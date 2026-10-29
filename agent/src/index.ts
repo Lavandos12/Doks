@@ -22,6 +22,7 @@ export * from './storage/file-mirror.js';
 export * from './storage/file-watcher.js';
 export * from './storage/snapshots.js';
 export * from './storage/attachments.js';
+export * from './storage/db.js';
 export * from './peer/peer-service.js';
 export * from './server/http-server.js';
 

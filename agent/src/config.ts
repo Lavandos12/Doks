@@ -6,6 +6,9 @@ import type { AgentConfig } from '@doks/shared';
 import { generateTeamKey } from './security.js';
 import { findRadminIp } from './network.js';
 import { logger } from './logger.js';
+import { getDataDirectory } from './storage/db.js';
+
+export { getDataDirectory } from './storage/db.js';
 
 const AUTHOR_COLORS = [
   '#3b82f6', // blue
@@ -29,17 +32,21 @@ export interface ConfigOptions {
 export function loadOrCreateConfig(options: ConfigOptions = {}): AgentConfig {
   let baseDir = options.baseDir;
   if (!baseDir) {
-    const legacyElumaDir = path.join(os.homedir(), 'Eluma');
-    const defaultDoksDir = path.join(os.homedir(), 'Doks');
-    if (!fs.existsSync(defaultDoksDir) && fs.existsSync(legacyElumaDir)) {
-      try {
-        fs.cpSync(legacyElumaDir, defaultDoksDir, { recursive: true });
-        logger.info('[Migration] Migrated ~/Eluma to ~/Doks');
-      } catch (err) {
-        logger.warn('[Migration] Failed to migrate ~/Eluma to ~/Doks:', err);
+    if (process.env.DOKS_DATA_DIR) {
+      baseDir = process.env.DOKS_DATA_DIR;
+    } else {
+      const legacyElumaDir = path.join(os.homedir(), 'Eluma');
+      const defaultDoksDir = path.join(os.homedir(), 'Doks');
+      if (!fs.existsSync(defaultDoksDir) && fs.existsSync(legacyElumaDir)) {
+        try {
+          fs.cpSync(legacyElumaDir, defaultDoksDir, { recursive: true });
+          logger.info('[Migration] Migrated ~/Eluma to ~/Doks');
+        } catch (err) {
+          logger.warn('[Migration] Failed to migrate ~/Eluma to ~/Doks:', err);
+        }
       }
+      baseDir = defaultDoksDir;
     }
-    baseDir = defaultDoksDir;
   }
 
   const doksDir = path.join(baseDir, '.doks');

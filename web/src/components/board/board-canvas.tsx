@@ -16,11 +16,12 @@ import {
   type WorkspaceScope,
   boardToJSONCanvas
 } from '@doks/shared';
-import { yjsClient, agentStatus } from '../../state/yjs-client.js';
+import { yjsClient, agentStatus, connectionState } from '../../state/yjs-client.js';
 import {
   openTab,
   notes,
   boards,
+  selectedBoardId,
   createBoard,
   deleteBoard,
   renameBoard,
@@ -616,6 +617,53 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
   const [isLanShareOpen, setIsLanShareOpen] = useState(false);
   const [shareModalTab, setShareModalTab] = useState<'share' | 'direct' | 'phone'>('share');
   const [confirmConvertModal, setConfirmConvertModal] = useState<{ isOpen: boolean; targetScope: WorkspaceScope }>({ isOpen: false, targetScope: 'team' });
+
+  // 1. Detect if the user is a remote guest whose host is currently disconnected
+  const isGuestUser = typeof window !== 'undefined' && 
+    window.location.hostname !== 'localhost' && 
+    window.location.hostname !== '127.0.0.1';
+
+  const isHostDisconnected = isGuestUser && connectionState.value !== 'connected';
+  const isBoardLockedReadOnly = Boolean(isViewerMode.value || isHostDisconnected);
+
+  // 2. Clone snapshot into local private vault if host is gone
+  const handleSaveAsSolo = () => {
+    const currentTitle = currentBoardMeta?.title || 'Shared Board Snapshot';
+    const newSoloId = createBoard(`${currentTitle} (Saved)`, null, 'solo', false);
+
+    // Copy all active nodes and edges into the new solo board Y.Doc
+    try {
+      const targetDocName = getScopedBoardDocName('solo', newSoloId);
+      const targetDoc = yjsClient.getOrCreateDoc(targetDocName);
+      const { nodes: targetNodes, edges: targetEdges } = getBoardMaps(targetDoc);
+
+      targetDoc.transact(() => {
+        // Copy nodes
+        yNodes.forEach((nodeMap, nodeId) => {
+          if (!nodeMap.get('deleted')) {
+            const newNodeMap = new Y.Map();
+            nodeMap.forEach((val, key) => {
+              newNodeMap.set(key, val);
+            });
+            targetNodes.set(nodeId, newNodeMap);
+          }
+        });
+        // Copy edges
+        yEdges.forEach((edge, edgeId) => {
+          if (!edge.deleted) {
+            targetEdges.set(edgeId, { ...edge });
+          }
+        });
+      });
+    } catch (err) {
+      console.error('Failed to clone snapshot nodes:', err);
+    }
+
+    showToast('Board saved to your local Solo workspace', 'success');
+    setScope('solo');
+    selectedBoardId.value = newSoloId;
+    selectBoardWithScope(newSoloId, 'solo', currentTitle + ' (Saved)');
+  };
 
   const handleOpenTransferModal = (ids?: string[]) => {
     let targetIds = ids && ids.length > 0 ? ids : Array.from(selectedNodeIds);
@@ -2895,7 +2943,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
     setActiveFlyout('none');
 
     // Pan via Space + Left click, Middle click, Right click, Hand tool, or Read-Only Viewer mode
-    if (isViewerMode.value || isSpacePressed || e.button === 1 || e.button === 2 || activeTool === 'hand') {
+    if (isBoardLockedReadOnly || isSpacePressed || e.button === 1 || e.button === 2 || activeTool === 'hand') {
       if (e.button !== 2) {
         setPanState({
           startX: e.clientX,
@@ -3260,7 +3308,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
           createNodeAt('sticky', pos.x - 100, pos.y - 65, activeColor);
         }
       }}
-      onContextMenu={isViewerMode.value ? (e) => e.preventDefault() : handleContextMenu}
+      onContextMenu={isBoardLockedReadOnly ? (e) => e.preventDefault() : handleContextMenu}
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
@@ -3526,7 +3574,86 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
           <span>{t('topbar.export')}</span>
         </button>
 
-        {/* Boards & Templates Dropdown Popover */}
+        {/* Host-Offline Snapshot Lock Banner */}
+      {isHostDisconnected && (
+        <div
+          class="liquid-glass-surface"
+          style={{
+            position: 'fixed',
+            top: '56px',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            zIndex: 2500,
+            padding: '10px 18px',
+            background: 'rgba(17, 19, 28, 0.95)',
+            border: '1px solid rgba(245, 158, 11, 0.45)',
+            borderRadius: '16px',
+            boxShadow: '0 12px 32px rgba(0, 0, 0, 0.6)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '16px',
+            fontSize: '12px',
+            backdropFilter: 'blur(12px)'
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#fcd34d', fontWeight: 600 }}>
+            <span
+              style={{
+                width: '9px',
+                height: '9px',
+                borderRadius: '50%',
+                backgroundColor: '#f59e0b',
+                display: 'inline-block',
+                boxShadow: '0 0 8px #f59e0b'
+              }}
+            />
+            <span>Host is offline • Viewing cached snapshot (Read-Only)</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <button
+              type="button"
+              onClick={() => yjsClient.reconnect()}
+              class="btn-secondary-xs"
+              style={{
+                padding: '4px 10px',
+                background: 'rgba(255, 255, 255, 0.08)',
+                border: '1px solid rgba(255, 255, 255, 0.15)',
+                color: '#e2e8f0',
+                borderRadius: '8px',
+                cursor: 'pointer',
+                fontWeight: 500
+              }}
+              title="Attempt to reconnect to host"
+            >
+              Retry
+            </button>
+            <button
+              type="button"
+              onClick={handleSaveAsSolo}
+              class="btn-primary-xs"
+              style={{
+                padding: '4px 12px',
+                background: '#7c3aed',
+                borderColor: '#8b5cf6',
+                color: '#ffffff',
+                borderRadius: '8px',
+                cursor: 'pointer',
+                fontWeight: 600,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                boxShadow: '0 2px 10px rgba(124, 58, 237, 0.4)'
+              }}
+              title="Save a full copy to your local Solo workspace"
+            >
+              <Icon name="copy" size={13} />
+              <span>Save as My Solo Board</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Boards & Templates Dropdown Popover */}
         {isBoardsPopoverOpen && (
           <div class="miro-boards-popover liquid-glass-surface">
             <div class="miro-popover-header">
@@ -4805,9 +4932,9 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
         <CanvasEdgesLayer
           nodesMap={nodesBoxMap}
           edges={canvasEdges}
-          selectedEdgeId={isViewerMode.value ? null : selectedEdgeId}
+          selectedEdgeId={isBoardLockedReadOnly ? null : selectedEdgeId}
           viewportZoom={viewport.zoom}
-          readOnly={isViewerMode.value}
+          readOnly={isBoardLockedReadOnly}
           onSelectEdge={(id) => {
             if (isViewerMode.value) return;
             setSelectedEdgeId(id);
@@ -4905,17 +5032,45 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
             );
           })}
 
-          {/* Live edge reconnection dragging line */}
+          {/* Live edge reconnection dragging line with accurate curveType */}
           {reconnectEdgeState && (
-            <g class="connecting-preview-group">
-              <line
-                x1={reconnectEdgeState.startPoint.x}
-                y1={reconnectEdgeState.startPoint.y}
-                x2={reconnectEdgeState.currentX}
-                y2={reconnectEdgeState.currentY}
-                stroke="#7c8cff"
+            <g class="connecting-preview-group pointer-events-none">
+              <path
+                d={(() => {
+                  const edge = yEdges.get(reconnectEdgeState.edgeId);
+                  const curve = (edge?.curveType as any) || defaultLineStyle.curveType;
+                  const dx = reconnectEdgeState.currentX - reconnectEdgeState.startPoint.x;
+                  const dy = reconnectEdgeState.currentY - reconnectEdgeState.startPoint.y;
+                  const defaultTargetSide = Math.abs(dx) > Math.abs(dy)
+                    ? (dx > 0 ? 'left' : 'right')
+                    : (dy > 0 ? 'top' : 'bottom');
+                  const targetSide = reconnectEdgeState.snappedTarget
+                    ? reconnectEdgeState.snappedTarget.side
+                    : defaultTargetSide;
+                  const targetX = reconnectEdgeState.snappedTarget ? reconnectEdgeState.snappedTarget.point.x : reconnectEdgeState.currentX;
+                  const targetY = reconnectEdgeState.snappedTarget ? reconnectEdgeState.snappedTarget.point.y : reconnectEdgeState.currentY;
+
+                  const sourceSide = reconnectEdgeState.which === 'from'
+                    ? (edge?.toSide || 'left')
+                    : (edge?.fromSide || 'right');
+
+                  const res = buildEdgeSvgPath(
+                    reconnectEdgeState.startPoint.x,
+                    reconnectEdgeState.startPoint.y,
+                    sourceSide,
+                    targetX,
+                    targetY,
+                    targetSide,
+                    curve
+                  );
+                  return typeof res === 'string' ? res : (res as any).path;
+                })()}
+                class="connecting-preview-line"
+                stroke="#8b5cf6"
                 strokeWidth="2.5"
-                strokeDasharray="4 4"
+                strokeDasharray="5 5"
+                fill="none"
+                markerEnd="url(#arrow-marker)"
               />
               {reconnectEdgeState.snappedTarget && (
                 <circle
@@ -4928,33 +5083,46 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
             </g>
           )}
 
-          {/* Temporary arrow during drag with magnetic live snap */}
+          {/* Temporary arrow during drag with live magnetic snap & correct curveType */}
           {connectingState && (
-            <g class="connecting-preview-group">
+            <g class="connecting-preview-group pointer-events-none">
               <path
-                d={
-                  connectingState.snappedTarget
-                    ? buildBezierEdgePath(
-                        connectingState.startX,
-                        connectingState.startY,
-                        connectingState.fromSide,
-                        connectingState.snappedTarget.point.x,
-                        connectingState.snappedTarget.point.y,
-                        connectingState.snappedTarget.side
-                      )
-                    : buildBezierEdgePath(
-                        connectingState.startX,
-                        connectingState.startY,
-                        connectingState.fromSide,
-                        connectingState.currentX,
-                        connectingState.currentY,
-                        'left'
-                      )
-                }
+                d={(() => {
+                  const curve = defaultLineStyle.curveType;
+                  if (connectingState.snappedTarget) {
+                    const res = buildEdgeSvgPath(
+                      connectingState.startX,
+                      connectingState.startY,
+                      connectingState.fromSide,
+                      connectingState.snappedTarget.point.x,
+                      connectingState.snappedTarget.point.y,
+                      connectingState.snappedTarget.side,
+                      curve
+                    );
+                    return typeof res === 'string' ? res : (res as any).path;
+                  }
+                  // When dragging in free space, dynamically select port direction relative to cursor
+                  const dx = connectingState.currentX - connectingState.startX;
+                  const dy = connectingState.currentY - connectingState.startY;
+                  const targetSide = Math.abs(dx) > Math.abs(dy)
+                    ? (dx > 0 ? 'left' : 'right')
+                    : (dy > 0 ? 'top' : 'bottom');
+
+                  const res = buildEdgeSvgPath(
+                    connectingState.startX,
+                    connectingState.startY,
+                    connectingState.fromSide,
+                    connectingState.currentX,
+                    connectingState.currentY,
+                    targetSide,
+                    curve
+                  );
+                  return typeof res === 'string' ? res : (res as any).path;
+                })()}
                 class="connecting-preview-line"
-                stroke="var(--accent, #38bdf8)"
+                stroke="#8b5cf6"
                 strokeWidth="2.5"
-                strokeDasharray="4 4"
+                strokeDasharray="5 5"
                 fill="none"
                 markerEnd="url(#arrow-marker)"
               />

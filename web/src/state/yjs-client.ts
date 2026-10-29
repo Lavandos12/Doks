@@ -62,6 +62,15 @@ export class YjsClient {
     this.subscribeDoc(indexDocName);
   }
 
+  public reconnect(): void {
+    if (this.socket) {
+      try {
+        this.socket.close();
+      } catch {}
+    }
+    this.initSocket();
+  }
+
   private async initSocket(): Promise<void> {
     if (typeof window === 'undefined') return;
     connectionState.value = 'connecting';
