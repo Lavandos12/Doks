@@ -25,6 +25,9 @@ namespace DoksInstaller
         private static extern IntPtr CreateRoundRectRgn(
             int nLeftRect, int nTopRect, int nRightRect, int nBottomRect, int nWidthEllipse, int nHeightEllipse);
 
+        [DllImport("shell32.dll", CharSet = CharSet.Auto, SetLastError = true)]
+        public static extern void SHChangeNotify(int wEventId, int uFlags, IntPtr dwItem1, IntPtr dwItem2);
+
         public DoksSetupForm()
         {
             this.FormBorderStyle = FormBorderStyle.None;
@@ -274,8 +277,26 @@ namespace DoksInstaller
                 string startMenu = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.StartMenu), "Programs");
                 string exePath = Path.Combine(appDir, "Doks.exe");
 
-                CreateShortcut(desktop, "Doks", exePath);
-                CreateShortcut(startMenu, "Doks", exePath);
+                // Copy app.ico explicitly into application directory
+                string sourceIco = Path.Combine(sourceDir, "scripts", "tray-launcher", "app.ico");
+                if (!File.Exists(sourceIco)) sourceIco = Path.Combine(sourceDir, "app.ico");
+                string targetIco = Path.Combine(appDir, "app.ico");
+                if (File.Exists(sourceIco))
+                {
+                    File.Copy(sourceIco, targetIco, true);
+                }
+
+                // Explicit shortcut icon pointing directly to app.ico (or exePath fallback)
+                string icoPathForShortcut = File.Exists(targetIco) ? targetIco : exePath;
+                CreateShortcut(desktop, "Doks", exePath, icoPathForShortcut);
+                CreateShortcut(startMenu, "Doks", exePath, icoPathForShortcut);
+
+                // Instantly invalidate and flush Windows Shell icon cache
+                try
+                {
+                    SHChangeNotify(0x08000000 /* SHCNE_ASSOCCHANGED */, 0x0000 /* SHCNF_IDLIST */, IntPtr.Zero, IntPtr.Zero);
+                }
+                catch { }
 
                 SetStatus("Installation complete! Launching Doks...", 100);
                 Thread.Sleep(700);
@@ -332,7 +353,7 @@ namespace DoksInstaller
             }
         }
 
-        private void CreateShortcut(string folder, string name, string targetPath)
+        private void CreateShortcut(string folder, string name, string targetPath, string iconPath = null)
         {
             try
             {
@@ -343,7 +364,7 @@ namespace DoksInstaller
                     dynamic shortcut = shell.CreateShortcut(Path.Combine(folder, name + ".lnk"));
                     shortcut.TargetPath = targetPath;
                     shortcut.WorkingDirectory = Path.GetDirectoryName(targetPath);
-                    shortcut.IconLocation = targetPath + ",0";
+                    shortcut.IconLocation = (iconPath ?? targetPath) + ",0";
                     shortcut.Save();
                 }
             }

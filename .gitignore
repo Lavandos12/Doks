@@ -3,6 +3,8 @@
 release/
 *.exe
 *.zip
+/app.ico
+favicon_256.png
 **/*.tsbuildinfo
 **/test-results/
 **/playwright-report/

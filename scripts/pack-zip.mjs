@@ -13,11 +13,17 @@ if (!fs.existsSync(setupExe) || !fs.existsSync(releaseDir)) {
   execSync('npm run build:setup', { stdio: 'inherit', cwd: rootDir });
 }
 
+const icoSource = path.join(rootDir, 'scripts', 'tray-launcher', 'app.ico');
+const rootIco = path.join(rootDir, 'app.ico');
+if (fs.existsSync(icoSource)) {
+  fs.copyFileSync(icoSource, rootIco);
+}
+
 console.log('Creating portable distribution zip archive...');
 if (process.platform === 'win32') {
-  execSync(`powershell -NoProfile -Command "Compress-Archive -Path DoksSetup.exe, Doks.exe, release -DestinationPath '${outZip}' -Force"`, { stdio: 'inherit', cwd: rootDir });
+  execSync(`powershell -NoProfile -Command "Compress-Archive -Path DoksSetup.exe, Doks.exe, app.ico, release -DestinationPath '${outZip}' -Force"`, { stdio: 'inherit', cwd: rootDir });
 } else {
-  execSync(`zip -r "${outZip}" DoksSetup.exe Doks.exe release/`, { stdio: 'inherit', cwd: rootDir });
+  execSync(`zip -r "${outZip}" DoksSetup.exe Doks.exe app.ico release/`, { stdio: 'inherit', cwd: rootDir });
 }
 
 if (fs.existsSync(outZip)) {

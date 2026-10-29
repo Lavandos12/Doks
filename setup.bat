@@ -11,6 +11,11 @@ echo   ^|____/ \___/^|_^|\_\___/  COLLABORATIVE CANVAS
 echo ==============================================================
 echo.
 
+echo [0/5] Writing authentic SVG brand icon...
+call node scripts/write-true-icon.mjs
+echo       ^-- Authentic multi-resolution app.ico verified!
+echo.
+
 echo [1/5] Compiling TypeScript workspaces...
 call npm run build
 if %errorlevel% neq 0 (

@@ -229,7 +229,21 @@ namespace DoksLauncher
                 string scriptPath = File.Exists(protectedBundle) ? protectedBundle : (File.Exists(rootBundle) ? rootBundle : devBundle);
 
                 ProcessStartInfo psi = new ProcessStartInfo();
-                psi.FileName = "node";
+                string nodeExe = "node";
+                string[] nodeCandidates = new string[] {
+                    Path.Combine(rootDir, "node.exe"),
+                    Path.Combine(rootDir, "bin", "node.exe"),
+                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "nodejs", "node.exe"),
+                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "nodejs", "node.exe"),
+                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", "node", "node.exe")
+                };
+
+                foreach (string n in nodeCandidates)
+                {
+                    if (File.Exists(n)) { nodeExe = n; break; }
+                }
+
+                psi.FileName = nodeExe;
                 psi.Arguments = "\"" + scriptPath + "\" --open";
                 psi.WorkingDirectory = rootDir;
                 psi.CreateNoWindow = true;
@@ -239,13 +253,36 @@ namespace DoksLauncher
                 psi.StandardOutputEncoding = Encoding.UTF8;
                 psi.StandardErrorEncoding = Encoding.UTF8;
 
+                StringBuilder startupLog = new StringBuilder();
                 agentProcess = new Process();
                 agentProcess.StartInfo = psi;
-                agentProcess.OutputDataReceived += (s, e) => AppendLog(e.Data);
-                agentProcess.ErrorDataReceived += (s, e) => AppendLog(e.Data);
+                agentProcess.OutputDataReceived += (s, e) => {
+                    AppendLog(e.Data);
+                    if (!string.IsNullOrEmpty(e.Data)) startupLog.AppendLine(e.Data);
+                };
+                agentProcess.ErrorDataReceived += (s, e) => {
+                    AppendLog(e.Data);
+                    if (!string.IsNullOrEmpty(e.Data)) startupLog.AppendLine(e.Data);
+                };
                 agentProcess.Start();
                 agentProcess.BeginOutputReadLine();
                 agentProcess.BeginErrorReadLine();
+
+                // Watchdog: detect immediate crash within 2 seconds
+                Thread watchdog = new Thread(() => {
+                    Thread.Sleep(2000);
+                    if (agentProcess != null && agentProcess.HasExited && agentProcess.ExitCode != 0)
+                    {
+                        string err = startupLog.ToString();
+                        MessageBox.Show(
+                            "Doks background Node.js server stopped unexpectedly (Exit Code: " + agentProcess.ExitCode + ").\n\nLog output:\n" + (string.IsNullOrEmpty(err) ? "No error output captured." : err),
+                            "Doks Server Error",
+                            MessageBoxButtons.OK,
+                            MessageBoxIcon.Error);
+                    }
+                });
+                watchdog.IsBackground = true;
+                watchdog.Start();
 
                 trayIcon.ShowBalloonTip(2500, "Doks Started", "Server is running in background. Double-click to open canvas, right-click for menu.", ToolTipIcon.Info);
             }
