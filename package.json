@@ -36,6 +36,7 @@
     "build:protected": "node scripts/build-protected.mjs",
     "pack:release": "node scripts/build-protected.mjs",
     "build:exe": "node scripts/build-exe.mjs",
+    "build:setup": "node scripts/build-setup.mjs",
     "test": "vitest run --fileParallelism=false",
     "e2e": "playwright test",
     "check": "npm run typecheck && npm run test && npm run build",

@@ -1,7 +1,8 @@
 @echo off
-echo [Doks Installer] Preparing lightweight release bundle...
+echo [Doks Installer] Preparing lightweight release bundle and GUI installer...
 call npm run build
 call npm run pack:release
 call npm run build:exe
-echo [Doks Installer] Build complete. Ready for distribution!
+call npm run build:setup
+echo [Doks Installer] Build complete. Doks.exe and DoksSetup.exe ready for distribution!
 pause

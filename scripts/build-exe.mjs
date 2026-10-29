@@ -5,6 +5,7 @@ import { execSync } from 'node:child_process';
 const rootDir = process.cwd();
 const sourceFile = path.join(rootDir, 'scripts', 'tray-launcher', 'DoksTray.cs');
 const outFile = path.join(rootDir, 'Doks.exe');
+const iconFile = path.join(rootDir, 'scripts', 'tray-launcher', 'app.ico');
 
 if (!fs.existsSync(sourceFile)) {
   console.error(`Source file not found: ${sourceFile}`);
@@ -37,8 +38,10 @@ if (!cscPath) {
   process.exit(0);
 }
 
+const iconFlag = fs.existsSync(iconFile) ? ` /win32icon:"${iconFile}"` : '';
+
 console.log(`Compiling Doks.exe using ${cscPath}...`);
-const cmd = `"${cscPath}" /nologo /target:winexe /out:"${outFile}" /r:System.Windows.Forms.dll /r:System.Drawing.dll "${sourceFile}"`;
+const cmd = `"${cscPath}" /nologo /target:winexe /out:"${outFile}" /r:System.Windows.Forms.dll /r:System.Drawing.dll${iconFlag} "${sourceFile}"`;
 
 try {
   execSync(cmd, { stdio: 'inherit', cwd: rootDir });
