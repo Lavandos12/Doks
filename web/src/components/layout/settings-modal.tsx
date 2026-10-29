@@ -4,7 +4,7 @@ import { theme, agentStatus, currentScope } from '../../state/app-state.js';
 import { Icon } from '../../ui/icons.js';
 import { showToast } from '../../ui/toast.js';
 import { api } from '../../api/client.js';
-import { t, currentLanguage, setLanguage, type Language } from '../../i18n/index.js';
+import { t } from '../../i18n/index.js';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -208,26 +208,7 @@ export function SettingsModal({
                 </button>
               </div>
 
-              <div class="settings-section-card">
-                <label class="settings-card-label">{t('settings.language')}</label>
-                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                  {([
-                    { code: 'ru', label: 'Русский (RU)' },
-                    { code: 'en', label: 'English (EN)' },
-                    { code: 'es', label: 'Español (ES)' }
-                  ] as const).map((item) => (
-                    <button
-                      key={item.code}
-                      type="button"
-                      class={currentLanguage.value === item.code ? 'btn-primary-sm' : 'btn-secondary-sm'}
-                      style={currentLanguage.value === item.code ? { background: '#7c3aed', color: '#fff', borderColor: '#8b5cf6' } : {}}
-                      onClick={() => setLanguage(item.code)}
-                    >
-                      {item.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
+
             </div>
           )}
 

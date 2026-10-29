@@ -93,7 +93,7 @@ export function loadOrCreateConfig(options: ConfigOptions = {}): AgentConfig {
   const agentId = existing.agentId || crypto.randomUUID();
   const teamKey = options.teamKey || existing.teamKey || generateTeamKey();
   const rawMemberName = options.memberName || existing.memberName;
-  const memberName = (!rawMemberName || rawMemberName === 'Tester') ? 'Вы' : rawMemberName;
+  const memberName = (!rawMemberName || rawMemberName === 'Tester') ? 'You' : rawMemberName;
   const memberColor = existing.memberColor || AUTHOR_COLORS[Math.floor(Math.random() * AUTHOR_COLORS.length)];
   const peerPort = options.peerPort ?? existing.peerPort ?? 4747;
   const savedWebPort = existing.webPort === 3000 || existing.webPort === 7860 ? 4780 : existing.webPort;

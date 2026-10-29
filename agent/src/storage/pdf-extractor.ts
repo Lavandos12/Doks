@@ -94,12 +94,12 @@ export function extractTextFromPdfBuffer(buf: Buffer): string {
           .slice(0, 100)
           .join('\n');
       }
-      return `Документ PDF (${estimatedPages} стр.)`;
+      return `PDF Document / Документ PDF (${estimatedPages} pages)`;
     }
 
     const fullText = textPieces.join(' ').replace(/\s{2,}/g, ' ').trim();
-    return fullText.length > 0 ? fullText : `Документ PDF (${estimatedPages} стр.)`;
+    return fullText.length > 0 ? fullText : `PDF Document / Документ PDF (${estimatedPages} pages)`;
   } catch (err) {
-    return 'Документ PDF';
+    return 'PDF Document / Документ PDF';
   }
 }

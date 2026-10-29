@@ -8,12 +8,12 @@ async function openBoard(page: Page) {
   if (await page.locator('.board-container').isVisible({ timeout: 1000 }).catch(() => false)) {
     return;
   }
-  const welcomeBtn = page.locator('.empty-view-placeholder button:has-text("Новая доска"), .empty-view-placeholder button:has-text("Создать доску")').first();
+  const welcomeBtn = page.locator('.empty-view-placeholder button:has-text("Новая доска"), .empty-view-placeholder button:has-text("Создать доску"), .empty-view-placeholder button:has-text("New Board"), .empty-view-placeholder button:has-text("Create Board")').first();
   if (await welcomeBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
     await welcomeBtn.click();
   } else {
-    await page.click('button[title*="Доски"]');
-    const newBoardBtn = page.locator('.miro-popover-header button[title="Новая доска"]');
+    await page.click('button[title*="Доски"], button[title*="Boards"], .miro-board-selector-btn');
+    const newBoardBtn = page.locator('.miro-popover-header button[title="Новая доска"], button[title="New Board"]');
     if (await newBoardBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
       await newBoardBtn.click();
     } else {
@@ -77,7 +77,7 @@ test.describe('F12: Playwright E2E Scenarios for Doks', () => {
     await openBoard(page);
 
     // Click on sticky tool
-    await page.click('button[title*="Стикер"]');
+    await page.click('button[title*="Стикер"], button[title*="Sticky"]');
 
     // Click on canvas center to place sticky
     const canvas = page.locator('.board-container');
@@ -97,7 +97,7 @@ test.describe('F12: Playwright E2E Scenarios for Doks', () => {
     await openBoard(page);
 
     // Create a sticky first
-    await page.click('button[title*="Стикер"]');
+    await page.click('button[title*="Стикер"], button[title*="Sticky"]');
     const canvas = page.locator('.board-container');
     await canvas.click({ position: { x: 300, y: 300 } });
 
@@ -126,7 +126,7 @@ test.describe('F12: Playwright E2E Scenarios for Doks', () => {
     await openBoard(page);
 
     // Create a sticky
-    await page.click('button[title*="Стикер"]');
+    await page.click('button[title*="Стикер"], button[title*="Sticky"]');
     const canvas = page.locator('.board-container');
     await canvas.click({ position: { x: 350, y: 250 } });
 
@@ -179,7 +179,7 @@ test.describe('F12: Playwright E2E Scenarios for Doks', () => {
 
     // Alice creates a sticky on Agent 1
     await p1.bringToFront();
-    await p1.click('button[title*="Стикер"]');
+    await p1.click('button[title*="Стикер"], button[title*="Sticky"]');
     await p1.locator('.board-container').click({ position: { x: 400, y: 200 } });
 
     const t1 = p1.locator('.node-inline-textarea').first();
@@ -212,7 +212,7 @@ test.describe('F12: Playwright E2E Scenarios for Doks', () => {
     await openBoard(page);
 
     // Create a sticky
-    await page.click('button[title*="Стикер"]');
+    await page.click('button[title*="Стикер"], button[title*="Sticky"]');
     await page.locator('.board-container').click({ position: { x: 300, y: 200 } });
     const textarea = page.locator('.node-inline-textarea').first();
     await expect(textarea).toBeVisible();
@@ -225,11 +225,11 @@ test.describe('F12: Playwright E2E Scenarios for Doks', () => {
     // Verify modal opened
     const modal = page.locator('.ai-export-modal');
     await expect(modal).toBeVisible();
-    await expect(modal).toContainText('Экспорт доски для ИИ');
+    await expect(modal).toContainText(/Экспорт доски для ИИ|Export Board Context for AI/);
 
     // Preview contains structured doks-ai/1 format in textarea
     const preview = page.locator('.ai-export-preview');
-    await expect(preview).toHaveValue(/# Контекст доски:/, { timeout: 10000 });
+    await expect(preview).toHaveValue(/# (Контекст доски|Board Context):/, { timeout: 10000 });
     await expect(preview).toHaveValue(/Стикер для ИИ/, { timeout: 10000 });
 
     // Close modal
@@ -275,7 +275,7 @@ test.describe('F12: Playwright E2E Scenarios for Doks', () => {
 
     const startLoad = Date.now();
     await page.goto(`http://127.0.0.1:${port1}`);
-    await page.click('button[title*="Доски"]');
+    await page.click('button[title*="Доски"], button[title*="Boards"], .miro-board-selector-btn');
     await page.waitForSelector('.tree-board-item:has-text("Бенчмарк 1000")');
     await page.click('.tree-board-item:has-text("Бенчмарк 1000")');
     await page.waitForSelector('.board-container');
@@ -311,7 +311,7 @@ test.describe('F12: Playwright E2E Scenarios for Doks', () => {
     await expect(boardsPopover).toBeVisible();
 
     // Select or ensure Solo board is active
-    const soloBoardItem = page.locator('.miro-board-item:has(.miro-scope-tag.solo), .miro-board-item:has-text("Личная"), .miro-board-item:has-text("Черновик"), .miro-board-item:has-text("Моя первая доска")').first();
+    const soloBoardItem = page.locator('.miro-board-item:has(.miro-scope-tag.solo), .miro-board-item:has-text("Личная"), .miro-board-item:has-text("Solo"), .miro-board-item:has-text("Черновик"), .miro-board-item:has-text("Draft"), .miro-board-item:has-text("Моя первая доска"), .miro-board-item:has-text("Main Board")').first();
     if (await soloBoardItem.isVisible()) {
       await soloBoardItem.click();
     } else {
@@ -319,7 +319,7 @@ test.describe('F12: Playwright E2E Scenarios for Doks', () => {
     }
 
     // Create a sticky note
-    await page.click('button[title*="Стикер"]');
+    await page.click('button[title*="Стикер"], button[title*="Sticky"]');
     const canvas = page.locator('.board-container');
     await canvas.click({ position: { x: 350, y: 250 } });
 
@@ -349,7 +349,7 @@ test.describe('F12: Playwright E2E Scenarios for Doks', () => {
     // Switch to Team Board via unified board popover
     await boardSelectorBtn.click();
     await expect(boardsPopover).toBeVisible();
-    const teamBoardItem = page.locator('.miro-board-item:has(.miro-scope-tag.team), .miro-board-item:has-text("Общая")').first();
+    const teamBoardItem = page.locator('.miro-board-item:has(.miro-scope-tag.team), .miro-board-item:has-text("Общая"), .miro-board-item:has-text("Team")').first();
     await teamBoardItem.click();
 
     // Verify transferred sticky note is present on Team board
@@ -444,12 +444,12 @@ test.describe('F12: Playwright E2E Scenarios for Doks', () => {
     await openBoard(page);
 
     // Place Sticky A
-    await page.click('button[title*="Стикер"]');
+    await page.click('button[title*="Стикер"], button[title*="Sticky"]');
     const canvas = page.locator('.board-container');
     await canvas.click({ position: { x: 250, y: 250 } });
 
     // Place Sticky B
-    await page.click('button[title*="Стикер"]');
+    await page.click('button[title*="Стикер"], button[title*="Sticky"]');
     await canvas.click({ position: { x: 550, y: 250 } });
 
     const nodes = page.locator('.board-node-box');
@@ -495,7 +495,7 @@ test.describe('F12: Playwright E2E Scenarios for Doks', () => {
     await openBoard(page);
 
     // Place a sticky
-    await page.click('button[title*="Стикер"]');
+    await page.click('button[title*="Стикер"], button[title*="Sticky"]');
     const canvas = page.locator('.board-container');
     await canvas.click({ position: { x: 300, y: 300 } });
 
@@ -503,7 +503,7 @@ test.describe('F12: Playwright E2E Scenarios for Doks', () => {
     await expect(nodes).toHaveCount(1);
 
     // Click Undo in the HUD
-    const undoBtn = page.locator('button[title*="Отменить действие"]');
+    const undoBtn = page.locator('button[title*="Отменить действие"], button[title*="Undo action"]');
     await expect(undoBtn).toBeVisible();
     await undoBtn.click();
 
@@ -511,7 +511,7 @@ test.describe('F12: Playwright E2E Scenarios for Doks', () => {
     await expect(nodes).toHaveCount(0);
 
     // Click Redo in the HUD
-    const redoBtn = page.locator('button[title*="Повторить действие"]');
+    const redoBtn = page.locator('button[title*="Повторить действие"], button[title*="Redo action"]');
     await expect(redoBtn).toBeVisible();
     await redoBtn.click();
 
@@ -619,7 +619,7 @@ test.describe('F12: Playwright E2E Scenarios for Doks', () => {
     await expect(imageNode.locator('.port-left')).toBeAttached();
 
     // Add a sticky note to connect with the screenshot
-    await page.click('button[title*="Стикер"]');
+    await page.click('button[title*="Стикер"], button[title*="Sticky"]');
     const boardArea = page.locator('.board-container');
     await boardArea.click({ position: { x: 880, y: 420 } });
     const stickyNode = page.locator('.board-node-box.type-sticky').first();

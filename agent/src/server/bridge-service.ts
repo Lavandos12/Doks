@@ -153,18 +153,18 @@ export class BridgeService {
       child.on('error', () => {
         this.tunnelStatus = 'error';
         this.tunnelError =
-          'Утилита cloudflared не найдена. Доступ по локальному Wi-Fi / Radmin VPN работает в штатном режиме (для доступа через интернет положите cloudflared.exe в .doks/bin или установите cloudflared).';
+          'cloudflared binary not found. Local Wi-Fi / Radmin VPN access is fully functional (place cloudflared.exe into .doks/bin for internet access).';
       });
 
       child.on('exit', (code) => {
         if (this.tunnelStatus === 'starting' && !this.publicBaseUrl) {
           this.tunnelStatus = 'error';
-          this.tunnelError = `Туннель Cloudflare завершился (код ${code ?? 0}). Локальная ссылка активна.`;
+          this.tunnelError = `Cloudflare tunnel exited with code ${code ?? 0}. Local network link remains active.`;
         }
       });
     } catch {
       this.tunnelStatus = 'error';
-      this.tunnelError = 'Не удалось запустить cloudflared. Локальная ссылка по Wi-Fi активна.';
+      this.tunnelError = 'Failed to launch cloudflared. Local Wi-Fi link remains active.';
     }
   }
 }

@@ -48,7 +48,7 @@ export class PeerDiscoveryService extends EventEmitter {
     this.teamKey = options.teamKey;
     this.wsPort = options.wsPort;
     this.webPort = options.webPort || 4780;
-    this.displayName = options.displayName || 'Командная доска';
+    this.displayName = options.displayName || 'Team Board';
     this.peerId = options.peerId;
     this.udpPort = options.port || 41234;
     this.bindAddress = options.bindAddress;
@@ -83,7 +83,7 @@ export class PeerDiscoveryService extends EventEmitter {
               const host = rinfo.address;
               const room: DiscoveredLanRoom = {
                 peerId: data.peerId,
-                displayName: data.displayName || 'Комната Doks',
+                displayName: data.displayName || 'Doks Room',
                 host,
                 wsPort: data.wsPort,
                 webPort: data.webPort || 4780,

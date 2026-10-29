@@ -691,7 +691,7 @@ export class AgentHttpServer {
       if (scope === 'solo' && !this.isHostSession(req)) {
         return reply.code(403).send({ error: 'Forbidden: Solo workspace is private to host' });
       }
-      const title = (body.title || 'Новая доска').trim();
+      const title = (body.title || 'New Board').trim();
       const folder = body.folder || null;
       const boardId = crypto.randomUUID();
       const indexDoc = this.docManager.getOrCreateDoc(getScopedIndexDocName(scope));
@@ -786,7 +786,7 @@ export class AgentHttpServer {
       if (scope === 'solo' && !this.isHostSession(req)) {
         return reply.code(403).send({ error: 'Forbidden: Solo workspace is private to host' });
       }
-      const title = (body.title || 'Новая заметка').trim();
+      const title = (body.title || 'New Note').trim();
       const folder = body.folder || null;
       const noteId = crypto.randomUUID();
       const indexDoc = this.docManager.getOrCreateDoc(getScopedIndexDocName(scope));
@@ -1489,7 +1489,7 @@ export class AgentHttpServer {
         const queryScope = ((req.query as any)?.scope === 'solo' ? 'solo' : 'team') as WorkspaceScope;
         const isViewer = this.isViewerSession(req);
         const isHost = !isViewer && (this.isHostSession(req) || this.isLoopbackRequest(req));
-        // Разрешаем доступ к синхронизации для хоста, зрителя моста и любого соавтора по Radmin / LAN
+        // Allow sync access for host, bridge viewer, and any LAN / Radmin co-author
         const allowSync = true;
         const allowSolo = true;
 

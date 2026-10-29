@@ -123,7 +123,7 @@ namespace DoksLauncher
         private void InitializeLogWindow()
         {
             logWindow = new Form();
-            logWindow.Text = "Doks — Терминал агента (Сверните или закройте крестиком, чтобы спрятать в трей)";
+            logWindow.Text = "Doks — Agent Terminal (Minimize or close to hide in tray)";
             logWindow.Size = new Size(780, 480);
             logWindow.BackColor = Color.FromArgb(13, 15, 23);
             logWindow.ForeColor = Color.FromArgb(226, 232, 240);
@@ -161,23 +161,23 @@ namespace DoksLauncher
         private void InitializeTrayIcon()
         {
             ContextMenu menu = new ContextMenu();
-            menu.MenuItems.Add("Открыть Doks в браузере", (s, e) => OpenUrl(webUrl));
-            menu.MenuItems.Add("Режим моста (QR для телефона)", (s, e) => OpenUrl(webUrl + "/?openBridge=1"));
+            menu.MenuItems.Add("Open Doks in Browser", (s, e) => OpenUrl(webUrl));
+            menu.MenuItems.Add("Phone Bridge (QR Code)", (s, e) => OpenUrl(webUrl + "/?openBridge=1"));
             menu.MenuItems.Add("-");
-            menu.MenuItems.Add("Показать / Скрыть терминал", (s, e) => ToggleLogWindow());
-            menu.MenuItems.Add("Открыть папку хранилища (~/Doks)", (s, e) =>
+            menu.MenuItems.Add("Show / Hide Terminal", (s, e) => ToggleLogWindow());
+            menu.MenuItems.Add("Open Vault Folder (~/Doks)", (s, e) =>
             {
                 string vault = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Doks");
                 if (!Directory.Exists(vault)) Directory.CreateDirectory(vault);
                 Process.Start("explorer.exe", vault);
             });
-            menu.MenuItems.Add("Перезапустить сервер", (s, e) =>
+            menu.MenuItems.Add("Restart Server", (s, e) =>
             {
                 StopAgent();
                 StartAgent();
             });
             menu.MenuItems.Add("-");
-            menu.MenuItems.Add("Выход (Остановить Doks)", (s, e) => ExitApplication());
+            menu.MenuItems.Add("Exit (Stop Doks)", (s, e) => ExitApplication());
 
             trayIcon = new NotifyIcon();
             trayIcon.Icon = CreateBrandIcon();
@@ -246,11 +246,11 @@ namespace DoksLauncher
                 agentProcess.BeginOutputReadLine();
                 agentProcess.BeginErrorReadLine();
 
-                trayIcon.ShowBalloonTip(2500, "Doks запущен", "Сервер работает в фоновом режиме. Двойной клик — открыть доску, правый клик — терминал и настройки.", ToolTipIcon.Info);
+                trayIcon.ShowBalloonTip(2500, "Doks Started", "Server is running in background. Double-click to open canvas, right-click for menu.", ToolTipIcon.Info);
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Не удалось запустить Node.js агент Doks:\n" + ex.Message, "Ошибка Doks", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show("Failed to launch Doks Node.js agent:\n" + ex.Message, "Doks Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 

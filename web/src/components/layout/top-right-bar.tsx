@@ -6,7 +6,7 @@ import {
   allTrashBoards
 } from '../../state/app-state.js';
 import { Icon } from '../../ui/icons.js';
-import { t, currentLanguage, cycleLanguage } from '../../i18n/index.js';
+import { t } from '../../i18n/index.js';
 
 interface TopRightBarProps {
   onToggleNotes: () => void;
@@ -118,21 +118,7 @@ export function TopRightBar({
             <span>{t('topBar.aiContext')}</span>
           </button>
 
-          {/* 5. [ Language Switcher: RU / EN / ES ] */}
-          <button
-            type="button"
-            class="miro-action-pill lang-switch-pill"
-            onClick={cycleLanguage}
-            title={t('topBar.settings')}
-            style={{
-              padding: '5px 8px',
-              fontWeight: 700,
-              color: '#c084fc',
-              border: '1px solid rgba(139, 92, 246, 0.3)'
-            }}
-          >
-            <span>{currentLanguage.value.toUpperCase()}</span>
-          </button>
+
 
           {/* 6. [ Settings ] */}
           <button

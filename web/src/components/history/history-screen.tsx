@@ -16,7 +16,7 @@ import {
 } from '../../state/app-state.js';
 import { api } from '../../api/client.js';
 import { Icon } from '../../ui/icons.js';
-import { t, currentLanguage } from '../../i18n/index.js';
+import { t } from '../../i18n/index.js';
 import { showConfirm } from '../../ui/dialogs.js';
 import { showToast } from '../../ui/toast.js';
 
@@ -311,7 +311,7 @@ export function HistoryScreen({ onClose }: HistoryScreenProps = {}) {
                         {note.scope === 'team' ? t('topbar.team') : t('topbar.solo')}
                       </span>
                       <span class="trash-date">
-                        {note.deletedAt ? new Date(note.deletedAt).toLocaleString(currentLanguage.value === 'ru' ? 'ru-RU' : currentLanguage.value === 'es' ? 'es-ES' : 'en-US') : ''}
+                        {note.deletedAt ? new Date(note.deletedAt).toLocaleString('en-US') : ''}
                       </span>
                     </div>
                     <button
@@ -348,7 +348,7 @@ export function HistoryScreen({ onClose }: HistoryScreenProps = {}) {
                         {b.scope === 'team' ? t('topbar.team') : t('topbar.solo')}
                       </span>
                       <span class="trash-date">
-                        {b.deletedAt ? new Date(b.deletedAt).toLocaleString(currentLanguage.value === 'ru' ? 'ru-RU' : currentLanguage.value === 'es' ? 'es-ES' : 'en-US') : ''}
+                        {b.deletedAt ? new Date(b.deletedAt).toLocaleString('en-US') : ''}
                       </span>
                     </div>
                     <button
