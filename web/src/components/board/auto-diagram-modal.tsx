@@ -1,6 +1,7 @@
 import { h } from 'preact';
 import { useState } from 'preact/hooks';
 import { Icon } from '../../ui/icons.js';
+import { t } from '../../i18n/index.js';
 import {
   generateDiagramFromText,
   DIAGRAM_PRESETS,
@@ -57,9 +58,9 @@ export function AutoDiagramModal({
         <div class="modal-header">
           <div class="modal-title-group">
             <Icon name="sparkles" size={20} class="text-accent" />
-            <h3 class="modal-title">Генератор автодиаграмм и Mindmap</h3>
+            <h3 class="modal-title">{t('autoDiagram.title')}</h3>
           </div>
-          <button onClick={onClose} aria-label="Закрыть" class="modal-close-btn">
+          <button onClick={onClose} aria-label={t('common.close')} class="modal-close-btn">
             <Icon name="x" size={18} />
           </button>
         </div>
@@ -67,7 +68,7 @@ export function AutoDiagramModal({
         {/* Body */}
         <div class="modal-body auto-diagram-body">
           <div class="diagram-field-group">
-            <label class="diagram-label">Готовые шаблоны (Presets)</label>
+            <label class="diagram-label">{t('autoDiagram.presets')}</label>
             <select
               class="diagram-select"
               value={selectedPreset}
@@ -83,15 +84,15 @@ export function AutoDiagramModal({
 
           <div class="diagram-field-group" style={{ marginTop: '14px' }}>
             <div class="diagram-label-group">
-              <label class="diagram-label">Схема или структура текста</label>
-              <span class="diagram-hint">Стрелки (A -&gt; B -&gt; C) или список с отступами</span>
+              <label class="diagram-label">{t('autoDiagram.structure')}</label>
+              <span class="diagram-hint">{t('autoDiagram.hint')}</span>
             </div>
             <textarea
               class="diagram-textarea"
               rows={9}
               value={inputText}
               onInput={(e) => setInputText((e.target as HTMLTextAreaElement).value)}
-              placeholder="Введите шаги через -&gt; или структуру списка..."
+              placeholder={t('autoDiagram.placeholder')}
             />
           </div>
         </div>
@@ -99,7 +100,7 @@ export function AutoDiagramModal({
         {/* Footer */}
         <div class="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '18px' }}>
           <button type="button" class="btn btn-secondary" onClick={onClose}>
-            Отмена
+            {t('common.cancel')}
           </button>
           <button
             type="button"
@@ -108,7 +109,7 @@ export function AutoDiagramModal({
             disabled={!inputText.trim() || isSubmitting}
           >
             <Icon name="arrow" size={14} />
-            <span>{isSubmitting ? 'Генерация...' : 'Сгенерировать на доске'}</span>
+            <span>{isSubmitting ? t('autoDiagram.generating') : t('autoDiagram.generate')}</span>
           </button>
         </div>
       </div>

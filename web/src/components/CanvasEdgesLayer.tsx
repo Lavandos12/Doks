@@ -18,14 +18,14 @@ export interface CanvasEdgeModel {
 }
 
 export const EDGE_COLORS = [
-  { id: 'slate', value: '#94a3b8', label: 'Сланец' },
-  { id: 'indigo', value: '#818cf8', label: 'Индиго' },
-  { id: 'sky', value: '#38bdf8', label: 'Небесный' },
-  { id: 'emerald', value: '#34d399', label: 'Изумруд' },
-  { id: 'amber', value: '#facc15', label: 'Янтарь' },
-  { id: 'rose', value: '#fb7185', label: 'Коралл' },
-  { id: 'violet', value: '#c084fc', label: 'Фиолет' },
-  { id: 'white', value: '#f8fafc', label: 'Белый' },
+  { id: 'slate', value: '#94a3b8', label: 'Slate' },
+  { id: 'indigo', value: '#818cf8', label: 'Indigo' },
+  { id: 'sky', value: '#38bdf8', label: 'Sky' },
+  { id: 'emerald', value: '#34d399', label: 'Emerald' },
+  { id: 'amber', value: '#facc15', label: 'Amber' },
+  { id: 'rose', value: '#fb7185', label: 'Coral' },
+  { id: 'violet', value: '#c084fc', label: 'Violet' },
+  { id: 'white', value: '#f8fafc', label: 'White' },
 ];
 
 interface Props {
@@ -243,7 +243,7 @@ export const CanvasEdgesLayer: FunctionComponent<Props> = ({
                     strokeWidth={2}
                     className="edge-reconnect-handle"
                     style={{ pointerEvents: 'auto', cursor: 'grab' }}
-                    title="Перетащите для изменения источника"
+                    title="Drag to change source"
                     onMouseDown={(e: MouseEvent) => {
                       e.stopPropagation();
                       onStartReconnect?.(edge.id, 'from', p1);
@@ -258,7 +258,7 @@ export const CanvasEdgesLayer: FunctionComponent<Props> = ({
                     strokeWidth={2}
                     className="edge-reconnect-handle"
                     style={{ pointerEvents: 'auto', cursor: 'grab' }}
-                    title="Перетащите для изменения цели"
+                    title="Drag to change target"
                     onMouseDown={(e: MouseEvent) => {
                       e.stopPropagation();
                       onStartReconnect?.(edge.id, 'to', p2);
@@ -281,7 +281,7 @@ export const CanvasEdgesLayer: FunctionComponent<Props> = ({
                         autoFocus
                         className="edge-label-input doks-edge-label-input"
                         value={edge.label || ''}
-                        placeholder="Подпись связи..."
+                        placeholder="Label..."
                         onClick={(e: MouseEvent) => e.stopPropagation()}
                         onMouseDown={(e: MouseEvent) => e.stopPropagation()}
                         onInput={(e: Event) => {
@@ -383,7 +383,7 @@ export const CanvasEdgesLayer: FunctionComponent<Props> = ({
             <div className="doks-inspector-group">
               <button
                 type="button"
-                title="Плавная кривая (Bezier)"
+                title="Bezier curve"
                 className={`edge-pill-btn doks-icon-btn ${(!edge.curveType || edge.curveType === 'bezier') ? 'active is-active' : ''}`}
                 onClick={() => onUpdateEdge(edge.id, { curveType: 'bezier' })}
               >
@@ -393,7 +393,7 @@ export const CanvasEdgesLayer: FunctionComponent<Props> = ({
               </button>
               <button
                 type="button"
-                title="Прямоугольная (Orthogonal 90°)"
+                title="Orthogonal 90°"
                 className={`edge-pill-btn doks-icon-btn ${edge.curveType === 'orthogonal' ? 'active is-active' : ''}`}
                 onClick={() => onUpdateEdge(edge.id, { curveType: 'orthogonal' })}
               >
@@ -403,7 +403,7 @@ export const CanvasEdgesLayer: FunctionComponent<Props> = ({
               </button>
               <button
                 type="button"
-                title="Прямая линия"
+                title="Straight line"
                 className={`edge-pill-btn doks-icon-btn ${edge.curveType === 'straight' ? 'active is-active' : ''}`}
                 onClick={() => onUpdateEdge(edge.id, { curveType: 'straight' })}
               >
@@ -419,7 +419,7 @@ export const CanvasEdgesLayer: FunctionComponent<Props> = ({
             <div className="doks-inspector-group">
               <button
                 type="button"
-                title="Сплошная"
+                title="Solid"
                 className={`edge-pill-btn doks-icon-btn ${(!edge.style || edge.style === 'solid') ? 'active is-active' : ''}`}
                 onClick={() => onUpdateEdge(edge.id, { style: 'solid' })}
               >
@@ -429,7 +429,7 @@ export const CanvasEdgesLayer: FunctionComponent<Props> = ({
               </button>
               <button
                 type="button"
-                title="Пунктирная"
+                title="Dashed"
                 className={`edge-pill-btn doks-icon-btn ${edge.style === 'dashed' ? 'active is-active' : ''}`}
                 onClick={() => onUpdateEdge(edge.id, { style: 'dashed' })}
               >
@@ -439,7 +439,7 @@ export const CanvasEdgesLayer: FunctionComponent<Props> = ({
               </button>
               <button
                 type="button"
-                title="Анимированный поток"
+                title="Animated flow"
                 className={`edge-pill-btn doks-icon-btn ${edge.style === 'animated' ? 'active is-active' : ''}`}
                 onClick={() => onUpdateEdge(edge.id, { style: 'animated' })}
               >
@@ -455,7 +455,7 @@ export const CanvasEdgesLayer: FunctionComponent<Props> = ({
             <div className="doks-inspector-group">
               <button
                 type="button"
-                title={`Направление: ${edge.direction || 'forward'}`}
+                title={`Direction: ${edge.direction || 'forward'}`}
                 className="edge-pill-btn doks-icon-btn"
                 onClick={() => {
                   const nextDir = edge.direction === 'forward' ? 'both' : edge.direction === 'both' ? 'none' : 'forward';
@@ -470,7 +470,7 @@ export const CanvasEdgesLayer: FunctionComponent<Props> = ({
               {/* Thickness Toggle */}
               <button
                 type="button"
-                title={`Толщина: ${edge.thickness || 2}px`}
+                title={`Thickness: ${edge.thickness || 2}px`}
                 className="edge-pill-btn doks-icon-btn"
                 onClick={() => {
                   const nextThick = (edge.thickness === 2 || !edge.thickness) ? 3 : edge.thickness === 3 ? 5 : 2;
@@ -487,7 +487,7 @@ export const CanvasEdgesLayer: FunctionComponent<Props> = ({
             <input
               type="text"
               className="edge-label-input doks-edge-label-input"
-              placeholder="Подпись..."
+              placeholder="Label..."
               value={edge.label || ''}
               onClick={(e: MouseEvent) => e.stopPropagation()}
               onMouseDown={(e: MouseEvent) => e.stopPropagation()}
@@ -506,7 +506,7 @@ export const CanvasEdgesLayer: FunctionComponent<Props> = ({
             />
             <button
               type="button"
-              title="Удалить связь (Delete)"
+              title="Delete connection (Delete)"
               className="edge-pill-btn doks-icon-btn is-danger danger"
               onClick={() => onDeleteEdge(edge.id)}
             >

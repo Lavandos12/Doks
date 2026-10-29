@@ -482,6 +482,26 @@ export class AgentHttpServer {
       };
     });
 
+    // GET /api/network-status: Direct status overview for ShareModal & co-authors
+    this.fastify.get('/api/network-status', async (req) => {
+      const overview = detectNetworkOverview({
+        p2pEnabled: this.p2pMeshEnabled,
+        teamKey: this.config.teamKey,
+        port: this.config.peerPort,
+        peerId: this.config.agentId
+      });
+      return {
+        ...overview,
+        running: true,
+        ip: overview.lanIp || '127.0.0.1',
+        port: this.config.webPort,
+        radminIp: overview.detectedRadminIp,
+        peers: this.peerService.getPeersStatus(),
+        connectedCount: this.peerService.getConnectedCount(),
+        discoveredLanRooms: this.peerService.getDiscoveredLanRooms()
+      };
+    });
+
     // GET /api/network: Guaranteed non-null inviteUri and P2P overview
     this.fastify.get('/api/network', async (req) => {
       const overview = detectNetworkOverview({
@@ -530,6 +550,33 @@ export class AgentHttpServer {
         return reply.code(403).send({ error: 'Forbidden: Bridge management requires host privileges' });
       }
       return this.bridgeService.disableBridge();
+    });
+
+    this.fastify.post('/api/bridge/start', async (req, reply) => {
+      if (!this.isHostSession(req)) {
+        return reply.code(403).send({ error: 'Forbidden: Bridge management requires host privileges' });
+      }
+      const body = (req.body as any) || {};
+      const status = await this.bridgeService.enableBridge({
+        useCloudflare: body.useCloudflare !== undefined ? body.useCloudflare : true,
+        allowSolo: true
+      });
+      return {
+        active: status.enabled,
+        url: status.primaryUrl,
+        ...status
+      };
+    });
+
+    this.fastify.post('/api/bridge/stop', async (req, reply) => {
+      if (!this.isHostSession(req)) {
+        return reply.code(403).send({ error: 'Forbidden: Bridge management requires host privileges' });
+      }
+      const status = this.bridgeService.disableBridge();
+      return {
+        active: false,
+        ...status
+      };
     });
 
     // API: Change team key (with automatic backup snapshot)
@@ -1454,6 +1501,8 @@ export class AgentHttpServer {
             subscribedDocs.size === 0 ||
             subscribedDocs.has(docName) ||
             docName === DOC_INDEX ||
+            docName.endsWith(`:${DOC_INDEX}`) ||
+            docName.startsWith('board:') ||
             docName === `${queryScope}:${DOC_INDEX}` ||
             docName === `solo:${DOC_INDEX}` ||
             docName === `team:${DOC_INDEX}`

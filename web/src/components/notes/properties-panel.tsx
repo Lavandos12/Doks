@@ -2,6 +2,7 @@ import { h } from 'preact';
 import { useState } from 'preact/hooks';
 import * as Y from 'yjs';
 import { Icon } from '../../ui/icons.js';
+import { t } from '../../i18n/index.js';
 
 interface PropertiesPanelProps {
   yText: Y.Text;
@@ -77,14 +78,14 @@ export function PropertiesPanel({ yText, noteId }: PropertiesPanelProps) {
     <div class="note-properties-panel">
       <div class="properties-header" onClick={() => setIsOpen(!isOpen)}>
         <Icon name={isOpen ? 'chevron-down' : 'chevron-right'} size={14} class="properties-chevron" />
-        <span class="properties-title">Свойства заметки</span>
-        <span class="properties-badge">{tags.length} тегов</span>
+        <span class="properties-title">{t('notes.properties')}</span>
+        <span class="properties-badge">{tags.length} {t('notes.tags_count')}</span>
       </div>
 
       {isOpen && (
         <div class="properties-content">
           <div class="property-row">
-            <span class="prop-label">Теги:</span>
+            <span class="prop-label">{t('notes.tags')}:</span>
             <div class="tags-chips-list">
               {tags.map((t) => (
                 <span key={t} class="tag-chip">
@@ -100,7 +101,7 @@ export function PropertiesPanel({ yText, noteId }: PropertiesPanelProps) {
                   <input
                     type="text"
                     class="tag-input"
-                    placeholder="тег..."
+                    placeholder={t('notes.tag_placeholder')}
                     value={newTagInput}
                     onInput={(e) => setNewTagInput((e.target as HTMLInputElement).value)}
                     onKeyDown={(e) => {
@@ -114,9 +115,9 @@ export function PropertiesPanel({ yText, noteId }: PropertiesPanelProps) {
                   </button>
                 </div>
               ) : (
-                <button class="tag-add-btn" onClick={() => setIsAddingTag(true)} title="Добавить тег">
+                <button class="tag-add-btn" onClick={() => setIsAddingTag(true)} title={t('notes.add_tag')}>
                   <Icon name="plus" size={12} />
-                  <span>Тег</span>
+                  <span>{t('notes.tag')}</span>
                 </button>
               )}
             </div>

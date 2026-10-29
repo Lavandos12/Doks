@@ -22,38 +22,38 @@ export const DIAGRAM_PALETTE = ['#818cf8', '#38bdf8', '#34d399', '#facc15', '#fb
 
 export const DIAGRAM_PRESETS: Record<string, { title: string; content: string }> = {
   mindmap_product: {
-    title: 'Mindmap: Разработка продукта',
-    content: `Архитектура Doks
-  Клиент (React + Canvas)
-    Бесконечный холст
-    Редактор заметок
-    Векторные стрелки
-  Сервер (Node + Yjs)
-    Хранилище SQLite
-    Синхронизация P2P
-    Парсер документов
-  Безопасность
-    Шифрование ChaCha20
-    Ed25519 ключи`
+    title: 'Mindmap: Product Architecture',
+    content: `Doks Architecture
+  Client (Preact + Canvas)
+    Infinite Canvas
+    Note Editor
+    Vector Connectors
+  Server (Fastify + Yjs)
+    SQLite Storage
+    P2P Sync
+    Document Parser
+  Security
+    ChaCha20 Encryption
+    Ed25519 Keys`
   },
   flowchart_auth: {
-    title: 'Блок-схема: Алгоритм авторизации',
-    content: `Старт -> Ввод логина и пароля -> Проверка данных?
-Проверка данных? -> Успешно -> Главная страница
-Проверка данных? -> Ошибка -> Восстановление доступа -> Ввод логина и пароля`
+    title: 'Flowchart: Authentication Flow',
+    content: `Start -> Enter Credentials -> Validate?
+Validate? -> Success -> Dashboard
+Validate? -> Error -> Password Reset -> Enter Credentials`
   },
   kanban_board: {
-    title: 'Kanban: Доска задач',
-    content: `Бэклог -> В работе -> Ревью кода -> Готово к релизу`
+    title: 'Kanban: Task Board',
+    content: `Backlog -> In Progress -> Code Review -> Ready for Release`
   },
   swot_analysis: {
-    title: 'SWOT-анализ проекта',
-    content: `Сильные стороны (Strengths) -> Возможности (Opportunities)
-Слабые стороны (Weaknesses) -> Угрозы (Threats)`
+    title: 'SWOT Analysis',
+    content: `Strengths -> Opportunities
+Weaknesses -> Threats`
   },
   roadmap: {
-    title: 'Дорожная карта (Roadmap)',
-    content: `Q1: Архитектура P2P -> Q2: Canvas и Заметки -> Q3: Безопасность и VPN -> Q4: Релиз v1.0`
+    title: 'Roadmap (Milestones)',
+    content: `Q1: P2P Mesh -> Q2: Canvas & Notes -> Q3: Security & Bridge -> Q4: Release v1.0`
   }
 };
 
@@ -122,7 +122,7 @@ export function generateDiagramFromText(
   const hasArrows = lines.some((l) => l.includes('->') || l.includes('→'));
 
   if (hasArrows) {
-    // Parse Flowchart chains: "Шаг 1 -> Шаг 2 -> Шаг 3"
+    // Parse Flowchart chains: "Step 1 -> Step 2 -> Step 3"
     for (const line of lines) {
       const parts = line.split(/->|→/).map((s) => s.trim()).filter(Boolean);
       for (let i = 0; i < parts.length; i++) {

@@ -38,7 +38,7 @@ export function TransferModal({
   const [transferMode, setTransferMode] = useState<'copy' | 'move'>('copy');
 
   const [newBoardTitle, setNewBoardTitle] = useState<string>(
-    fromScope === 'solo' ? 'Общая доска' : 'Черновик'
+    fromScope === 'solo' ? 'Team Board' : 'Draft'
   );
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -54,7 +54,7 @@ export function TransferModal({
       if (destinationType === 'new' || !finalTargetBoardId) {
         targetScope = newBoardScope;
         finalTargetBoardId = createBoard(
-          newBoardTitle.trim() || 'Новая доска',
+          newBoardTitle.trim() || 'New Board',
           null,
           targetScope,
           false
@@ -76,18 +76,18 @@ export function TransferModal({
         });
 
         if (res.success) {
-          const actionText = transferMode === 'move' ? 'перемещены' : 'скопированы';
-          showToast(`Элементы успешно ${actionText} на целевую доску`, 'success');
+          const actionText = transferMode === 'move' ? 'moved' : 'copied';
+          showToast(`Items ${actionText} successfully to target board`, 'success');
           onClose();
         } else {
-          setErrorMsg(res.error || 'Ошибка переноса элементов');
+          setErrorMsg(res.error || 'Transfer failed');
         }
       } else {
-        showToast('Нет выбранных объектов для переноса', 'info');
+        showToast('No objects selected for transfer', 'info');
         onClose();
       }
     } catch (err: any) {
-      setErrorMsg(err.message || 'Сбой сети при переносе');
+      setErrorMsg(err.message || 'Network transfer error');
     } finally {
       setIsSubmitting(false);
     }
@@ -107,14 +107,14 @@ export function TransferModal({
             </span>
             <div>
               <h3 class="modal-title" style={{ margin: 0, fontSize: '17px', fontWeight: 600 }}>
-                Перенос объектов на другую доску
+                Transfer Objects to Another Board
               </h3>
               <p class="modal-subtitle" style={{ margin: '4px 0 0', fontSize: '12px', color: '#94a3b8' }}>
-                Копирование или перемещение карточек и схем между досками
+                Copy or move canvas cards and schemes between boards
               </p>
             </div>
           </div>
-          <button class="modal-close-btn" onClick={onClose} aria-label="Закрыть">
+          <button class="modal-close-btn" onClick={onClose} aria-label="Close">
             <Icon name="x" size={18} />
           </button>
         </div>
@@ -125,7 +125,7 @@ export function TransferModal({
           {/* Mode Selector: Copy vs Move */}
           <div class="form-group" style={{ margin: 0 }}>
             <label style={{ fontSize: '13px', fontWeight: 500, color: '#f1f5f9', marginBottom: '6px', display: 'block' }}>
-              Режим операции
+              Operation Mode
             </label>
             <div style={{ display: 'flex', gap: '8px' }}>
               <button
@@ -140,7 +140,7 @@ export function TransferModal({
                 }}
                 onClick={() => setTransferMode('copy')}
               >
-                Копировать
+                Copy
               </button>
               <button
                 type="button"
@@ -154,7 +154,7 @@ export function TransferModal({
                 }}
                 onClick={() => setTransferMode('move')}
               >
-                Переместить
+                Move
               </button>
             </div>
           </div>
@@ -162,7 +162,7 @@ export function TransferModal({
           {/* Destination Type: Existing Board vs New Board */}
           <div class="form-group" style={{ margin: 0 }}>
             <label style={{ fontSize: '13px', fontWeight: 500, color: '#f1f5f9', marginBottom: '6px', display: 'block' }}>
-              Целевая доска
+              Target Board
             </label>
             <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
               <button
@@ -183,7 +183,7 @@ export function TransferModal({
                   }
                 }}
               >
-                Существующая ({candidateBoards.length})
+                Existing ({candidateBoards.length})
               </button>
               <button
                 type="button"
@@ -197,7 +197,7 @@ export function TransferModal({
                 }}
                 onClick={() => setDestinationType('new')}
               >
-                Новая доска
+                New Board
               </button>
             </div>
 
@@ -210,7 +210,7 @@ export function TransferModal({
               >
                 {candidateBoards.map((b) => (
                   <option key={b.id} value={b.id}>
-                    {b.title} [{b.scope === 'team' ? 'Общая' : 'Личная'}]
+                    {b.title} [{b.scope === 'team' ? 'Team' : 'Solo'}]
                   </option>
                 ))}
               </select>
@@ -221,7 +221,7 @@ export function TransferModal({
                   class="form-input text-input"
                   value={newBoardTitle}
                   onInput={(e) => setNewBoardTitle((e.target as HTMLInputElement).value)}
-                  placeholder="Введите название новой доски..."
+                  placeholder="New board title..."
                   style={{ width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.15)', background: 'rgba(255,255,255,0.05)', color: '#fff' }}
                   autoFocus
                 />
@@ -239,7 +239,7 @@ export function TransferModal({
                       color: newBoardScope === 'solo' ? '#c084fc' : 'var(--text-secondary)'
                     }}
                   >
-                    Личная
+                    Solo
                   </button>
                   <button
                     type="button"
@@ -254,7 +254,7 @@ export function TransferModal({
                       color: newBoardScope === 'team' ? '#34d399' : 'var(--text-secondary)'
                     }}
                   >
-                    Общая
+                    Team
                   </button>
                 </div>
               </div>
@@ -262,13 +262,13 @@ export function TransferModal({
           </div>
 
           <div style={{ fontSize: '12px', color: '#94a3b8', background: 'rgba(255,255,255,0.03)', padding: '10px 12px', borderRadius: '8px' }}>
-            Объектов к переносу: {nodeIds.length}. Связанные markdown-заметки будут скопированы автоматически.
+            Objects to transfer: {nodeIds.length}. Linked markdown notes are preserved.
           </div>
         </div>
 
         <div class="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '18px' }}>
           <button class="btn btn-secondary" onClick={onClose} disabled={isSubmitting}>
-            Отмена
+            Cancel
           </button>
           <button
             class="btn btn-primary"
@@ -277,10 +277,10 @@ export function TransferModal({
             style={{ minWidth: '150px' }}
           >
             {isSubmitting
-              ? 'Обработка...'
+              ? 'Processing...'
               : transferMode === 'move'
-              ? 'Переместить'
-              : 'Скопировать'}
+              ? 'Move'
+              : 'Copy'}
           </button>
         </div>
       </div>

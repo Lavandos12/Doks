@@ -2,6 +2,7 @@ import { h } from 'preact';
 import { useRef, useMemo } from 'preact/hooks';
 import type { BoardNodeData } from '@doks/shared';
 import { CANVAS_COLORS } from './board-canvas.js';
+import { t } from '../../i18n/index.js';
 
 interface BoardMinimapProps {
   nodes: BoardNodeData[];
@@ -102,7 +103,7 @@ export function BoardMinimap({
     <div
       ref={mapRef}
       class="board-minimap-container"
-      title="Мини-карта (кликните или перетащите)"
+      title={t('minimap.title')}
       onMouseDown={handleMouseDown}
       style={{
         width: `${MAP_W}px`,

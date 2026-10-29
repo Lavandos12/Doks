@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'preact/hooks';
+import { t } from '../i18n/index.js';
 import type { JSX } from 'preact';
 
 export interface DropGhostState {
@@ -42,10 +43,10 @@ export function useCanvasDropZone({
         worldX: pt.x,
         worldY: pt.y,
         label: isInternalNote
-          ? 'Разместить карточку заметки здесь'
+          ? t('canvas.drop_note_here')
           : itemCount > 1
-          ? `Разместить файлы (${itemCount} шт.) здесь`
-          : 'Разместить документ на холсте',
+          ? `Drop files (${itemCount}) here`
+          : t('canvas.drop_doc_here'),
         count: Math.max(1, itemCount),
       });
     },

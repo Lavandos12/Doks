@@ -46,7 +46,7 @@ export function BoardSettingsModal({
     const finalTitle = title.trim();
     if (finalTitle && finalTitle !== boardTitle) {
       renameBoard(boardId, finalTitle, scope);
-      showToast(`Название доски изменено на "${finalTitle}"`, 'info');
+      showToast(`Board renamed to "${finalTitle}"`, 'info');
     }
   };
 
@@ -58,7 +58,7 @@ export function BoardSettingsModal({
       onClose();
     } catch (err) {
       console.error('Failed to convert board scope:', err);
-      showToast('Ошибка при смене режима доступа доски', 'error');
+      showToast('Error changing board access mode', 'error');
     } finally {
       setIsConverting(false);
     }
@@ -66,7 +66,7 @@ export function BoardSettingsModal({
 
   const handleDelete = () => {
     deleteBoard(boardId, scope);
-    showToast(`Доска "${boardTitle}" удалена в корзину`, 'info');
+    showToast(`Board "${boardTitle}" moved to trash`, 'info');
     onClose();
 
     // Switch to another remaining board if available
@@ -84,7 +84,7 @@ export function BoardSettingsModal({
   const handleCopyLink = () => {
     navigator.clipboard.writeText(browserLink);
     setCopiedLink(true);
-    showToast('Ссылка на доску скопирована в буфер', 'success');
+    showToast('Board link copied', 'success');
     setTimeout(() => setCopiedLink(false), 2000);
   };
 
@@ -105,13 +105,13 @@ export function BoardSettingsModal({
         <div class="modal-header">
           <div class="modal-title-group">
             <Icon name="settings" size={20} class="text-accent" />
-            <h3 class="modal-title">Параметры и доступ доски</h3>
+            <h3 class="modal-title">Board Settings</h3>
           </div>
           <button
             type="button"
             class="modal-close-btn"
             onClick={onClose}
-            title="Закрыть"
+            title="Close"
           >
             <Icon name="x" size={16} />
           </button>
@@ -122,7 +122,7 @@ export function BoardSettingsModal({
           {/* Section 1: Title */}
           <div class="settings-section" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             <label style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)' }}>
-              Название доски
+              Board Title
             </label>
             <div style={{ display: 'flex', gap: 8 }}>
               <input
@@ -162,7 +162,7 @@ export function BoardSettingsModal({
                   fontSize: 13
                 }}
               >
-                Сохранить
+                Save
               </button>
             </div>
           </div>
@@ -171,7 +171,7 @@ export function BoardSettingsModal({
           <div class="settings-section" style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: 14, borderRadius: 10, background: 'rgba(255, 255, 255, 0.03)', border: '1px solid rgba(255, 255, 255, 0.08)' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)' }}>
-                Режим доступа
+                Access Mode
               </span>
               <span
                 class={`miro-scope-badge ${scope}`}
@@ -192,7 +192,7 @@ export function BoardSettingsModal({
             {scope === 'solo' ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.4 }}>
-                  Сейчас это Личная доска (доступна только вам на этом ПК, не видна в сети).
+                  Solo board (accessible only on this computer).
                 </div>
                 <button
                   type="button"
@@ -215,13 +215,13 @@ export function BoardSettingsModal({
                   }}
                 >
                   <Icon name="globe-mesh" size={15} />
-                  <span>{isConverting ? 'Перенос объектов...' : 'Сделать доску Общей (Открыть для команды)'}</span>
+                  <span>{isConverting ? 'Converting...' : 'Make Collaborative (LAN / Radmin)'}</span>
                 </button>
               </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.4 }}>
-                  Сейчас это Общая доска (синхронизируется по сети Radmin VPN / LAN с живыми курсорами).
+                  Collaborative board (synced over LAN / Radmin with live cursors).
                 </div>
                 <button
                   type="button"
@@ -244,7 +244,7 @@ export function BoardSettingsModal({
                   }}
                 >
                   <Icon name="lock" size={15} />
-                  <span>{isConverting ? 'Перенос объектов...' : 'Сделать доску Личной (Скрыть из сети)'}</span>
+                  <span>{isConverting ? 'Converting...' : 'Make Solo (this PC only)'}</span>
                 </button>
               </div>
             )}
@@ -254,10 +254,10 @@ export function BoardSettingsModal({
           {scope === 'team' && (
             <div class="settings-section" style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: 14, borderRadius: 10, background: 'rgba(255, 255, 255, 0.03)', border: '1px solid rgba(255, 255, 255, 0.08)' }}>
               <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)' }}>
-                Сетевое подключение к Общей доске
+                Network Connection
               </span>
               <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-                Отправьте эту ссылку коллегам в Radmin VPN или локальной сети для входа через браузер:
+                Share this link with collaborators on LAN / Radmin VPN:
               </div>
               <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                 <input
@@ -293,7 +293,7 @@ export function BoardSettingsModal({
                   }}
                 >
                   <Icon name="share" size={13} />
-                  <span>{copiedLink ? 'Скопировано' : 'Копировать'}</span>
+                  <span>{copiedLink ? 'Copied' : 'Copy'}</span>
                 </button>
               </div>
               <button
@@ -319,7 +319,7 @@ export function BoardSettingsModal({
                 }}
               >
                 <Icon name="network" size={13} />
-                <span>Открыть настройки Radmin VPN и список комнат</span>
+                <span>Open LAN / Radmin Share</span>
               </button>
               <button
                 type="button"
@@ -344,7 +344,7 @@ export function BoardSettingsModal({
                 }}
               >
                 <Icon name="share" size={13} />
-                <span>Показать QR-код для телефона (Режим моста)</span>
+                <span>Show Mobile Bridge QR</span>
               </button>
             </div>
           )}
@@ -352,7 +352,7 @@ export function BoardSettingsModal({
           {/* Section 4: Actions */}
           <div class="settings-section" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)' }}>
-              Действия с доской
+              Board Actions
             </span>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               {onSeedTemplate && (
@@ -377,7 +377,7 @@ export function BoardSettingsModal({
                   }}
                 >
                   <Icon name="sparkles" size={14} class="text-accent" />
-                  <span>Заполнить шаблоном задач</span>
+                  <span>Fill with Task Template</span>
                 </button>
               )}
 
@@ -403,7 +403,7 @@ export function BoardSettingsModal({
                   }}
                 >
                   <Icon name="eraser" size={14} />
-                  <span>Очистить все объекты на доске</span>
+                  <span>Clear all objects on canvas</span>
                 </button>
               )}
 
@@ -426,7 +426,7 @@ export function BoardSettingsModal({
                 }}
               >
                 <Icon name="trash" size={14} />
-                <span>Удалить доску в корзину</span>
+                <span>Move board to trash</span>
               </button>
             </div>
           </div>

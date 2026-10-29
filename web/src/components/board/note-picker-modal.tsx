@@ -2,6 +2,7 @@ import { h } from 'preact';
 import { useState } from 'preact/hooks';
 import { notes, createNote } from '../../state/app-state.js';
 import { Icon } from '../../ui/icons.js';
+import { t } from '../../i18n/index.js';
 
 interface NotePickerModalProps {
   isOpen: boolean;
@@ -22,7 +23,7 @@ export function NotePickerModal({ isOpen, onClose, onSelectNote }: NotePickerMod
     : activeNotes;
 
   const handleCreate = () => {
-    const titleToUse = newTitle.trim() || 'Новая заметка';
+    const titleToUse = newTitle.trim() || t('notes.default_title');
     const newId = createNote(titleToUse);
     onSelectNote(newId, titleToUse);
     onClose();
@@ -34,9 +35,9 @@ export function NotePickerModal({ isOpen, onClose, onSelectNote }: NotePickerMod
         <div class="modal-header">
           <div class="modal-title-group" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <Icon name="file-text" size={18} class="text-accent" />
-            <h3 class="modal-title" style={{ margin: 0, fontSize: '16px', fontWeight: 600 }}>Добавить карточку заметки на доску</h3>
+            <h3 class="modal-title" style={{ margin: 0, fontSize: '16px', fontWeight: 600 }}>{t('notePicker.title')}</h3>
           </div>
-          <button class="modal-close-btn" onClick={onClose} aria-label="Закрыть">
+          <button class="modal-close-btn" onClick={onClose} aria-label={t('common.close')}>
             <Icon name="x" size={16} />
           </button>
         </div>
@@ -44,11 +45,11 @@ export function NotePickerModal({ isOpen, onClose, onSelectNote }: NotePickerMod
         <div class="modal-body">
           {isCreating ? (
             <div class="note-picker-create-form">
-              <label class="modal-label">Название новой заметки:</label>
+              <label class="modal-label">{t('notePicker.createNew')}</label>
               <input
                 type="text"
                 class="modal-input"
-                placeholder="Введите название..."
+                placeholder={t('notePicker.newPlaceholder')}
                 value={newTitle}
                 onInput={(e) => setNewTitle((e.target as HTMLInputElement).value)}
                 onKeyDown={(e) => {
@@ -59,10 +60,10 @@ export function NotePickerModal({ isOpen, onClose, onSelectNote }: NotePickerMod
               />
               <div class="modal-actions-row" style={{ marginTop: '12px' }}>
                 <button class="btn btn-secondary" onClick={() => setIsCreating(false)}>
-                  Назад к списку
+                  {t('common.cancel')}
                 </button>
                 <button class="btn btn-primary" onClick={handleCreate}>
-                  Создать и прикрепить
+                  {t('notePicker.createAndAdd')}
                 </button>
               </div>
             </div>
@@ -73,7 +74,7 @@ export function NotePickerModal({ isOpen, onClose, onSelectNote }: NotePickerMod
                 <input
                   type="text"
                   class="modal-input search-input"
-                  placeholder="Поиск заметки по названию..."
+                  placeholder={t('sidebar.search_placeholder')}
                   value={query}
                   onInput={(e) => setQuery((e.target as HTMLInputElement).value)}
                   autoFocus
@@ -87,14 +88,14 @@ export function NotePickerModal({ isOpen, onClose, onSelectNote }: NotePickerMod
                   onClick={() => setIsCreating(true)}
                 >
                   <Icon name="plus" size={14} />
-                  <span>Создать новую заметку</span>
+                  <span>{t('notePicker.createNew')}</span>
                 </button>
               </div>
 
               <div class="note-picker-list">
                 {filteredNotes.length === 0 ? (
                   <div class="empty-state-notice">
-                    {query ? 'Заметки не найдены' : 'Нет доступных заметок'}
+                    {query ? t('notePicker.notFound') : t('notePicker.noneAvailable')}
                   </div>
                 ) : (
                   filteredNotes.map((note) => (

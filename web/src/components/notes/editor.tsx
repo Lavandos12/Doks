@@ -3,6 +3,7 @@ import { useEffect, useRef, useState, useMemo } from 'preact/hooks';
 import { EditorState } from '@codemirror/state';
 import { EditorView, keymap } from '@codemirror/view';
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
+import { t } from '../../i18n/index.js';
 import { markdown } from '@codemirror/lang-markdown';
 import { autocompletion } from '@codemirror/autocomplete';
 import { oneDark } from '@codemirror/theme-one-dark';
@@ -60,7 +61,7 @@ export function NoteEditor({ noteId }: NoteEditorProps) {
           const yNodes = bDoc.getMap('nodes');
           yNodes.forEach((nodeMap: any, id: string) => {
             if (nodeMap?.get && nodeMap.get('noteId') === noteId && !nodeMap.get('deleted')) {
-              found.push({ nodeId: id, boardTitle: 'Активная доска' });
+              found.push({ nodeId: id, boardTitle: 'Active Board' });
             }
           });
         }
@@ -70,7 +71,7 @@ export function NoteEditor({ noteId }: NoteEditorProps) {
   }, [noteId, currentScope.value, selectedBoardId.value]);
 
   const currentNote = notes.value.find((n) => n.id === noteId);
-  const title = currentNote?.title || 'Без названия';
+  const title = currentNote?.title || t('notes.untitled');
 
   const docName = getScopedNoteDocName(currentScope.value, noteId);
   const yDoc = yjsClient.getOrCreateDoc(docName);
@@ -268,7 +269,7 @@ export function NoteEditor({ noteId }: NoteEditorProps) {
       const isImg = (data.mimeType || fileType || '').startsWith('image/') && !((data.mimeType || '').includes('svg'));
       const snippet = isImg ? `![[${data.fileName || fileName}]]` : `[[${data.fileName || fileName}]]`;
       insertSnippet(snippet);
-      showToast('Изображение вставлено в заметку');
+      showToast('Image inserted');
     } catch (err) {
       console.error('Failed to upload file to note:', err);
     }
@@ -313,7 +314,7 @@ export function NoteEditor({ noteId }: NoteEditorProps) {
           <input
             class="note-title-input"
             value={title}
-            placeholder="Название заметки..."
+            placeholder={t('notes.search_placeholder')}
             onInput={(e) => renameNote(noteId, (e.target as HTMLInputElement).value)}
           />
 
@@ -326,10 +327,10 @@ export function NoteEditor({ noteId }: NoteEditorProps) {
                   isSplitView.value = false;
                   splitTabId.value = null;
                 }}
-                title="Закрыть режим разделенного экрана"
+                title={t('notes.split_canvas')}
               >
                 <Icon name="x" size={14} />
-                <span>Закрыть сплит</span>
+                <span>{t('notes.close')}</span>
               </button>
             )}
 
@@ -337,46 +338,46 @@ export function NoteEditor({ noteId }: NoteEditorProps) {
             <button
               class={`note-action-btn ${editorMode === 'preview' ? 'active' : ''}`}
               onClick={() => setEditorMode(editorMode === 'preview' ? 'source' : 'preview')}
-              title={`Режим: ${editorMode === 'preview' ? 'Live Preview' : 'Исходный Markdown'} (Ctrl+E)`}
+              title={`Mode: ${editorMode === 'preview' ? 'Live Preview' : 'Source'} (Ctrl+E)`}
             >
               <Icon name={editorMode === 'preview' ? 'eye' : 'edit'} size={15} />
-              <span>{editorMode === 'preview' ? 'Просмотр' : 'Исходник'}</span>
+              <span>{editorMode === 'preview' ? t('notes.preview_short') : t('notes.edit_short')}</span>
             </button>
 
             {/* Quick Insert Snippets */}
             <div class="quick-insert-group">
               <button
                 class="quick-insert-btn"
-                onClick={() => insertSnippet('## Заголовок')}
-                title="Вставить заголовок H2"
+                onClick={() => insertSnippet('## Heading')}
+                title={t('notes.heading2')}
               >
                 H2
               </button>
               <button
                 class="quick-insert-btn"
-                onClick={() => insertSnippet('- [ ] Новая задача')}
-                title="Вставить чекбокс"
+                onClick={() => insertSnippet('- [ ] Task')}
+                title={t('notes.checklist')}
               >
                 <Icon name="check" size={13} />
               </button>
               <button
                 class="quick-insert-btn"
-                onClick={() => insertSnippet('> [!note] Заметка\n> Важная мысль или контекст')}
-                title="Вставить коллаут"
+                onClick={() => insertSnippet('> [!note] Note\n> Note content')}
+                title={t('notes.callout')}
               >
                 <Icon name="sparkles" size={13} />
               </button>
               <button
                 class="quick-insert-btn"
-                onClick={() => insertSnippet('[[Название заметки]]')}
-                title="Вставить связь [[...]]"
+                onClick={() => insertSnippet('[[Note]]')}
+                title={t('notes.wikilink')}
               >
                 <Icon name="link" size={13} />
               </button>
               <button
                 class="quick-insert-btn"
                 onClick={() => fileInputRef.current?.click()}
-                title="Прикрепить файл или изображение"
+                title="Attach file or image"
               >
                 <Icon name="paperclip" size={13} />
               </button>
@@ -401,7 +402,7 @@ export function NoteEditor({ noteId }: NoteEditorProps) {
             <button
               class={`note-action-btn ${isRightPanelOpen ? 'active' : ''}`}
               onClick={() => setIsRightPanelOpen(!isRightPanelOpen)}
-              title="Панель оглавления и связей"
+              title={t('notes.outline')}
             >
               <Icon name="columns" size={15} />
             </button>
@@ -442,14 +443,14 @@ export function NoteEditor({ noteId }: NoteEditorProps) {
                 onClick={() => setRightPanelTab('outline')}
               >
                 <Icon name="file-text" size={13} />
-                <span>Оглавление</span>
+                <span>{t('notes.outline')}</span>
               </button>
               <button
                 class={`rp-tab-btn ${rightPanelTab === 'backlinks' ? 'active' : ''}`}
                 onClick={() => setRightPanelTab('backlinks')}
               >
                 <Icon name="link" size={13} />
-                <span>Связи ({backlinks.length})</span>
+                <span>{t('notes.backlinks')} ({backlinks.length})</span>
               </button>
             </div>
 
@@ -464,21 +465,21 @@ export function NoteEditor({ noteId }: NoteEditorProps) {
                     <div class="note-backlinks-panel" style={{ marginTop: 0, paddingTop: 0, borderTop: 'none', marginBottom: '14px' }}>
                       <div class="note-backlinks-title">
                         <Icon name="layout-canvas" size={13} />
-                        <span>На доске ({linkedBoardCards.length})</span>
+                        <span>{t('notes.linked_cards')} ({linkedBoardCards.length})</span>
                       </div>
                       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '6px' }}>
                         {linkedBoardCards.map((c) => (
                           <button
                             key={c.nodeId}
                             class="note-backlink-chip"
-                            title="Перейти к карточке на холсте"
+                            title={t('notes.goto_note')}
                             onClick={() => {
                               ensureSplitTabs();
                               window.dispatchEvent(new CustomEvent('doks-focus-node', { detail: { nodeId: c.nodeId } }));
                             }}
                           >
                             <Icon name="sparkles" size={12} />
-                            <span>Карточка</span>
+                            <span>{t('board.note_card')}</span>
                           </button>
                         ))}
                       </div>
@@ -486,7 +487,7 @@ export function NoteEditor({ noteId }: NoteEditorProps) {
                   )}
 
                   {backlinks.length === 0 ? (
-                    <div class="backlinks-empty">На эту заметку пока нет текстовых [[ссылок]]</div>
+                    <div class="backlinks-empty">{t('notes.no_backlinks')}</div>
                   ) : (
                     backlinks.map((bl) => (
                       <div

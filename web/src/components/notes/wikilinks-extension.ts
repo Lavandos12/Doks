@@ -23,7 +23,7 @@ export function wikilinksCompletionSource(context: CompletionContext): Completio
     .map((n) => ({
       label: n.title,
       apply: `${n.title}]]`,
-      detail: 'Заметка'
+      detail: 'Note'
     }));
 
   return {

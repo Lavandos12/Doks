@@ -40,3 +40,7 @@ export function t(key: TranslationKey | string, params?: Record<string, string |
 
   return text;
 }
+
+export function useTranslation() {
+  return { t, currentLanguage, setLanguage, cycleLanguage };
+}

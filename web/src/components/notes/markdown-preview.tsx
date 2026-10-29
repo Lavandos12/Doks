@@ -302,7 +302,7 @@ function renderInlineMarkdown(text: string, onNavigateWikilink?: (title: string)
               }
             }
           }}
-          title={`Перейти к заметке: ${targetTitle}`}
+          title={`Go to note: ${targetTitle}`}
         >
           {displayText}
         </span>

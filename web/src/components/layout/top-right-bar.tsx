@@ -1,7 +1,5 @@
 import { h, VNode } from 'preact';
 import {
-  workspaceMode,
-  setWorkspaceMode,
   agentStatus,
   isViewerMode,
   allTrashNotes,
@@ -33,8 +31,7 @@ export function TopRightBar({
 }: TopRightBarProps): VNode {
   const status = agentStatus.value;
   const isViewer = Boolean(isViewerMode.value || status?.viewerMode);
-  const isRadminFound = Boolean(status?.radminFound || status?.radminIp);
-  const effectiveIp = status?.effectiveIp || '127.0.0.1';
+  const deletedCount = allTrashNotes.value.length + allTrashBoards.value.length;
 
   return (
     <div
@@ -43,67 +40,105 @@ export function TopRightBar({
       onClick={(e) => e.stopPropagation()}
       style={{
         right: isSplitMode ? 'calc(50% + 16px)' : '16px',
-        transition: 'right 0.2s ease'
+        transition: 'right 0.2s ease',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '6px'
       }}
     >
-      {/* [ Notes ] Drawer Toggle Button */}
+      {/* 1. [ Notes ] */}
       <button
         class={`miro-action-pill ${isNotesOpen ? 'active' : ''}`}
         data-testid="notes-drawer-toggle-btn"
         onClick={onToggleNotes}
-        title={t('topbar.notes')}
+        title={t('topBar.notes')}
+        style={{
+          borderColor: isNotesOpen ? '#8b5cf6' : undefined,
+          color: isNotesOpen ? '#c084fc' : undefined
+        }}
       >
         <Icon name="file-text" size={14} />
-        <span>{t('topbar.notes')}</span>
+        <span>{t('topBar.notes')}</span>
       </button>
 
       {!isViewer && (
         <>
-          {/* [ AI Context ] */}
-          <button
-            class="miro-action-pill"
-            data-testid="ai-export-btn"
-            onClick={onOpenAiExport}
-            title={t('topbar.ai_context')}
-          >
-            <Icon name="sparkles" size={14} />
-            <span>{t('topbar.ai_context')}</span>
-          </button>
+          {/* 2. [ Phone ] Restored between Notes and Trash */}
+          {onOpenBridge && (
+            <button
+              class="miro-action-pill"
+              data-testid="phone-bridge-btn"
+              onClick={onOpenBridge}
+              title={t('topBar.phone')}
+            >
+              <Icon name="smartphone" size={14} />
+              <span>{t('topBar.phone')}</span>
+            </button>
+          )}
 
-          {/* [ Trash / History ] */}
+          {/* 3. [ Trash ] Upgraded with clear violet styling & count badge */}
           {onOpenTrash && (
             <button
               class="miro-action-pill"
               data-testid="trash-toggle-btn"
               onClick={onOpenTrash}
-              title={t('topbar.trash')}
+              title={t('topBar.trash')}
+              style={{ position: 'relative' }}
             >
               <Icon name="trash" size={14} />
-              <span>{t('topbar.trash')}</span>
-              {(allTrashNotes.value.length + allTrashBoards.value.length) > 0 && (
-                <span class="trash-count-pill">
-                  {allTrashNotes.value.length + allTrashBoards.value.length}
+              <span>{t('topBar.trash')}</span>
+              {deletedCount > 0 && (
+                <span
+                  class="trash-count-pill"
+                  style={{
+                    backgroundColor: '#8b5cf6',
+                    color: '#ffffff',
+                    fontSize: '10px',
+                    fontWeight: 700,
+                    borderRadius: '10px',
+                    padding: '1px 6px',
+                    marginLeft: '3px',
+                    lineHeight: '1.2'
+                  }}
+                >
+                  {deletedCount}
                 </span>
               )}
             </button>
           )}
 
-          {/* [ Language Switcher: RU / EN / ES ] */}
+          {/* 4. [ AI Context ] */}
+          <button
+            class="miro-action-pill"
+            data-testid="ai-export-btn"
+            onClick={onOpenAiExport}
+            title={t('topBar.aiContext')}
+          >
+            <Icon name="sparkles" size={14} />
+            <span>{t('topBar.aiContext')}</span>
+          </button>
+
+          {/* 5. [ Language Switcher: RU / EN / ES ] */}
           <button
             type="button"
             class="miro-action-pill lang-switch-pill"
             onClick={cycleLanguage}
-            title={t('settings.language')}
-            style={{ padding: '5px 8px', fontWeight: 700, color: '#c084fc' }}
+            title={t('topBar.settings')}
+            style={{
+              padding: '5px 8px',
+              fontWeight: 700,
+              color: '#c084fc',
+              border: '1px solid rgba(139, 92, 246, 0.3)'
+            }}
           >
             <span>{currentLanguage.value.toUpperCase()}</span>
           </button>
 
-          {/* [ Settings ] */}
+          {/* 6. [ Settings ] */}
           <button
             class="miro-action-pill settings-trigger-btn"
             onClick={onOpenSettings}
-            title={t('topbar.settings')}
+            title={t('topBar.settings')}
             style={{ padding: '5px 8px' }}
           >
             <Icon name="settings" size={15} />

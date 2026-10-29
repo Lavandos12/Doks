@@ -24,6 +24,7 @@ import {
 } from '../../state/app-state.js';
 import { getScopedBoardDocName, getBoardMaps, nodeMapToData } from '@doks/shared';
 import { Icon, type IconName } from '../../ui/icons.js';
+import { t } from '../../i18n/index.js';
 import { api } from '../../api/client.js';
 
 interface PaletteItem {
@@ -66,7 +67,7 @@ export function CommandPalette() {
     const noteItems: PaletteItem[] = activeNotes.map((n) => ({
       id: `note-${n.id}`,
       title: n.title,
-      subtitle: 'Заметка',
+      subtitle: t('topBar.notes'),
       icon: 'file-text',
       action: () => {
         openTab('note', n.id, n.title);
@@ -76,7 +77,7 @@ export function CommandPalette() {
     const boardItems: PaletteItem[] = activeBoards.map((b) => ({
       id: `board-${b.id}`,
       title: b.title,
-      subtitle: 'Доска',
+      subtitle: t('sidebar.boards'),
       icon: 'layout',
       action: () => {
         openTab('board', b.id, b.title);
@@ -89,8 +90,8 @@ export function CommandPalette() {
     items = [
       {
         id: 'cmd-scope-solo',
-        title: 'Переключить в Соло (Личное)',
-        subtitle: 'Локальное хранилище на этом ПК (Alt+1)',
+        title: `${t('topbar.solo')} (Solo)`,
+        subtitle: 'Local storage on this PC (Alt+1)',
         icon: 'lock',
         action: () => {
           setScope('solo');
@@ -99,8 +100,8 @@ export function CommandPalette() {
       },
       {
         id: 'cmd-scope-team',
-        title: 'Переключить в Команду (P2P меш)',
-        subtitle: 'Синхронизация с соавторами (Alt+2)',
+        title: `${t('topbar.team')} (LAN / P2P)`,
+        subtitle: 'Sync with co-authors (Alt+2)',
         icon: 'globe-mesh',
         action: () => {
           setScope('team');
@@ -109,8 +110,8 @@ export function CommandPalette() {
       },
       {
         id: 'cmd-mode-canvas',
-        title: 'Режим: Холст',
-        subtitle: 'Полноэкранная бесконечная доска',
+        title: 'Mode: Canvas',
+        subtitle: 'Infinite board canvas',
         icon: 'layout-canvas',
         action: () => {
           setWorkspaceMode('canvas');
@@ -119,8 +120,8 @@ export function CommandPalette() {
       },
       {
         id: 'cmd-mode-split',
-        title: 'Режим: Сплит',
-        subtitle: 'Холст и редактор рядом (Ctrl+\\)',
+        title: 'Mode: Split',
+        subtitle: 'Canvas & editor side-by-side (Ctrl+\\)',
         icon: 'layout-split',
         action: () => {
           setWorkspaceMode('split');
@@ -129,8 +130,8 @@ export function CommandPalette() {
       },
       {
         id: 'cmd-mode-vault',
-        title: 'Режим: Заметки',
-        subtitle: 'Полноэкранная база знаний',
+        title: 'Mode: Notes',
+        subtitle: 'Full-screen knowledge base',
         icon: 'layout-doc',
         action: () => {
           setWorkspaceMode('vault');
@@ -139,8 +140,8 @@ export function CommandPalette() {
       },
       {
         id: 'cmd-new-note',
-        title: 'Создать новую заметку',
-        subtitle: 'Markdown документ',
+        title: t('sidebar.new_note'),
+        subtitle: 'Markdown document',
         icon: 'file-text',
         action: () => {
           createNote();
@@ -149,8 +150,8 @@ export function CommandPalette() {
       },
       {
         id: 'cmd-new-board',
-        title: 'Создать новую доску',
-        subtitle: 'Бесконечный холст JSON Canvas',
+        title: t('sidebar.new_board'),
+        subtitle: 'JSON Canvas infinite board',
         icon: 'layout',
         action: () => {
           window.dispatchEvent(new CustomEvent('doks:open-create-board'));
@@ -159,8 +160,8 @@ export function CommandPalette() {
       },
       {
         id: 'cmd-split-view',
-        title: 'Разделить / объединить экран',
-        subtitle: 'Split View рядом',
+        title: 'Toggle Split View',
+        subtitle: 'Split View side-by-side',
         icon: 'columns',
         action: () => {
           toggleSplitView();
@@ -169,8 +170,8 @@ export function CommandPalette() {
       },
       {
         id: 'cmd-toggle-theme',
-        title: `Переключить тему на ${theme.value === 'dark' ? 'светлую' : 'тёмную'}`,
-        subtitle: 'Дизайн системы',
+        title: `Switch theme to ${theme.value === 'dark' ? 'Light' : 'Dark'}`,
+        subtitle: 'System theme appearance',
         icon: theme.value === 'dark' ? 'sun' : 'moon',
         action: () => {
           setTheme(theme.value === 'dark' ? 'light' : 'dark');
@@ -179,8 +180,8 @@ export function CommandPalette() {
       },
       {
         id: 'cmd-network',
-        title: 'Участники и сеть Radmin',
-        subtitle: 'Список пиров и подключений',
+        title: t('share.tabShare'),
+        subtitle: 'Network status & sharing',
         icon: 'wifi',
         action: () => {
           window.dispatchEvent(new CustomEvent('doks:open-network'));
@@ -189,8 +190,8 @@ export function CommandPalette() {
       },
       {
         id: 'cmd-history',
-        title: 'Снимки и история',
-        subtitle: 'Резервные копии документов',
+        title: t('sidebar.history'),
+        subtitle: 'Document snapshots & versions',
         icon: 'history',
         action: () => {
           currentView.value = 'history';
@@ -199,8 +200,8 @@ export function CommandPalette() {
       },
       {
         id: 'cmd-import-wizard',
-        title: 'Мастер импорта файлов',
-        subtitle: 'Импорт Markdown, Canvas, CSV, DOCX, ZIP',
+        title: t('menu.import'),
+        subtitle: 'Import Markdown, Canvas, CSV, DOCX, ZIP',
         icon: 'upload',
         action: () => {
           isImportWizardOpen.value = true;
@@ -209,8 +210,8 @@ export function CommandPalette() {
       },
       {
         id: 'cmd-export-vault',
-        title: 'Экспорт хранилища (.zip)',
-        subtitle: 'Полный архив заметок и досок',
+        title: t('menu.export_vault'),
+        subtitle: 'Complete notes & boards archive',
         icon: 'download',
         action: () => {
           window.open('/api/export/vault', '_blank');
@@ -219,8 +220,8 @@ export function CommandPalette() {
       },
       {
         id: 'cmd-history-trash',
-        title: 'История снимков и Корзина',
-        subtitle: 'Контрольные точки версий и восстановление',
+        title: `${t('sidebar.history')} & ${t('topbar.trash')}`,
+        subtitle: 'Version restore & trash',
         icon: 'history',
         action: () => {
           window.dispatchEvent(new CustomEvent('doks:open-history'));
@@ -229,8 +230,8 @@ export function CommandPalette() {
       },
       {
         id: 'cmd-create-snapshot',
-        title: 'Создать резервную копию (снимок)',
-        subtitle: 'Мгновенный снимок всех документов',
+        title: t('menu.create_snapshot'),
+        subtitle: 'Instant snapshot of all documents',
         icon: 'history',
         action: async () => {
           try {
@@ -245,8 +246,8 @@ export function CommandPalette() {
         if (activeTab?.type === 'note') {
           dynamicItems.push({
             id: 'cmd-export-active-note',
-            title: `Экспорт текущей заметки "${activeTab.title}" (.md)`,
-            subtitle: 'Скачать markdown-файл',
+            title: `Export note "${activeTab.title}" (.md)`,
+            subtitle: 'Download markdown file',
             icon: 'file-text',
             action: () => {
               window.open(`/api/export/note/${activeTab.id}`, '_blank');
@@ -257,8 +258,8 @@ export function CommandPalette() {
         if (activeTab?.type === 'board') {
           dynamicItems.push({
             id: 'cmd-export-active-board',
-            title: `Экспорт текущей доски "${activeTab.title}" (.canvas)`,
-            subtitle: 'Скачать JSON Canvas',
+            title: `Export board "${activeTab.title}" (.canvas)`,
+            subtitle: 'Download JSON Canvas',
             icon: 'layout',
             action: () => {
               window.open(`/api/export/board/${activeTab.id}`, '_blank');
@@ -271,7 +272,7 @@ export function CommandPalette() {
       ...activeNotes.map((n) => ({
         id: `note-${n.id}`,
         title: n.title,
-        subtitle: 'Заметка',
+        subtitle: t('topBar.notes'),
         icon: 'file-text' as IconName,
         action: () => {
           openTab('note', n.id, n.title);
@@ -281,7 +282,7 @@ export function CommandPalette() {
       ...activeBoards.map((b) => ({
         id: `board-${b.id}`,
         title: b.title,
-        subtitle: 'Доска',
+        subtitle: t('sidebar.boards'),
         icon: 'layout' as IconName,
         action: () => {
           openTab('board', b.id, b.title);
@@ -302,7 +303,7 @@ export function CommandPalette() {
               cardItems.push({
                 id: `card-${data.id}`,
                 title: preview.length > 50 ? preview.slice(0, 50) + '...' : preview,
-                subtitle: `Карточка на доске (${data.type})`,
+                subtitle: `Board card (${data.type})`,
                 icon: 'file-text' as IconName,
                 action: () => {
                   window.dispatchEvent(new CustomEvent('doks-focus-node', { detail: { nodeId: data.id } }));
@@ -350,7 +351,7 @@ export function CommandPalette() {
             ref={inputRef}
             type="text"
             class="palette-input"
-            placeholder={isQuickSwitch ? 'Быстрый переход к заметке или доске...' : 'Введите команду или название...'}
+            placeholder={isQuickSwitch ? t('palette.switch_placeholder') : t('palette.search_placeholder')}
             value={query}
             onInput={(e) => {
               setQuery((e.target as HTMLInputElement).value);
@@ -363,7 +364,7 @@ export function CommandPalette() {
 
         <div class="palette-list">
           {filtered.length === 0 ? (
-            <div class="palette-empty">Ничего не найдено</div>
+            <div class="palette-empty">{t('palette.empty')}</div>
           ) : (
             filtered.map((item, index) => (
               <div

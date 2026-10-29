@@ -24,6 +24,7 @@ export { yjsClient, agentStatus, connectionState } from './yjs-client.js';
 import { api } from '../api/client.js';
 import { NotesSearchIndex } from '../search/indexer.js';
 import { showToast } from '../ui/toast.js';
+import { t } from '../i18n/index.js';
 
 export const searchIndex = new NotesSearchIndex();
 
@@ -178,7 +179,7 @@ export function ensureSplitTabs(): void {
       openTab('board', b.id, b.title);
       boardTab = openTabs.value.find((t) => t.id === b.id);
     } else {
-      const newId = createBoard('Главный план');
+      const newId = createBoard(t('sidebar.new_board'));
       boardTab = openTabs.value.find((t) => t.id === newId);
     }
   }
@@ -189,7 +190,7 @@ export function ensureSplitTabs(): void {
       openTab('note', n.id, n.title);
       noteTab = openTabs.value.find((t) => t.id === n.id);
     } else {
-      const newId = createNote('Заметка');
+      const newId = createNote(t('notes.default_title'));
       noteTab = openTabs.value.find((t) => t.id === newId);
     }
   }
@@ -226,7 +227,7 @@ export function ensureDefaultBoard(): void {
     const id = SOLO_MAIN_BOARD_ID;
     soloMaps.boards.set(id, {
       id,
-      title: 'Моя первая доска',
+      title: t('sidebar.new_board'),
       folder: null,
       deleted: false,
       createdAt: Date.now(),
@@ -418,8 +419,8 @@ export function openTab(type: 'note' | 'board', id: string, title?: string): voi
     const docTitle =
       title ||
       (type === 'note'
-        ? activeMaps.notes.get(id)?.title || 'Без названия'
-        : activeMaps.boards.get(id)?.title || 'Безымянная доска');
+        ? activeMaps.notes.get(id)?.title || t('notes.untitled')
+        : activeMaps.boards.get(id)?.title || t('sidebar.new_board'));
     openTabs.value = [...openTabs.value, { id, type, title: docTitle }];
   }
 
@@ -478,7 +479,7 @@ export function toggleSplitView(): void {
   }
 }
 
-export function createNote(title = 'Новая заметка', folder: string | null = null): string {
+export function createNote(title = t('sidebar.new_note'), folder: string | null = null): string {
   const scope = currentScope.value;
   const activeDoc = getActiveIndexDoc();
   const activeMaps = getActiveMaps();
@@ -509,7 +510,7 @@ export function createNote(title = 'Новая заметка', folder: string |
 }
 
 export function createBoard(
-  title = 'Новая доска',
+  title = t('sidebar.new_board'),
   folder: string | null = null,
   scope: WorkspaceScope = currentScope.value,
   shouldOpenTab = true
@@ -537,7 +538,7 @@ export function createBoard(
   return id;
 }
 
-export function createFolder(name = 'Новая папка', parent: string | null = null): string {
+export function createFolder(name = t('sidebar.new_folder'), parent: string | null = null): string {
   const scope = currentScope.value;
   const activeDoc = getActiveIndexDoc();
   const activeMaps = getActiveMaps();
@@ -732,7 +733,7 @@ export function selectBoardWithScope(boardId: string, scope: WorkspaceScope, tit
     syncIndexSignals();
   }
   selectedBoardId.value = boardId;
-  openTab('board', boardId, title || 'Доска');
+  openTab('board', boardId, title || t('sidebar.boards'));
 }
 
 export async function convertBoardScope(
@@ -744,7 +745,7 @@ export async function convertBoardScope(
 
   const sourceMap = fromScope === 'solo' ? soloMaps.boards : teamMaps.boards;
   const meta = sourceMap.get(boardId);
-  const title = meta?.title || 'Доска';
+  const title = meta?.title || t('sidebar.boards');
 
   // 1. Create target board in toScope with the same title
   const newBoardId = createBoard(title, meta?.folder || null, toScope, false);
@@ -783,8 +784,8 @@ export async function convertBoardScope(
   selectBoardWithScope(newBoardId, toScope, title);
   showToast(
     toScope === 'team'
-      ? `Доска "${title}" теперь Общая (доступна в сети)`
-      : `Доска "${title}" теперь Личная (скрыта из сети)`,
+      ? `Board "${title}" is now Collaborative`
+      : `Board "${title}" is now Solo`,
     'success'
   );
   return newBoardId;
@@ -815,7 +816,7 @@ export async function transferNodesAcrossScopes(req: BridgeTransferRequest): Pro
 }
 
 /**
- * 1-Click Instant Push to Opposite Scope ("На общую доску ->" / "<- В черновик")
+ * 1-Click Instant Push to Opposite Scope
  */
 export async function quickPushNodesToOppositeScope(
   fromScope: WorkspaceScope,
@@ -832,7 +833,7 @@ export async function quickPushNodesToOppositeScope(
     targetDoc.transact(() => {
       targetMaps.boards.set(targetBoardId, {
         id: targetBoardId,
-        title: targetScope === 'team' ? 'Общая доска' : 'Моя доска',
+        title: targetScope === 'team' ? 'Team Board' : 'Solo Board',
         folder: null,
         deleted: false,
         createdAt: Date.now(),
@@ -856,8 +857,8 @@ export async function quickPushNodesToOppositeScope(
   if (res.success) {
     showToast(
       fromScope === 'solo'
-        ? 'Отправлено на Общую доску!'
-        : 'Скопировано в ваш личный Черновик!',
+        ? 'Pushed to Team board!'
+        : 'Pushed to Solo board!',
       'success'
     );
     if (switchAfter) {
@@ -865,7 +866,7 @@ export async function quickPushNodesToOppositeScope(
       openTab('board', targetBoardId);
     }
   } else {
-    showToast(res.error || 'Ошибка переноса объектов', 'error');
+    showToast(res.error || 'Transfer error', 'error');
   }
 
   return res;
@@ -893,7 +894,7 @@ if (typeof window !== 'undefined') {
       // Ctrl+S: Prevent browser "Save page as" and show save toast
       if ((e.ctrlKey || e.metaKey) && !e.shiftKey && (e.code === 'KeyS' || e.key.toLowerCase() === 's' || e.key === 'ы')) {
         e.preventDefault();
-        showToast(currentScope.value === 'solo' ? 'Все изменения сохранены локально' : 'Синхронизировано в P2P-сети', 'success');
+        showToast(t('status.synced'), 'success');
         return;
       }
 

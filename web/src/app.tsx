@@ -18,9 +18,8 @@ import {
 } from './state/app-state.js';
 import { TopRightBar } from './components/layout/top-right-bar.js';
 import { NotesDrawer } from './components/layout/notes-drawer.js';
-import { NetworkPopover } from './components/layout/network-popover.js';
 import { SettingsModal } from './components/layout/settings-modal.js';
-import { BridgeModal } from './components/layout/bridge-modal.js';
+import { ShareModal } from './components/layout/share-modal.js';
 import { CommandPalette } from './components/layout/command-palette.js';
 import { ImportWizardModal } from './components/board/import-wizard-modal.js';
 import { AiExportModal } from './components/board/ai-export-modal.js';
@@ -29,6 +28,7 @@ import { ToastContainer } from './ui/toast.js';
 import { NoteEditor } from './components/notes/editor.js';
 import { BoardCanvas } from './components/board/board-canvas.js';
 import { showToast } from './ui/toast.js';
+import { t } from './i18n/index.js';
 
 export function App() {
   const [isAiExportOpen, setIsAiExportOpen] = useState(false);
@@ -128,7 +128,7 @@ export function App() {
           }}
         >
           <Icon name="lock" size={14} />
-          <span>Режим чтения (Мост): синхронизация в реальном времени. Редактирование отключено.</span>
+          <span>{t('topbar.viewer_banner')}</span>
         </div>
       )}
 
@@ -199,17 +199,19 @@ export function App() {
 
       {/* Radmin VPN / LAN Modal */}
       {isNetworkOpen && (
-        <NetworkPopover
+        <ShareModal
           isOpen={isNetworkOpen}
           onClose={() => setIsNetworkOpen(false)}
+          initialTab="share"
         />
       )}
 
       {/* Bridge (Phone QR) Modal */}
       {isBridgeOpen && (
-        <BridgeModal
+        <ShareModal
           isOpen={isBridgeOpen}
           onClose={() => setIsBridgeOpen(false)}
+          initialTab="phone"
         />
       )}
 

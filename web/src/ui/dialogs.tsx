@@ -2,6 +2,7 @@ import { h, VNode, ComponentChildren } from 'preact';
 import { signal } from '@preact/signals';
 import { useState, useEffect } from 'preact/hooks';
 import { Icon } from '../components/Icons.js';
+import { t } from '../i18n/index.js';
 
 interface ModalProps {
   isOpen: boolean;
@@ -52,7 +53,7 @@ function Modal({
                 {subtitle && <p class="modal-subtitle">{subtitle}</p>}
               </div>
             </div>
-            <button class="modal-close-btn" onClick={onClose} aria-label="Закрыть">
+            <button class="modal-close-btn" onClick={onClose} aria-label={t('common.close')}>
               <Icon name="x" size={16} />
             </button>
           </div>
@@ -127,10 +128,10 @@ function PromptForm({ options }: { options: PromptOptions }) {
       />
       <div class="modal-buttons">
         <button class="btn-cancel" onClick={handleCancel}>
-          {options.cancelText || 'Отмена'}
+          {options.cancelText || t('common.cancel')}
         </button>
         <button class="btn-primary" onClick={handleConfirm}>
-          {options.confirmText || 'Подтвердить'}
+          {options.confirmText || t('common.confirm')}
         </button>
       </div>
     </div>
@@ -163,7 +164,7 @@ export function DialogContainer(): VNode {
                   activeConfirm.value = null;
                 }}
               >
-                {confirm.cancelText || 'Отмена'}
+                {confirm.cancelText || t('common.cancel')}
               </button>
               <button
                 class={confirm.danger ? 'btn-danger' : 'btn-primary'}
@@ -173,7 +174,7 @@ export function DialogContainer(): VNode {
                 }}
                 autoFocus
               >
-                {confirm.confirmText || 'Подтвердить'}
+                {confirm.confirmText || t('common.confirm')}
               </button>
             </div>
           </div>

@@ -56,7 +56,7 @@ import { NotePickerModal } from './note-picker-modal.js';
 import { BoardMinimap } from './board-minimap.js';
 import { TransferModal } from './transfer-modal.js';
 import { AutoDiagramModal } from './auto-diagram-modal.js';
-import { LanShareModal } from '../layout/lan-share-modal.js';
+import { ShareModal } from '../layout/share-modal.js';
 import {
   pointsToSmoothSvgPath,
   buildCalligraphicBrushPath,
@@ -613,6 +613,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
   const [isBoardSettingsOpen, setIsBoardSettingsOpen] = useState(false);
   const [settingsTargetBoard, setSettingsTargetBoard] = useState<{ id: string; scope: WorkspaceScope; title: string } | null>(null);
   const [isLanShareOpen, setIsLanShareOpen] = useState(false);
+  const [shareModalTab, setShareModalTab] = useState<'share' | 'direct' | 'phone'>('share');
 
   const handleOpenTransferModal = (ids?: string[]) => {
     let targetIds = ids && ids.length > 0 ? ids : Array.from(selectedNodeIds);
@@ -3357,16 +3358,47 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
           <Icon name="chevron-down" size={12} />
         </button>
 
-        {/* 2. Minecraft LAN Network Access Button */}
+        {/* 2. Universal Share Button */}
         <button
           class="miro-scope-status-pill team"
           style={{ background: 'rgba(109, 40, 217, 0.18)', borderColor: 'rgba(167, 139, 250, 0.4)', color: '#c084fc' }}
-          onClick={() => setIsLanShareOpen(true)}
-          title={t('lan.title')}
+          onClick={() => {
+            setShareModalTab('share');
+            setIsLanShareOpen(true);
+          }}
+          title={t('share.tabShare')}
         >
           <Icon name="globe-mesh" size={13} />
-          <span>{t('lan.open_lan_btn')}</span>
+          <span>{t('share.tabShare')}</span>
         </button>
+
+        {/* 3. Online Network Status Pill */}
+        {(agentStatus.value?.radminIp || (agentStatus.value?.effectiveIp && agentStatus.value?.effectiveIp !== '127.0.0.1')) && (
+          <div
+            class="miro-online-badge-pill"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '4px 10px',
+              background: 'rgba(16, 185, 129, 0.1)',
+              border: '1px solid rgba(16, 185, 129, 0.3)',
+              borderRadius: '20px',
+              fontSize: '11px',
+              color: '#34d399',
+              fontWeight: 500,
+              cursor: 'pointer'
+            }}
+            onClick={() => {
+              setShareModalTab('share');
+              setIsLanShareOpen(true);
+            }}
+            title={`${t('share.onlineBadge')} (${agentStatus.value?.radminIp || agentStatus.value?.effectiveIp}:${agentStatus.value?.webPort || 4780})`}
+          >
+            <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#10b981', display: 'inline-block' }} />
+            <span>{t('share.onlineBadge')} ({agentStatus.value?.radminIp || agentStatus.value?.effectiveIp}:{agentStatus.value?.webPort || 4780})</span>
+          </div>
+        )}
 
         {/* 3. Export Dropdown Button */}
         <button
@@ -6195,11 +6227,10 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
         onClose={() => setIsCreateBoardOpen(false)}
       />
 
-      <LanShareModal
+      <ShareModal
         isOpen={isLanShareOpen}
         onClose={() => setIsLanShareOpen(false)}
-        boardId={boardId}
-        boardTitle={currentBoardMeta?.title || t('topbar.boards')}
+        initialTab={shareModalTab}
       />
 
       <BoardSettingsModal

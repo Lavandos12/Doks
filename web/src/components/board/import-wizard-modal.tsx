@@ -1,6 +1,7 @@
 import { h } from 'preact';
 import { useState, useRef } from 'preact/hooks';
 import { Icon } from '../../ui/icons.js';
+import { t } from '../../i18n/index.js';
 import { openTab, currentScope } from '../../state/app-state.js';
 import { api } from '../../api/client.js';
 
@@ -73,7 +74,7 @@ export function ImportWizardModal({ isOpen, onClose }: ImportWizardModalProps) {
         });
 
         if (!res.ok) {
-          errors.push(`Ошибка импорта ${item.name}: ${res.statusText}`);
+          errors.push(`Import error ${item.name}: ${res.statusText}`);
           continue;
         }
 
@@ -90,7 +91,7 @@ export function ImportWizardModal({ isOpen, onClose }: ImportWizardModalProps) {
           }
         }
       } catch (err: any) {
-        errors.push(`Сбой при чтении ${item.name}: ${err.message}`);
+        errors.push(`Read failure ${item.name}: ${err.message}`);
       }
     }
 
@@ -105,9 +106,9 @@ export function ImportWizardModal({ isOpen, onClose }: ImportWizardModalProps) {
   };
 
   const formatBytes = (bytes: number) => {
-    if (bytes < 1024) return `${bytes} Б`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} КБ`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} МБ`;
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
   return (
@@ -116,9 +117,9 @@ export function ImportWizardModal({ isOpen, onClose }: ImportWizardModalProps) {
         <div class="modal-header">
           <div class="modal-title-row">
             <Icon name="upload" size={18} />
-            <h3>Мастер импорта файлов в Doks</h3>
+            <h3>{t('importWizard.title')}</h3>
           </div>
-          <button class="modal-close-btn" onClick={onClose}>
+          <button class="modal-close-btn" onClick={onClose} aria-label={t('common.close')}>
             <Icon name="x" size={16} />
           </button>
         </div>
@@ -128,26 +129,26 @@ export function ImportWizardModal({ isOpen, onClose }: ImportWizardModalProps) {
             <div class="import-report-box">
               <div class="report-header">
                 <Icon name="check" size={24} class="report-success-icon" />
-                <h4>Импорт успешно завершён</h4>
+                <h4>{t('importWizard.success')}</h4>
               </div>
               <div class="report-stats">
                 <div class="report-stat-row">
-                  <span>Обработано файлов:</span>
+                  <span>{t('importWizard.processed')}</span>
                   <strong>{importReport.total}</strong>
                 </div>
                 <div class="report-stat-row">
-                  <span>Создано заметок:</span>
+                  <span>{t('importWizard.notesCreated')}</span>
                   <strong>{importReport.notesCount}</strong>
                 </div>
                 <div class="report-stat-row">
-                  <span>Создано досок:</span>
+                  <span>{t('importWizard.boardsCreated')}</span>
                   <strong>{importReport.boardsCount}</strong>
                 </div>
               </div>
 
               {importReport.errors.length > 0 && (
                 <div class="report-errors">
-                  <h5>Замечания:</h5>
+                  <h5>{t('importWizard.notices')}</h5>
                   <ul>
                     {importReport.errors.map((err, i) => (
                       <li key={i}>{err}</li>
@@ -158,7 +159,7 @@ export function ImportWizardModal({ isOpen, onClose }: ImportWizardModalProps) {
 
               <div class="modal-actions-row" style={{ marginTop: '20px' }}>
                 <button class="btn btn-primary" onClick={onClose}>
-                  Готово
+                  {t('importWizard.done')}
                 </button>
               </div>
             </div>
@@ -182,14 +183,10 @@ export function ImportWizardModal({ isOpen, onClose }: ImportWizardModalProps) {
               }}
             >
               <Icon name="upload" size={36} class="dropzone-icon" />
-              <h4>Выберите или перетащите файлы сюда</h4>
-              <p>
-                Поддерживаются заметки <code>.md</code>, доски Obsidian <code>.canvas</code>, таблицы{' '}
-                <code>.csv</code>, документы Word <code>.docx</code>, <code>.html</code> и архивы{' '}
-                <code>.zip</code>.
-              </p>
+              <h4>{t('importWizard.dropzoneTitle')}</h4>
+              <p>{t('importWizard.dropzoneDesc')}</p>
               <button class="btn btn-secondary" style={{ marginTop: '12px' }}>
-                Обзор файлов...
+                {t('importWizard.browse')}
               </button>
               <input
                 type="file"
@@ -203,13 +200,13 @@ export function ImportWizardModal({ isOpen, onClose }: ImportWizardModalProps) {
           ) : (
             <div>
               <div class="staged-files-header">
-                <span>Выбрано файлов: {stagedFiles.length}</span>
+                <span>{t('importWizard.selectedFiles', { count: stagedFiles.length })}</span>
                 <button
                   class="btn btn-link btn-sm"
                   onClick={() => setStagedFiles([])}
                   disabled={isImporting}
                 >
-                  Очистить
+                  {t('importWizard.clear')}
                 </button>
               </div>
 
@@ -232,8 +229,8 @@ export function ImportWizardModal({ isOpen, onClose }: ImportWizardModalProps) {
                       }}
                       disabled={isImporting}
                     >
-                      <option value="note">Заметка</option>
-                      <option value="board">Доска</option>
+                      <option value="note">{t('topBar.notes')}</option>
+                      <option value="board">{t('sidebar.boards')}</option>
                     </select>
                   </div>
                 ))}
@@ -245,10 +242,10 @@ export function ImportWizardModal({ isOpen, onClose }: ImportWizardModalProps) {
                   onClick={() => setStagedFiles([])}
                   disabled={isImporting}
                 >
-                  Отмена
+                  {t('common.cancel')}
                 </button>
                 <button class="btn btn-primary" onClick={executeImport} disabled={isImporting}>
-                  {isImporting ? 'Импортирование...' : `Импортировать ${stagedFiles.length} файлов`}
+                  {isImporting ? t('importWizard.importing') : t('importWizard.importAction', { count: stagedFiles.length })}
                 </button>
               </div>
             </div>

@@ -1,6 +1,7 @@
 import { h } from 'preact';
 import type { HeadingItem } from './markdown-preview.js';
 import { Icon } from '../../ui/icons.js';
+import { t } from '../../i18n/index.js';
 
 interface OutlinePanelProps {
   headings: HeadingItem[];
@@ -12,12 +13,12 @@ export function OutlinePanel({ headings, onSelectHeading }: OutlinePanelProps) {
     <div class="outline-panel-root">
       <div class="outline-header">
         <Icon name="file-text" size={14} />
-        <span>Оглавление ({headings.length})</span>
+        <span>{t('notes.outline')} ({headings.length})</span>
       </div>
 
       <div class="outline-list">
         {headings.length === 0 ? (
-          <div class="outline-empty">В заметке нет заголовков (# H1, ## H2...)</div>
+          <div class="outline-empty">{t('notes.outline_empty')}</div>
         ) : (
           headings.map((hItem) => (
             <div
