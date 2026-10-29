@@ -62,17 +62,17 @@ export function NotesDrawer({
   }, [selectedId, activeNotes.length, currentScope.value]);
 
   const handleCreateNew = () => {
-    const newId = createNote('Новая заметка');
+    const newId = createNote(t('notes.new_note'));
     setSelectedId(newId);
     setPreviewMode(false);
-    showToast('Создана новая заметка');
+    showToast(t('notes.new_note'));
   };
 
   const handleDeleteNote = () => {
     if (!selectedId) return;
-    if (confirm(`Удалить заметку "${noteTitle || 'Без названия'}"?`)) {
+    if (confirm(`${t('notes.delete_confirm')}`.replace('{title}', noteTitle || t('notes.untitled')))) {
       deleteNote(selectedId);
-      showToast('Заметка удалена');
+      showToast(t('notes.delete_success'));
       const remaining = activeNotes.filter((n) => n.id !== selectedId);
       setSelectedId(remaining[0]?.id || '');
     }
@@ -96,8 +96,8 @@ export function NotesDrawer({
 
   const handleDropToCanvas = () => {
     if (!selectedId) return;
-    onDropNoteToCanvas?.(selectedId, noteTitle || 'Заметка', noteText);
-    showToast(`Заметка "${noteTitle}" добавлена на холст`);
+    onDropNoteToCanvas?.(selectedId, noteTitle || t('notes.default_title'), noteText);
+    showToast(t('notes.drop_canvas'));
   };
 
   const filtered = activeNotes.filter((n) =>
@@ -123,26 +123,26 @@ export function NotesDrawer({
               <button
                 class={`btn-ghost-xs ${previewMode ? 'active' : ''}`}
                 onClick={() => setPreviewMode(!previewMode)}
-                title={previewMode ? 'Редактировать Markdown' : 'Предпросмотр Markdown'}
+                title={previewMode ? t('notes.edit') : t('notes.preview')}
               >
                 <Icon name={previewMode ? 'edit' : 'eye'} size={14} />
               </button>
               <button
                 class="btn-ghost-xs text-danger"
                 onClick={handleDeleteNote}
-                title="Удалить заметку"
+                title={t("sidebar.delete_note")}
               >
                 <Icon name="trash" size={14} />
               </button>
             </>
           )}
           {!isViewer && (
-            <button class="btn-primary-xs" onClick={handleCreateNew} title="Создать заметку">
+            <button class="btn-primary-xs" onClick={handleCreateNew} title={t("notes.new_note")}>
               <Icon name="plus" size={13} />
-              <span>Новая</span>
+              <span>{t("notes.new_note")}</span>
             </button>
           )}
-          <button class="modal-close-btn" onClick={onClose} aria-label="Закрыть">
+          <button class="modal-close-btn" onClick={onClose} aria-label={t("ai.close")}>
             <Icon name="x" size={16} />
           </button>
         </div>
@@ -156,7 +156,7 @@ export function NotesDrawer({
           <input
             type="text"
             class="notes-drawer-search-input"
-            placeholder="Поиск по заметкам..."
+            placeholder={t("notes.search_placeholder")}
             value={searchQuery}
             onInput={(e) => setSearchQuery((e.target as HTMLInputElement).value)}
           />
@@ -174,7 +174,7 @@ export function NotesDrawer({
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px', overflow: 'hidden' }}>
                   <Icon name="file-text" size={12} />
                   <span style={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
-                    {n.title || 'Без названия'}
+                    {n.title || t('notes.untitled')}
                   </span>
                 </div>
               </div>
@@ -196,7 +196,7 @@ export function NotesDrawer({
                 setNoteTitle(newVal);
                 renameNote(selectedId, newVal);
               }}
-              placeholder="Название заметки..."
+              placeholder={t("sidebar.new_note")}
             />
             {effectivePreview ? (
               <div class="notes-drawer-editor-body preview-scroll" style={{ overflowY: 'auto' }}>
@@ -207,17 +207,17 @@ export function NotesDrawer({
                 class="notes-drawer-editor-body"
                 value={noteText}
                 onInput={(e) => handleTextChange((e.target as HTMLTextAreaElement).value)}
-                placeholder="Пишите markdown здесь... Поддерживаются списки - [ ], заголовки #, ссылки [[связи]]."
+                placeholder={t('notes.editor_placeholder')}
               />
             )}
           </div>
         ) : (
           <div class="miro-empty-notes">
             <Icon name="file-text" size={32} />
-            <p>Нет заметок в этом пространстве</p>
+            <p>{t("notes.no_notes")}</p>
             {!isViewer && (
               <button class="btn-primary-sm" onClick={handleCreateNew}>
-                Создать первую заметку
+                {t("sidebar.create_note")}
               </button>
             )}
           </div>
@@ -228,12 +228,12 @@ export function NotesDrawer({
       {selectedId && (
         <div class="notes-drawer-footer">
           <span style={{ fontSize: '11px', color: '#94a3b8' }}>
-            Автосохранение в Markdown
+            Markdown
           </span>
           {!isViewer && (
-            <button class="btn-drop-to-canvas" onClick={handleDropToCanvas} title="Поместить заметку на холст">
+            <button class="btn-drop-to-canvas" onClick={handleDropToCanvas} title={t("notes.drop_canvas")}>
               <Icon name="plus" size={13} />
-              <span>На доску</span>
+              <span>{t("notes.drop_canvas")}</span>
             </button>
           )}
         </div>

@@ -11,11 +11,12 @@ import {
   emptyTrash,
   yjsClient,
   currentScope,
-  selectedBoardId
+  selectedBoardId,
+  activeTabId
 } from '../../state/app-state.js';
 import { api } from '../../api/client.js';
 import { Icon } from '../../ui/icons.js';
-import { t } from '../../i18n/index.js';
+import { t, currentLanguage } from '../../i18n/index.js';
 import { showConfirm } from '../../ui/dialogs.js';
 import { showToast } from '../../ui/toast.js';
 
@@ -31,15 +32,11 @@ export function HistoryScreen({ onClose }: HistoryScreenProps = {}) {
 
   const deletedNotes = allTrashNotes.value;
   const deletedBoards = allTrashBoards.value;
-  const activeBoardId = selectedBoardId.value;
+  const activeBoardId = activeTabId.value || selectedBoardId.value || 'default';
 
   const [deletedCanvasNodes, setDeletedCanvasNodes] = useState<{ id: string; type: string; text: string }[]>([]);
 
   const refreshDeletedNodes = () => {
-    if (!activeBoardId) {
-      setDeletedCanvasNodes([]);
-      return;
-    }
     try {
       const bDoc = yjsClient.getOrCreateDoc(getScopedBoardDocName(currentScope.value, activeBoardId));
       const { nodes } = getBoardMaps(bDoc);
@@ -48,8 +45,8 @@ export function HistoryScreen({ onClose }: HistoryScreenProps = {}) {
         if (nodeMap && nodeMap.get && nodeMap.get('deleted') === true) {
           list.push({
             id,
-            type: nodeMap.get('type') || 'object',
-            text: (nodeMap.get('text') || '').slice(0, 60) || nodeMap.get('type') || 'Объект'
+            type: nodeMap.get('type') || 'sticky',
+            text: (nodeMap.get('text') || nodeMap.get('fileName') || '').toString().slice(0, 50) || t('trash.deleted_node')
           });
         }
       });
@@ -60,7 +57,6 @@ export function HistoryScreen({ onClose }: HistoryScreenProps = {}) {
   };
 
   const handleRestoreNode = (nodeId: string) => {
-    if (!activeBoardId) return;
     try {
       const bDoc = yjsClient.getOrCreateDoc(getScopedBoardDocName(currentScope.value, activeBoardId));
       const { nodes } = getBoardMaps(bDoc);
@@ -78,7 +74,7 @@ export function HistoryScreen({ onClose }: HistoryScreenProps = {}) {
   const handleEmptyTrash = async () => {
     const ok = await showConfirm({
       title: t('trash.clear_all'),
-      message: 'Вы уверены, что хотите окончательно удалить все объекты из корзины? Это действие необратимо.',
+      message: t('trash.clear_confirm'),
       confirmText: t('trash.clear_all'),
       danger: true
     });
@@ -86,17 +82,15 @@ export function HistoryScreen({ onClose }: HistoryScreenProps = {}) {
 
     emptyTrash();
     // Also permanently remove deleted nodes from current board
-    if (activeBoardId) {
-      try {
-        const bDoc = yjsClient.getOrCreateDoc(getScopedBoardDocName(currentScope.value, activeBoardId));
-        const { nodes } = getBoardMaps(bDoc);
-        bDoc.transact(() => {
-          deletedCanvasNodes.forEach((n) => nodes.delete(n.id));
-        }, 'user');
-        refreshDeletedNodes();
-      } catch {}
-    }
-    showToast('Корзина полностью очищена', 'success');
+    try {
+      const bDoc = yjsClient.getOrCreateDoc(getScopedBoardDocName(currentScope.value, activeBoardId));
+      const { nodes } = getBoardMaps(bDoc);
+      bDoc.transact(() => {
+        deletedCanvasNodes.forEach((n) => nodes.delete(n.id));
+      }, 'user');
+      refreshDeletedNodes();
+    } catch {}
+    showToast(t('trash.cleared_toast'), 'success');
   };
 
   const fetchSnapshots = async () => {
@@ -119,11 +113,11 @@ export function HistoryScreen({ onClose }: HistoryScreenProps = {}) {
     try {
       const res = await api.fetch('/api/snapshots', { method: 'POST' });
       if (res.ok) {
-        setMessage('Снимок успешно создан');
+        setMessage(t('history.snapshot_success'));
         fetchSnapshots();
       }
     } catch {
-      setMessage('Ошибка создания снимка');
+      setMessage(t('history.snapshot_error'));
     } finally {
       setLoading(false);
       setTimeout(() => setMessage(null), 3000);
@@ -132,9 +126,9 @@ export function HistoryScreen({ onClose }: HistoryScreenProps = {}) {
 
   const handleRestoreSnapshot = async (id: string) => {
     const ok = await showConfirm({
-      title: 'Восстановление снимка',
-      message: 'Вы уверены, что хотите восстановить состояние из этого снимка? Текущие несохраненные правки будут перезаписаны.',
-      confirmText: 'Восстановить',
+      title: t('history.restore_title'),
+      message: t('history.restore_confirm'),
+      confirmText: t('history.restore_btn'),
       danger: true
     });
     if (!ok) return;
@@ -146,10 +140,10 @@ export function HistoryScreen({ onClose }: HistoryScreenProps = {}) {
         body: JSON.stringify({ snapshotId: id })
       });
       if (res.ok) {
-        setMessage('Состояние успешно восстановлено');
+        setMessage(t('history.restore_success'));
       }
     } catch {
-      setMessage('Ошибка восстановления снимка');
+      setMessage(t('history.restore_error'));
     } finally {
       setLoading(false);
       setTimeout(() => setMessage(null), 3000);
@@ -186,8 +180,8 @@ export function HistoryScreen({ onClose }: HistoryScreenProps = {}) {
             <button
               class="modal-close-btn"
               onClick={onClose}
-              title="Закрыть"
-              aria-label="Закрыть"
+              title={t('history.close')}
+              aria-label={t('history.close')}
             >
               <Icon name="x" size={16} />
             </button>
@@ -209,21 +203,21 @@ export function HistoryScreen({ onClose }: HistoryScreenProps = {}) {
               <span>{t('trash.create_snapshot')}</span>
             </button>
             <span class="snapshots-info">
-              Снимки создаются автоматически каждые 10 минут при наличии правок. Хранятся последние 100 снимков.
+              {t('history.snapshots_info')}
             </span>
           </div>
 
           <div class="snapshots-list">
             {snapshots.length === 0 ? (
-              <div class="empty-state">Нет сохраненных снимков</div>
+              <div class="empty-state">{t('history.no_snapshots')}</div>
             ) : (
               snapshots.map((snap) => (
                 <div key={snap.id} class="snapshot-card">
                   <div class="snap-details">
                     <span class="snap-date">{snap.dateStr}</span>
-                    <span class="snap-badge">Документов: {snap.docsCount}</span>
+                    <span class="snap-badge">{t('history.docs_count')}: {snap.docsCount}</span>
                     <span class="snap-size">
-                      {(snap.sizeBytes / 1024).toFixed(1)} КБ
+                      {(snap.sizeBytes / 1024).toFixed(1)} {t('history.kb')}
                     </span>
                   </div>
                   <button
@@ -244,7 +238,7 @@ export function HistoryScreen({ onClose }: HistoryScreenProps = {}) {
         <div class="trash-section">
           <div class="trash-info-bar" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
             <span>
-              Удаленные объекты хранятся в корзине 30 дней, после чего автоматически очищаются.
+              {t('trash.info_retention')}
             </span>
             {totalTrashCount > 0 && (
               <button
@@ -317,7 +311,7 @@ export function HistoryScreen({ onClose }: HistoryScreenProps = {}) {
                         {note.scope === 'team' ? t('topbar.team') : t('topbar.solo')}
                       </span>
                       <span class="trash-date">
-                        {note.deletedAt ? new Date(note.deletedAt).toLocaleString('ru-RU') : 'недавно'}
+                        {note.deletedAt ? new Date(note.deletedAt).toLocaleString(currentLanguage.value === 'ru' ? 'ru-RU' : currentLanguage.value === 'es' ? 'es-ES' : 'en-US') : ''}
                       </span>
                     </div>
                     <button
@@ -354,7 +348,7 @@ export function HistoryScreen({ onClose }: HistoryScreenProps = {}) {
                         {b.scope === 'team' ? t('topbar.team') : t('topbar.solo')}
                       </span>
                       <span class="trash-date">
-                        {b.deletedAt ? new Date(b.deletedAt).toLocaleString('ru-RU') : 'недавно'}
+                        {b.deletedAt ? new Date(b.deletedAt).toLocaleString(currentLanguage.value === 'ru' ? 'ru-RU' : currentLanguage.value === 'es' ? 'es-ES' : 'en-US') : ''}
                       </span>
                     </div>
                     <button

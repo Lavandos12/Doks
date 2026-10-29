@@ -19,7 +19,7 @@ export function CreateBoardModal({
 }: CreateBoardModalProps): VNode | null {
   if (!isOpen) return null;
 
-  const [title, setTitle] = useState('Новая доска');
+  const [title, setTitle] = useState(t('create_board.default_title'));
   const [selectedScope, setSelectedScope] = useState<WorkspaceScope>('solo');
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -32,13 +32,13 @@ export function CreateBoardModal({
 
   const handleSubmit = (e?: Event) => {
     if (e) e.preventDefault();
-    const finalTitle = title.trim() || 'Новая доска';
+    const finalTitle = title.trim() || t('create_board.default_title');
     const newId = createBoard(finalTitle, null, selectedScope, false);
     selectBoardWithScope(newId, selectedScope, finalTitle);
     onClose();
 
     if (selectedScope === 'team') {
-      showToast('Общая доска создана. Нажмите "Общая · Настроить" для подключения участников', 'info');
+      showToast(t('create_board.board_created'), 'info');
     }
 
     if (onCreated) {
@@ -79,7 +79,7 @@ export function CreateBoardModal({
         <form onSubmit={handleSubmit} class="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <div class="form-group" style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             <label class="form-label" style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)' }}>
-              Название доски
+              {t('create_board.name_label')}
             </label>
             <input
               ref={inputRef}
@@ -87,7 +87,7 @@ export function CreateBoardModal({
               class="form-input text-input"
               value={title}
               onInput={(e) => setTitle((e.target as HTMLInputElement).value)}
-              placeholder="Введите название доски..."
+              placeholder={t('create_board.name_placeholder')}
               style={{
                 width: '100%',
                 padding: '9px 12px',
@@ -103,7 +103,7 @@ export function CreateBoardModal({
 
           <div class="form-group" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             <label class="form-label" style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)' }}>
-              Тип доступа доски
+              {t('create_board.scope_label')}
             </label>
             <div class="board-scope-choice-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
               {/* Option 1: Solo */}
@@ -127,7 +127,7 @@ export function CreateBoardModal({
                   <span style={{ fontWeight: 600, fontSize: 14, color: 'var(--text-primary)' }}>{t('topbar.solo')}</span>
                 </div>
                 <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: '1.4' }}>
-                  Хранится локально на вашем ПК. Не видна в сети и не синхронизируется с другими.
+                  {t('create_board.solo_desc')}
                 </div>
               </div>
 
@@ -152,7 +152,7 @@ export function CreateBoardModal({
                   <span style={{ fontWeight: 600, fontSize: 14, color: 'var(--text-primary)' }}>{t('topbar.team')}</span>
                 </div>
                 <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: '1.4' }}>
-                  Доступна для совместной работы по Radmin VPN / LAN с живыми курсорами.
+                  {t('create_board.team_desc')}
                 </div>
               </div>
             </div>

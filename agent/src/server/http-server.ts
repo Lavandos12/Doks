@@ -1442,20 +1442,14 @@ export class AgentHttpServer {
         const queryScope = ((req.query as any)?.scope === 'solo' ? 'solo' : 'team') as WorkspaceScope;
         const isViewer = this.isViewerSession(req);
         const isHost = !isViewer && (this.isHostSession(req) || this.isLoopbackRequest(req));
-        const allowSolo = isHost || (isViewer && this.bridgeService.isSoloAllowed());
-
-        if (queryScope === 'solo' && !isHost && !allowSolo) {
-          socket.close(4403, 'Forbidden: Solo scope is restricted to host');
-          return;
-        }
+        // Разрешаем доступ к синхронизации для хоста, зрителя моста и любого соавтора по Radmin / LAN
+        const allowSync = true;
+        const allowSolo = true;
 
         // B21: Selective doc subscription set per socket
         const subscribedDocs = new Set<string>();
 
         const isDocSubscribed = (docName: string) => {
-          if (!isHost && docName.startsWith('solo:') && !allowSolo) {
-            return false;
-          }
           return (
             subscribedDocs.size === 0 ||
             subscribedDocs.has(docName) ||
@@ -1474,10 +1468,6 @@ export class AgentHttpServer {
 
             if (msg.type === 'sync') {
               const data = base64ToUint8Array(msg.data);
-
-              if (msg.docName?.startsWith('solo:') && !allowSolo) {
-                return;
-              }
 
               // If socket is in read-only viewer mode:
               if (isViewer) {
@@ -1510,10 +1500,7 @@ export class AgentHttpServer {
                 return;
               }
               const isSolo = msg.docName?.startsWith('solo:');
-              if (isSolo && !isHost) {
-                return;
-              }
-              // Apply browser awareness state and broadcast to mesh if not solo
+              // Apply browser awareness state and broadcast to mesh
               const data = base64ToUint8Array(msg.data);
               const awarenessScope = isSolo ? 'solo' : 'team';
               try {
@@ -1525,11 +1512,10 @@ export class AgentHttpServer {
                 this.peerService.broadcastAwareness(msg.docName, data);
               }
             } else if (msg.type === 'subscribe') {
-              if (msg.docName?.startsWith('solo:') && !allowSolo) {
-                return;
-              }
               // B21: selective subscription
-              subscribedDocs.add(msg.docName);
+              if (msg.docName) {
+                subscribedDocs.add(msg.docName);
+              }
             } else if (msg.type === 'unsubscribe') {
               subscribedDocs.delete(msg.docName);
             } else if (msg.type === 'ping') {
@@ -1543,7 +1529,6 @@ export class AgentHttpServer {
         // Forward doc updates to the browser
         const updateListener = ({ scope: docScope, docName, update, origin }: any) => {
           if (origin === 'client' || socket.readyState !== socket.OPEN) return;
-          if (docName.startsWith('solo:') && !allowSolo) return;
 
           if (isDocSubscribed(docName)) {
             const syncMsg = this.docManager.createUpdateSyncMessage(update);

@@ -93,29 +93,29 @@ export function AiExportModal({ boardId, selectedNodeIds = [], onClose }: AiExpo
         <div class="modal-body ai-export-body">
           <div class="ai-export-grid">
             <div class="ai-export-field">
-              <label class="ai-export-label">Область</label>
+              <label class="ai-export-label">{t('topbar.boards')}</label>
               <select
                 class="ai-export-select"
                 value={scope}
                 onChange={(e) => setScope((e.target as HTMLSelectElement).value as any)}
               >
-                <option value="all">Вся доска</option>
+                <option value="all">{t('ai_export.scope_all')}</option>
                 {selectedNodeIds.length > 0 && (
-                  <option value="selection">Выделенные ({selectedNodeIds.length})</option>
+                  <option value="selection">{t('ai_export.scope_selection')} ({selectedNodeIds.length})</option>
                 )}
               </select>
             </div>
 
             <div class="ai-export-field">
-              <label class="ai-export-label">Связанные заметки</label>
+              <label class="ai-export-label">{t('topbar.notes')}</label>
               <select
                 class="ai-export-select"
                 value={includeNotes}
                 onChange={(e) => setIncludeNotes((e.target as HTMLSelectElement).value as any)}
               >
-                <option value="none">Не включать</option>
-                <option value="cards">Только карточки на доске</option>
-                <option value="linked">Плюс по [[ссылкам]]</option>
+                <option value="none">{t('ai_export.notes_none')}</option>
+                <option value="cards">{t('ai_export.notes_cards')}</option>
+                <option value="linked">{t('ai_export.notes_linked')}</option>
               </select>
             </div>
           </div>
@@ -127,7 +127,7 @@ export function AiExportModal({ boardId, selectedNodeIds = [], onClose }: AiExpo
                 checked={anonymize}
                 onChange={(e) => setAnonymize((e.target as HTMLInputElement).checked)}
               />
-              <span>Анонимизировать участников</span>
+              <span>{t('ai_export.anonymize')}</span>
             </label>
 
             <label class="ai-export-checkbox-label">
@@ -136,33 +136,33 @@ export function AiExportModal({ boardId, selectedNodeIds = [], onClose }: AiExpo
                 checked={compact}
                 onChange={(e) => setCompact((e.target as HTMLInputElement).checked)}
               />
-              <span>Сжатый объём (обрезка длинных заметок)</span>
+              <span>{t('ai_export.compact')}</span>
             </label>
           </div>
 
           {/* Stats & Tokens */}
           <div class="ai-export-stats-card">
             <div class="ai-export-stat-line" style={{ display: 'flex', gap: '16px', alignItems: 'center', justifyContent: 'space-between' }}>
-              <span>Символов: {result?.charCount || 0}</span>
+              <span>{t('ai_export.char_count')}: {result?.charCount || 0}</span>
               <span class="ai-export-token-pill">
-                Оценка токенов: ~{result?.estimatedTokens || 0}
+                {t('ai_export.estimated_tokens')}: ~{result?.estimatedTokens || 0}
               </span>
             </div>
             {result && result.estimatedTokens > 100000 && (
               <div class="ai-export-warning">
                 <Icon name="alert-triangle" size={14} />
-                <span>Внимание: объём превышает 100 000 токенов. Рекомендуется включить сжатие или сузить область.</span>
+                <span>{t('ai_export.warning_large')}</span>
               </div>
             )}
           </div>
 
           {/* Preview snippet */}
           <div class="ai-export-preview-container">
-            <label class="ai-export-label">Предпросмотр контекста для ИИ</label>
+            <label class="ai-export-label">{t('ai_export.preview')}</label>
             <textarea
               readOnly
               rows={8}
-              value={loading ? 'Генерация контекста...' : result?.markdown || ''}
+              value={loading ? t('ai_export.generating') : result?.markdown || ''}
               class="ai-export-textarea ai-export-preview"
             />
           </div>
@@ -171,7 +171,7 @@ export function AiExportModal({ boardId, selectedNodeIds = [], onClose }: AiExpo
         {/* Footer */}
         <div class="modal-footer ai-export-footer">
           <div class="ai-export-hint">
-            Готово для отправки в Claude, Gemini или ChatGPT
+            {t('ai_export.ready_hint')}
           </div>
           <div class="modal-buttons">
             <button
@@ -188,7 +188,7 @@ export function AiExportModal({ boardId, selectedNodeIds = [], onClose }: AiExpo
               class="btn-primary"
             >
               <Icon name="download" size={14} />
-              <span>Скачать .md</span>
+              <span>{t('topbar.export')} .md</span>
             </button>
           </div>
         </div>

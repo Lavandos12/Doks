@@ -56,6 +56,7 @@ import { NotePickerModal } from './note-picker-modal.js';
 import { BoardMinimap } from './board-minimap.js';
 import { TransferModal } from './transfer-modal.js';
 import { AutoDiagramModal } from './auto-diagram-modal.js';
+import { LanShareModal } from '../layout/lan-share-modal.js';
 import {
   pointsToSmoothSvgPath,
   buildCalligraphicBrushPath,
@@ -611,6 +612,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
   const [isCreateBoardOpen, setIsCreateBoardOpen] = useState(false);
   const [isBoardSettingsOpen, setIsBoardSettingsOpen] = useState(false);
   const [settingsTargetBoard, setSettingsTargetBoard] = useState<{ id: string; scope: WorkspaceScope; title: string } | null>(null);
+  const [isLanShareOpen, setIsLanShareOpen] = useState(false);
 
   const handleOpenTransferModal = (ids?: string[]) => {
     let targetIds = ids && ids.length > 0 ? ids : Array.from(selectedNodeIds);
@@ -635,7 +637,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    showToast('Файл .canvas скачан');
+    showToast(t('toast.canvas_downloaded'));
   };
 
   const handleExportSvg = () => {
@@ -643,7 +645,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
     const allValid = nodesList.filter((n) => !n.deleted);
     const validEdges = edgesList.filter((e) => !e.deleted);
     if (allValid.length === 0 && validEdges.length === 0) {
-      showToast('На доске нет объектов для экспорта');
+      showToast(t('toast.empty_board'));
       return;
     }
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
@@ -694,7 +696,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    showToast('SVG экспортирован');
+    showToast(t('toast.svg_exported'));
   };
 
   // Hidden attachment file input
@@ -888,7 +890,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
             clientId,
             x: state.cursor.x,
             y: state.cursor.y,
-            name: state.cursor.name || 'Соавтор',
+            name: state.cursor.name || 'User',
             color: state.cursor.color || '#7c8cff'
           });
         }
@@ -1010,7 +1012,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
         yText.insert(0, markdown);
       }
       createNoteCardAt(noteId, x, y);
-      showToast(`Создана заметка "${title}"`);
+      showToast(`${t('toast.note_created')}: "${title}"`);
     },
     [currentScope.value, viewport]
   );
@@ -1250,7 +1252,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
       // Save (Ctrl+S) - prevent browser Save Page dialog
       if (matchShortcut(e, 'mod+s')) {
         e.preventDefault();
-        showToast(currentScope.value === 'solo' ? 'Все изменения сохранены локально' : 'Синхронизировано в P2P-сети', 'success');
+        showToast(currentScope.value === 'solo' ? t('toast.synced_local') : t('toast.synced_p2p'), 'success');
         return;
       }
 
@@ -1447,7 +1449,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
     if (typeof navigator !== 'undefined' && navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
       navigator.clipboard.writeText('__DOKS_INTERNAL_NODES__').catch(() => {});
     }
-    showToast(`Скопировано: ${selectedNodes.length} эл.`);
+    showToast(`${t('toast.copied')}: ${selectedNodes.length}`);
   };
 
   // Duplicate selected nodes with offset and duplicate connecting edges
@@ -1613,9 +1615,9 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
         y: Math.round(minY),
         w: Math.round(maxX - minX),
         h: Math.round(maxY - minY),
-        text: 'Группа / Фрейм',
+        text: t('canvas.frame_default_title'),
         color: 'default',
-        author: agentStatus.value?.memberName || 'Вы',
+        author: agentStatus.value?.memberName || 'User',
         z: 0,
         deleted: false,
         locked: false
@@ -1623,7 +1625,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
     }, CANVAS_UNDO_ORIGIN);
 
     setSelectedNodeIds(new Set([frameId]));
-    showToast('Выделенные элементы объединены во фрейм');
+    showToast(t('toast.frame_grouped'));
   };
 
   // Miro-grade Multi-select Alignment
@@ -1718,14 +1720,14 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
 
     let defaultText = initialText;
     if (!defaultText) {
-      if (isFrame) defaultText = 'Фрейм';
-      else if (isNote) defaultText = 'Карточка заметки';
-      else if (isChecklist) defaultText = '- [ ] Задача 1\n- [ ] Задача 2\n- [ ] Задача 3';
-      else if (isTable) defaultText = JSON.stringify([['Заголовок 1', 'Заголовок 2', 'Заголовок 3'], ['', '', ''], ['', '', '']]);
-      else if (isKanban) defaultText = 'К выполнению';
-      else if (isCode) defaultText = '// Напишите код здесь...\nfunction main() {\n  return 42;\n}';
-      else if (isChart) defaultText = 'Диаграмма долей';
-      else defaultText = type === 'text' ? 'Текст' : '';
+      if (isFrame) defaultText = t('canvas.frame');
+      else if (isNote) defaultText = t('canvas.note');
+      else if (isChecklist) defaultText = `- [ ] ${t('widget.task')} 1\n- [ ] ${t('widget.task')} 2\n- [ ] ${t('widget.task')} 3`;
+      else if (isTable) defaultText = JSON.stringify([[t('widget.col_header') + ' 1', t('widget.col_header') + ' 2', t('widget.col_header') + ' 3'], ['', '', ''], ['', '', '']]);
+      else if (isKanban) defaultText = t('widget.todo');
+      else if (isCode) defaultText = `// ${t('widget.code_placeholder')}\nfunction main() {\n  return 42;\n}`;
+      else if (isChart) defaultText = t('widget.chart');
+      else defaultText = type === 'text' ? t('canvas.text') : '';
     }
 
     let defaultW = 200;
@@ -1750,7 +1752,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
         h: defaultH,
         text: defaultText,
         color: (type === 'sticky' || isKanban || type === 'shape') ? color : 'default',
-        author: agentStatus.value?.memberName || 'Вы',
+        author: agentStatus.value?.memberName || 'User',
         done: false,
         z: isFrame ? 0 : 1,
         deleted: false,
@@ -1761,8 +1763,8 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
         chartType: isChart ? 'pie' : undefined,
         chartData: isChart
           ? [
-              { id: '1', label: 'Категория А', value: 75, color: '#6366f1' },
-              { id: '2', label: 'Категория Б', value: 25, color: '#10b981' }
+              { id: '1', label: `${t('widget.category')} A`, value: 75, color: '#6366f1' },
+              { id: '2', label: `${t('widget.category')} B`, value: 25, color: '#10b981' }
             ]
           : undefined
       });
@@ -1791,7 +1793,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
         noteId,
         text: '',
         color: 'default',
-        author: agentStatus.value?.memberName || 'Вы',
+        author: agentStatus.value?.memberName || 'User',
         done: false,
         z: 1,
         deleted: false,
@@ -1848,7 +1850,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
 
   const handleAddChecklistItem = (node: BoardNodeData) => {
     const items = parseChecklistItems(node.text);
-    items.push({ id: `item-${items.length}`, text: 'Новая задача', done: false });
+    items.push({ id: `item-${items.length}`, text: t('widget.new_task'), done: false });
     const newText = serializeChecklistItems(items);
     const map = yNodes.get(node.id);
     const calculatedHeight = Math.max(160, 85 + items.length * 36);
@@ -1863,7 +1865,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
         return parsed;
       }
     } catch {}
-    return [['Заголовок 1', 'Заголовок 2', 'Заголовок 3'], ['', '', ''], ['', '', '']];
+    return [[t('widget.col_header') + ' 1', t('widget.col_header') + ' 2', t('widget.col_header') + ' 3'], ['', '', ''], ['', '', '']];
   };
 
   const handleUpdateTableCell = (node: BoardNodeData, rIdx: number, cIdx: number, val: string) => {
@@ -1914,13 +1916,13 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
 
   // Kanban helpers
   const parseKanbanCards = (text: string): string[] => {
-    if (!text) return ['Новая задача', 'В процессе'];
+    if (!text) return [t('widget.new_task'), t('widget.in_progress')];
     return text.split('\n').map((l) => l.trim()).filter((l) => l.length > 0);
   };
 
   const handleAddKanbanCard = (node: BoardNodeData) => {
     const cards = parseKanbanCards(node.description || '');
-    cards.push('Новая карточка');
+    cards.push(t('widget.new_card'));
     const map = yNodes.get(node.id);
     if (map) {
       const requiredH = Math.max(node.h, 110 + cards.length * 52);
@@ -2039,7 +2041,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
 
       setSelectedNodeIds(new Set([id]));
       setActiveTool('select');
-      showToast(isImage ? 'Скриншот добавлен на холст' : `Файл "${fileName}" загружен`);
+      showToast(isImage ? t('toast.screenshot_pasted') : `${t('toast.file_uploaded')}: "${fileName}"`);
     } catch (err) {
       console.error('Failed to upload file to board:', err);
     }
@@ -2052,7 +2054,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
       if (!detail || !detail.noteId) return;
       const pos = screenToCanvas(window.innerWidth / 2, window.innerHeight / 2);
       createNoteCardAt(detail.noteId, pos.x - 120, pos.y - 80);
-      showToast(`Заметка "${detail.title || 'Заметка'}" добавлена на доску`);
+      showToast(`${t('canvas.note')} "${detail.title || t('canvas.note')}" ${t('canvas.added_to_board') || ''}`);
     };
 
     const handleWindowPaste = async (e: ClipboardEvent) => {
@@ -2186,7 +2188,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
         h: sourceNode.h,
         text: '',
         color: sourceNode.color || activeColor,
-        author: agentStatus.value?.memberName || 'Вы',
+        author: agentStatus.value?.memberName || 'User',
         done: false,
         z: 1,
         deleted: false,
@@ -2238,7 +2240,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
       }
     }, CANVAS_UNDO_ORIGIN);
 
-    showToast('Граф аккуратно выровнен');
+    showToast(t('toast.graph_aligned'));
   };
 
   // Generate Auto-Diagram from Text / Presets
@@ -2295,7 +2297,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
       }, false);
       setSelectedNodeIds(new Set(genNodes.map((n) => n.id)));
     }
-    showToast(`Создано: ${genNodes.length} узлов и ${genEdges.length} связей`);
+    showToast(`${t('toast.created')}: ${genNodes.length} / ${genEdges.length}`);
   };
 
   // Global Pointer Events
@@ -2311,7 +2313,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
       awareness.setLocalStateField('cursor', {
         x: pos.x,
         y: pos.y,
-        name: agentStatus.value?.memberName || 'Соавтор',
+        name: agentStatus.value?.memberName || 'User',
         color: agentStatus.value?.memberColor || '#7c8cff'
       });
 
@@ -3293,7 +3295,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                       h: cn.height || 140,
                       text: cn.text || cn.file || '',
                       color: String(cn.color || '3'),
-                      author: agentStatus.value?.memberName || 'Вы',
+                      author: agentStatus.value?.memberName || 'User',
                       deleted: false,
                       z: 1
                     });
@@ -3319,7 +3321,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                   }
                 }
               }, CANVAS_UNDO_ORIGIN);
-              showToast(`Импортирован холст "${file.name}"`);
+              showToast(`${t('toast.imported_canvas')}: "${file.name}"`);
             } catch (err) {
               console.error('Failed to parse .canvas file:', err);
             }
@@ -3348,56 +3350,23 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
             setIsBoardsPopoverOpen(!isBoardsPopoverOpen);
             setIsExportMenuOpen(false);
           }}
-          title="Доски (Список и переключение)"
+          title={t("topbar.boards")}
         >
           <Icon name="layout" size={16} />
-          <span class="miro-board-title">{currentBoardMeta?.title || 'Доска'}</span>
+          <span class="miro-board-title">{currentBoardMeta?.title || t('boards.default_title')}</span>
           <Icon name="chevron-down" size={12} />
         </button>
 
-        {/* 2. Board Access & Settings Pill Button */}
-        {!isViewerMode.value ? (
-          (currentBoardMeta?.scope || effectiveScope) === 'solo' ? (
-            <button
-              class="miro-scope-status-pill solo"
-              onClick={() => {
-                setSettingsTargetBoard({
-                  id: boardId,
-                  scope: 'solo',
-                  title: currentBoardMeta?.title || 'Доска'
-                });
-                setIsBoardSettingsOpen(true);
-              }}
-              title="Настроить доступ и параметры доски"
-            >
-              <Icon name="lock" size={12} />
-              <span>Личная</span>
-              <Icon name="settings" size={11} style={{ opacity: 0.7 }} />
-            </button>
-          ) : (
-            <button
-              class="miro-scope-status-pill team"
-              onClick={() => {
-                setSettingsTargetBoard({
-                  id: boardId,
-                  scope: 'team',
-                  title: currentBoardMeta?.title || 'Доска'
-                });
-                setIsBoardSettingsOpen(true);
-              }}
-              title="Настроить общий доступ и сеть Radmin VPN"
-            >
-              <Icon name="globe-mesh" size={12} />
-              <span>Общая</span>
-              <Icon name="settings" size={11} style={{ opacity: 0.7 }} />
-            </button>
-          )
-        ) : (
-          <div class={`miro-scope-status-pill ${(currentBoardMeta?.scope || effectiveScope) === 'solo' ? 'solo' : 'team'}`} style={{ cursor: 'default' }}>
-            <Icon name={(currentBoardMeta?.scope || effectiveScope) === 'solo' ? 'lock' : 'globe-mesh'} size={12} />
-            <span>{(currentBoardMeta?.scope || effectiveScope) === 'solo' ? t('topbar.solo') : t('topbar.team')}</span>
-          </div>
-        )}
+        {/* 2. Minecraft LAN Network Access Button */}
+        <button
+          class="miro-scope-status-pill team"
+          style={{ background: 'rgba(109, 40, 217, 0.18)', borderColor: 'rgba(167, 139, 250, 0.4)', color: '#c084fc' }}
+          onClick={() => setIsLanShareOpen(true)}
+          title={t('lan.title')}
+        >
+          <Icon name="globe-mesh" size={13} />
+          <span>{t('lan.open_lan_btn')}</span>
+        </button>
 
         {/* 3. Export Dropdown Button */}
         <button
@@ -3448,13 +3417,13 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                   />
                   <span class="miro-board-name">{b.title}</span>
                   <span class={`miro-scope-tag ${b.scope || 'solo'}`}>
-                    {b.scope === 'team' ? 'Общая' : 'Личная'}
+                    {b.scope === 'team' ? t('boards.team') : t('boards.solo')}
                   </span>
                   {!isViewerMode.value && (
                     <button
                       type="button"
                       class="miro-board-item-settings-btn"
-                      title="Настройка доски"
+                      title={t('boards.settings_title')}
                       onClick={(e) => {
                         e.stopPropagation();
                         setSettingsTargetBoard({
@@ -3647,66 +3616,66 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                   <button
                     class={`miro-shape-pick-btn ${selectedShapeVariant === 'rectangle' ? 'active' : ''}`}
                     onClick={() => { setSelectedShapeVariant('rectangle'); setActiveTool('shape'); setActiveFlyout('none'); }}
-                    title="Прямоугольник"
+                    title={t("shapes.rectangle")}
                   >
                     <div class="shape-preview rect-preview" />
-                    <span>Прямоугольник</span>
+                    <span>{t("shapes.rectangle")}</span>
                   </button>
                   <button
                     class={`miro-shape-pick-btn ${selectedShapeVariant === 'rounded' ? 'active' : ''}`}
                     onClick={() => { setSelectedShapeVariant('rounded'); setActiveTool('shape'); setActiveFlyout('none'); }}
-                    title="Скруглённый блок"
+                    title={t("shapes.rounded")}
                   >
                     <div class="shape-preview rounded-preview" />
-                    <span>Скруглённый</span>
+                    <span>{t("shapes.rounded")}</span>
                   </button>
                   <button
                     class={`miro-shape-pick-btn ${selectedShapeVariant === 'circle' ? 'active' : ''}`}
                     onClick={() => { setSelectedShapeVariant('circle'); setActiveTool('shape'); setActiveFlyout('none'); }}
-                    title="Круг / Эллипс"
+                    title={t("shapes.circle")}
                   >
                     <div class="shape-preview circle-preview" />
-                    <span>Круг</span>
+                    <span>{t("shapes.circle")}</span>
                   </button>
                   <button
                     class={`miro-shape-pick-btn ${selectedShapeVariant === 'diamond' ? 'active' : ''}`}
                     onClick={() => { setSelectedShapeVariant('diamond'); setActiveTool('shape'); setActiveFlyout('none'); }}
-                    title="Ромб (Условие)"
+                    title={t("shapes.diamond")}
                   >
                     <div class="shape-preview diamond-preview" />
-                    <span>Ромб</span>
+                    <span>{t("shapes.diamond")}</span>
                   </button>
                   <button
                     class={`miro-shape-pick-btn ${selectedShapeVariant === 'triangle' ? 'active' : ''}`}
                     onClick={() => { setSelectedShapeVariant('triangle'); setActiveTool('shape'); setActiveFlyout('none'); }}
-                    title="Треугольник"
+                    title={t("shapes.triangle")}
                   >
                     <div class="shape-preview triangle-preview" />
-                    <span>Треугольник</span>
+                    <span>{t("shapes.triangle")}</span>
                   </button>
                   <button
                     class={`miro-shape-pick-btn ${selectedShapeVariant === 'parallelogram' ? 'active' : ''}`}
                     onClick={() => { setSelectedShapeVariant('parallelogram'); setActiveTool('shape'); setActiveFlyout('none'); }}
-                    title="Параллелограмм"
+                    title={t("shapes.parallelogram")}
                   >
                     <div class="shape-preview para-preview" />
-                    <span>Параллелограмм</span>
+                    <span>{t("shapes.parallelogram")}</span>
                   </button>
                   <button
                     class={`miro-shape-pick-btn ${selectedShapeVariant === 'cylinder' ? 'active' : ''}`}
                     onClick={() => { setSelectedShapeVariant('cylinder'); setActiveTool('shape'); setActiveFlyout('none'); }}
-                    title="База данных (Цилиндр)"
+                    title={t("shapes.cylinder")}
                   >
                     <div class="shape-preview cylinder-preview" />
-                    <span>База данных</span>
+                    <span>{t("shapes.cylinder")}</span>
                   </button>
                   <button
                     class={`miro-shape-pick-btn ${selectedShapeVariant === 'hexagon' ? 'active' : ''}`}
                     onClick={() => { setSelectedShapeVariant('hexagon'); setActiveTool('shape'); setActiveFlyout('none'); }}
-                    title="Шестиугольник"
+                    title={t("shapes.hexagon")}
                   >
                     <div class="shape-preview hexagon-preview" />
-                    <span>Шестиугольник</span>
+                    <span>{t("shapes.hexagon")}</span>
                   </button>
                 </div>
               </div>
@@ -3737,7 +3706,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                     <svg width="24" height="16" viewBox="0 0 24 16" fill="none" stroke="currentColor" strokeWidth="2">
                       <path d="M 2 14 C 10 14, 14 2, 22 2" />
                     </svg>
-                    <span>Плавная Безье</span>
+                    <span>{t("lines.bezier")}</span>
                   </button>
                   <button
                     class={`miro-line-btn ${defaultLineStyle.curveType === 'orthogonal' ? 'active' : ''}`}
@@ -3746,7 +3715,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                     <svg width="24" height="16" viewBox="0 0 24 16" fill="none" stroke="currentColor" strokeWidth="2">
                       <path d="M 2 14 L 12 14 L 12 2 L 22 2" />
                     </svg>
-                    <span>Ломаная 90°</span>
+                    <span>{t("lines.step")}</span>
                   </button>
                   <button
                     class={`miro-line-btn ${defaultLineStyle.curveType === 'straight' ? 'active' : ''}`}
@@ -3755,7 +3724,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                     <svg width="24" height="16" viewBox="0 0 24 16" fill="none" stroke="currentColor" strokeWidth="2">
                       <line x1="2" y1="14" x2="22" y2="2" />
                     </svg>
-                    <span>Прямая</span>
+                    <span>{t("lines.straight")}</span>
                   </button>
                 </div>
               </div>
@@ -4025,7 +3994,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
               setDrawMode('pen');
             }}
           >
-            Ручка
+            {t('canvas.pen')}
           </button>
           <button
             type="button"
@@ -4034,7 +4003,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
               setDrawMode('brush');
             }}
           >
-            Кисть
+            {t('canvas.brush')}
           </button>
           <button
             type="button"
@@ -4043,7 +4012,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
               setDrawMode('highlighter');
             }}
           >
-            Маркер
+            {t('canvas.marker')}
           </button>
 
           <div class="toolbox-divider" />
@@ -4082,36 +4051,36 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
       {/* Miro Multi-Select Alignment Bar */}
       {!isViewerMode.value && selectedNodeIds.size > 1 && (
         <div class="align-toolbar liquid-glass-surface" onClick={(e) => e.stopPropagation()}>
-          <button class="align-toolbar-btn" onClick={() => alignSelectedNodes('left')} title="Выровнять по левому краю">
-            <span>Слева</span>
+          <button class="align-toolbar-btn" onClick={() => alignSelectedNodes('left')} title={t('align.left')}>
+            <span>{t('align.left_short')}</span>
           </button>
-          <button class="align-toolbar-btn" onClick={() => alignSelectedNodes('center')} title="Выровнять по центру">
-            <span>Центр</span>
+          <button class="align-toolbar-btn" onClick={() => alignSelectedNodes('center')} title={t('align.center')}>
+            <span>{t('align.center_short')}</span>
           </button>
-          <button class="align-toolbar-btn" onClick={() => alignSelectedNodes('right')} title="Выровнять по правому краю">
-            <span>Справа</span>
-          </button>
-          <div class="align-toolbar-divider" />
-          <button class="align-toolbar-btn" onClick={() => alignSelectedNodes('top')} title="Выровнять по верху">
-            <span>Сверху</span>
-          </button>
-          <button class="align-toolbar-btn" onClick={() => alignSelectedNodes('middle')} title="Выровнять по середине">
-            <span>Середина</span>
-          </button>
-          <button class="align-toolbar-btn" onClick={() => alignSelectedNodes('bottom')} title="Выровнять по низу">
-            <span>Снизу</span>
+          <button class="align-toolbar-btn" onClick={() => alignSelectedNodes('right')} title={t('align.right')}>
+            <span>{t('align.right_short')}</span>
           </button>
           <div class="align-toolbar-divider" />
-          <button class="align-toolbar-btn" onClick={() => alignSelectedNodes('distribute-h')} title="Распределить по горизонтали">
-            <span>По гориз.</span>
+          <button class="align-toolbar-btn" onClick={() => alignSelectedNodes('top')} title={t('align.top')}>
+            <span>{t('align.top_short')}</span>
           </button>
-          <button class="align-toolbar-btn" onClick={() => alignSelectedNodes('distribute-v')} title="Распределить по вертикали">
-            <span>По верт.</span>
+          <button class="align-toolbar-btn" onClick={() => alignSelectedNodes('middle')} title={t('align.middle')}>
+            <span>{t('align.middle_short')}</span>
+          </button>
+          <button class="align-toolbar-btn" onClick={() => alignSelectedNodes('bottom')} title={t('align.bottom')}>
+            <span>{t('align.bottom_short')}</span>
           </button>
           <div class="align-toolbar-divider" />
-          <button class="align-toolbar-btn" onClick={wrapSelectedInFrame} title="Объединить во фрейм (Ctrl+G)">
+          <button class="align-toolbar-btn" onClick={() => alignSelectedNodes('distribute-h')} title={t('align.distribute_h')}>
+            <span>{t('align.distribute_h_short')}</span>
+          </button>
+          <button class="align-toolbar-btn" onClick={() => alignSelectedNodes('distribute-v')} title={t('align.distribute_v')}>
+            <span>{t('align.distribute_v_short')}</span>
+          </button>
+          <div class="align-toolbar-divider" />
+          <button class="align-toolbar-btn" onClick={wrapSelectedInFrame} title={`${t('align.group_frame')} (Ctrl+G)`}>
             <Icon name="frame" size={14} />
-            <span>В фрейм</span>
+            <span>{t('align.group_frame_short')}</span>
           </button>
         </div>
       )}
@@ -4159,7 +4128,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
           <div class="inspector-font-sizes">
             <button
               class="inspector-size-btn"
-              title="Размер S (14px)"
+              title={`${t('canvas.size')} S (14px)`}
               onClick={() => {
                 boardDoc.transact(() => {
                   for (const id of selectedNodeIds) {
@@ -4179,7 +4148,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
             </button>
             <button
               class="inspector-size-btn"
-              title="Размер M (18px)"
+              title={`${t('canvas.size')} M (18px)`}
               onClick={() => {
                 boardDoc.transact(() => {
                   for (const id of selectedNodeIds) {
@@ -4199,7 +4168,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
             </button>
             <button
               class="inspector-size-btn"
-              title="Размер L (24px)"
+              title={`${t('canvas.size')} L (24px)`}
               onClick={() => {
                 boardDoc.transact(() => {
                   for (const id of selectedNodeIds) {
@@ -4219,7 +4188,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
             </button>
             <button
               class="inspector-size-btn"
-              title="Размер XL (32px)"
+              title={`${t('canvas.size')} XL (32px)`}
               onClick={() => {
                 boardDoc.transact(() => {
                   for (const id of selectedNodeIds) {
@@ -4249,14 +4218,14 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
               return (
                 <button
                   class="inspector-btn"
-                  title="Открыть в режиме сплит-экрана рядом (Ctrl+\)"
+                  title={`${t('canvas.open_split')} (Ctrl+\)`}
                   onClick={() => {
                     ensureSplitTabs();
-                    openTab('note', node.noteId!, node.text || 'Заметка');
+                    openTab('note', node.noteId!, node.text || t('canvas.note'));
                   }}
                 >
                   <Icon name="layout-split" size={15} />
-                  <span>Открыть рядом</span>
+                  <span>{t('canvas.open_split')}</span>
                 </button>
               );
             }
@@ -4272,7 +4241,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                 <div class="inspector-divider" />
                 <button
                   class="inspector-btn"
-                  title="Форма: Прямоугольник"
+                  title={t('shapes.rectangle')}
                   onClick={() => {
                     boardDoc.transact(() => {
                       for (const id of selectedNodeIds) {
@@ -4286,7 +4255,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                 </button>
                 <button
                   class="inspector-btn"
-                  title="Форма: Скруглённый прямоугольник"
+                  title={`${t('canvas.shape')}: ${t('shapes.rounded')}`}
                   onClick={() => {
                     boardDoc.transact(() => {
                       for (const id of selectedNodeIds) {
@@ -4300,7 +4269,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                 </button>
                 <button
                   class="inspector-btn"
-                  title="Форма: Ромб"
+                  title={t('shapes.diamond')}
                   onClick={() => {
                     boardDoc.transact(() => {
                       for (const id of selectedNodeIds) {
@@ -4314,7 +4283,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                 </button>
                 <button
                   class="inspector-btn"
-                  title="Форма: Круг"
+                  title={t('shapes.circle')}
                   onClick={() => {
                     boardDoc.transact(() => {
                       for (const id of selectedNodeIds) {
@@ -4328,7 +4297,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                 </button>
                 <button
                   class="inspector-btn"
-                  title="Форма: Треугольник"
+                  title={t('shapes.triangle')}
                   onClick={() => {
                     boardDoc.transact(() => {
                       for (const id of selectedNodeIds) {
@@ -4342,7 +4311,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                 </button>
                 <button
                   class="inspector-btn"
-                  title="Форма: Параллелограмм"
+                  title={t('shapes.parallelogram')}
                   onClick={() => {
                     boardDoc.transact(() => {
                       for (const id of selectedNodeIds) {
@@ -4356,7 +4325,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                 </button>
                 <button
                   class="inspector-btn"
-                  title="Форма: Цилиндр (База данных)"
+                  title={`${t('canvas.shape')}: ${t('shapes.cylinder')}`}
                   onClick={() => {
                     boardDoc.transact(() => {
                       for (const id of selectedNodeIds) {
@@ -4370,7 +4339,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                 </button>
                 <button
                   class="inspector-btn"
-                  title="Форма: Шестиугольник"
+                  title={`${t('canvas.shape')}: ${t('shapes.hexagon')}`}
                   onClick={() => {
                     boardDoc.transact(() => {
                       for (const id of selectedNodeIds) {
@@ -4389,7 +4358,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
           {/* Lock / Unlock */}
           <button
             class="inspector-btn"
-            title="Заблокировать / разблокировать (Ctrl+L)"
+            title={`${t('canvas.lock_unlock')} (Ctrl+L)`}
             onClick={toggleLockSelected}
           >
             <Icon name="lock" size={15} />
@@ -4398,7 +4367,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
           {/* Bring to Front / Send to Back */}
           <button
             class="inspector-btn"
-            title="На передний план"
+            title={t('context.bring_front')}
             onClick={() => {
               const maxZ = Math.max(...nodesList.map((n) => n.z || 1), 1) + 1;
               boardDoc.transact(() => {
@@ -4413,7 +4382,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
           </button>
           <button
             class="inspector-btn"
-            title="На задний план"
+            title={t('context.send_back')}
             onClick={() => {
               const minZ = Math.min(...nodesList.map((n) => n.z || 1), 1) - 1;
               boardDoc.transact(() => {
@@ -4430,7 +4399,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
           {/* Reaction */}
           <button
             class="inspector-btn"
-            title="Добавить реакцию"
+            title={t('canvas.add_reaction')}
             onClick={() => {
               boardDoc.transact(() => {
                 for (const id of selectedNodeIds) {
@@ -4450,7 +4419,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
           {/* Duplicate */}
           <button
             class="inspector-btn"
-            title="Дублировать (Ctrl+D)"
+            title={`${t('context.duplicate')} (Ctrl+D)`}
             onClick={duplicateSelected}
           >
             <Icon name="copy" size={15} />
@@ -4460,21 +4429,21 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
           <button
             class="inspector-btn"
             data-testid="scope-transfer-btn"
-            title={effectiveScope === 'solo' ? 'Перенести на общую доску...' : 'Перенести в личный черновик...'}
+            title={effectiveScope === 'solo' ? t('canvas.move_to_team') : t('canvas.move_to_solo')}
             onClick={() => {
               handleOpenTransferModal(Array.from(selectedNodeIds));
             }}
           >
             <Icon name={effectiveScope === 'solo' ? 'promote' : 'fork'} size={15} />
             <span style={{ marginLeft: 4, fontSize: 11, fontWeight: 500 }}>
-              {effectiveScope === 'solo' ? 'На общую доску' : 'В черновик'}
+              {effectiveScope === 'solo' ? t('canvas.to_team') : t('canvas.to_solo')}
             </span>
           </button>
 
           {/* Delete */}
           <button
             class="inspector-btn danger"
-            title="Удалить (Delete)"
+            title={`${t('context.delete')} (Delete)`}
             onClick={deleteSelected}
           >
             <Icon name="trash" size={15} />
@@ -4899,7 +4868,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                     />
                   )}
                   {node.locked && (
-                    <span class="node-lock-badge" title="Заблокировано">
+                    <span class="node-lock-badge" title={t('canvas.locked')}>
                       <Icon name="lock" size={11} />
                     </span>
                   )}
@@ -4910,11 +4879,11 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
               {isNote && (
                 <div class="node-meta-stripe">
                   <span class="node-author-chip" style={{ color: nodeColorHex }}>
-                    Заметка
+                    {t('canvas.note')}
                   </span>
                   <button
                     class="node-open-note-btn"
-                    title="Открыть заметку во вкладке"
+                    title={t('notes.preview')}
                     onClick={(e) => {
                       e.stopPropagation();
                       if (node.noteId) {
@@ -4924,7 +4893,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                     }}
                   >
                     <Icon name="file-text" size={12} />
-                    <span>Открыть</span>
+                    <span>{t('notes.preview')}</span>
                   </button>
                 </div>
               )}
@@ -4938,7 +4907,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                   if (isDeleted) {
                     return (
                       <div class="note-card-deleted-view" onMouseDown={(e) => e.stopPropagation()}>
-                        <span class="deleted-label">Заметка удалена</span>
+                        <span class="deleted-label">{t('canvas.note_deleted')}</span>
                         {node.noteId && (
                           <button
                             class="btn-secondary-sm"
@@ -4948,7 +4917,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                               restoreNote(node.noteId!);
                             }}
                           >
-                            Восстановить
+                            {t('trash.restore')}
                           </button>
                         )}
                       </div>
@@ -4966,7 +4935,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                       onWheel={(e) => e.stopPropagation()}
                     >
                       <div class="note-card-header-title">
-                        {noteMeta?.title || 'Без названия'}
+                        {noteMeta?.title || t('notes.untitled')}
                       </div>
                       <div class="note-card-body-preview">
                         {noteContent.split('\n').map((line, lineIdx) => {
@@ -4999,7 +4968,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                 <div class="node-image-container" onMouseDown={(e) => handleNodePointerDown(node, e as any)}>
                   <img
                     src={node.fileDataUrl || node.imageUrl || (node.fileHash ? `/api/attachments/${node.fileHash}` : '')}
-                    alt={node.fileName || node.text || 'Снимок экрана'}
+                    alt={node.fileName || node.text || t('canvas.screenshot')}
                     class="node-rendered-img"
                     style={{ width: '100%', height: '100%', objectFit: 'fill', pointerEvents: 'none' }}
                   />
@@ -5028,7 +4997,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
 
                   const convertToNote = (e: MouseEvent) => {
                     e.stopPropagation();
-                    const noteTitle = (node.fileName || node.text || 'Документ').replace(/\.[^/.]+$/, '');
+                    const noteTitle = (node.fileName || node.text || t('canvas.document')).replace(/\.[^/.]+$/, '');
                     const noteContent = node.extractedText || `# ${noteTitle}\n\n`;
                     const noteId = createNote(noteTitle, null);
                     const noteDoc = yjsClient.getOrCreateDoc(getScopedNoteDocName(effectiveScope, noteId));
@@ -5036,7 +5005,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                     openTab('note', noteId, noteTitle);
                     ensureSplitTabs();
                     setWorkspaceMode('split');
-                    showToast(`Создана заметка "${noteTitle}" в Split-View`);
+                    showToast(`${t('toast.note_created')}: "${noteTitle}"`);
                   };
 
                   return (
@@ -5054,10 +5023,10 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                               type="button"
                               class="node-file-btn"
                               onClick={convertToNote}
-                              title="Преобразовать в заметку в Split-View"
+                              title={t('notes.edit')}
                             >
                               <Icon name="note-card" size={12} />
-                              <span>В заметку</span>
+                              <span>{t('notes.edit')}</span>
                             </button>
                           )}
                           <a
@@ -5066,10 +5035,10 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                             class="node-file-btn"
                             target="_blank"
                             rel="noopener"
-                            title="Скачать файл"
+                            title={t('settings.download_zip')}
                           >
                             <Icon name="download" size={12} />
-                            <span>Скачать</span>
+                            <span>{t('settings.download_zip')}</span>
                           </a>
                         </div>
                       </div>
@@ -5097,7 +5066,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                                 transformOrigin: 'top left'
                               }}
                             >
-                              {node.extractedText || 'Текст PDF документа извлекается...'}
+                              {node.extractedText || t('canvas.extracting_pdf')}
                             </div>
                           </div>
                         )
@@ -5117,7 +5086,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                               transformOrigin: 'top left'
                             }}
                           >
-                            {node.extractedText || 'Текст документа извлекается или пуст...'}
+                            {node.extractedText || t('canvas.extracting_doc')}
                           </div>
                         </div>
                       )}
@@ -5132,7 +5101,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                       class="frame-label-input"
                       value={node.text}
                       autoFocus
-                      placeholder="Название фрейма..."
+                      placeholder={t('dock.frame')}
                       onBlur={() => setEditingNodeId(null)}
                       onKeyDown={(e) => {
                         if (e.key === 'Enter' || e.key === 'Escape') {
@@ -5150,7 +5119,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                       onMouseDown={(e) => e.stopPropagation()}
                     />
                   ) : (
-                    <span class="frame-label-text">{node.text || 'Рамка'}</span>
+                    <span class="frame-label-text">{node.text || t('canvas.frame')}</span>
                   )}
                 </div>
               ) : node.type === 'shape' ? (
@@ -5164,7 +5133,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                       pointerEvents: editingNodeId === node.id ? 'auto' : 'none'
                     }}
                     value={node.text}
-                    placeholder="Введите текст..."
+                    placeholder={t('canvas.enter_text')}
                     onWheel={(e) => {
                       if (!e.ctrlKey && !e.metaKey) e.stopPropagation();
                     }}
@@ -5218,14 +5187,14 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                         class="card-top-drag-header checklist-title-row"
                         onMouseDown={(e) => handleNodePointerDown(node, e as any)}
                       >
-                        <div class="card-drag-grip" title="Перетащить чек-лист">
+                        <div class="card-drag-grip" title={t('widget.checklist')}>
                           <Icon name="grip-vertical" size={14} />
                         </div>
                         <input
                           type="text"
                           class="checklist-title-input"
-                          value={node.fileName || 'Чек-лист'}
-                          placeholder="Заголовок чек-листа..."
+                          value={node.fileName || t('widget.checklist')}
+                          placeholder={t('widget.checklist_title')}
                           readOnly={isViewerMode.value}
                           onMouseDown={(e) => e.stopPropagation()}
                           onInput={(e) => {
@@ -5273,7 +5242,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                                   e.stopPropagation();
                                   handleDeleteChecklistItem(node, idx);
                                 }}
-                                title="Удалить пункт"
+                                title={t("widget.delete_item")}
                               >
                                 <Icon name="x" size={12} />
                               </button>
@@ -5289,7 +5258,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                           onClick={() => handleAddChecklistItem(node)}
                         >
                           <Icon name="plus" size={13} />
-                          <span>Добавить пункт</span>
+                          <span>{t("widget.add_item")}</span>
                         </button>
                       )}
                     </div>
@@ -5310,16 +5279,16 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                         class="card-top-drag-header node-table-toolbar"
                         onMouseDown={(e) => handleNodePointerDown(node, e as any)}
                       >
-                        <div class="card-drag-grip" title="Перетащить таблицу">
+                        <div class="card-drag-grip" title={t('widget.table')}>
                           <Icon name="grip-vertical" size={14} />
                         </div>
-                        <span style={{ fontSize: '12px', fontWeight: 600, color: '#94a3b8', marginRight: 'auto' }}>Таблица</span>
+                        <span style={{ fontSize: '12px', fontWeight: 600, color: '#94a3b8', marginRight: 'auto' }}>{t('widget.table')}</span>
                         {!isViewerMode.value && (
                           <div class="card-header-actions" onMouseDown={(e) => e.stopPropagation()} style={{ display: 'flex', gap: '4px' }}>
-                            <button type="button" class="table-tool-btn" onClick={() => handleAddTableRow(node)}>+ Строка</button>
-                            <button type="button" class="table-tool-btn" onClick={() => handleDelTableRow(node)}>- Строка</button>
-                            <button type="button" class="table-tool-btn" onClick={() => handleAddTableCol(node)}>+ Столбец</button>
-                            <button type="button" class="table-tool-btn" onClick={() => handleDelTableCol(node)}>- Столбец</button>
+                            <button type="button" class="table-tool-btn" onClick={() => handleAddTableRow(node)}>{t('widget.add_row')}</button>
+                            <button type="button" class="table-tool-btn" onClick={() => handleDelTableRow(node)}>{t('widget.del_row')}</button>
+                            <button type="button" class="table-tool-btn" onClick={() => handleAddTableCol(node)}>{t('widget.add_col')}</button>
+                            <button type="button" class="table-tool-btn" onClick={() => handleDelTableCol(node)}>{t('widget.del_col')}</button>
                           </div>
                         )}
                       </div>
@@ -5331,7 +5300,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                                 type="text"
                                 value={cell}
                                 readOnly={isViewerMode.value}
-                                placeholder={rIdx === 0 ? `Колонка ${cIdx + 1}` : ''}
+                                placeholder={rIdx === 0 ? `${t('widget.column')} ${cIdx + 1}` : ''}
                                 onMouseDown={(e) => e.stopPropagation()}
                                 onInput={(e) => {
                                   if (!isViewerMode.value) handleUpdateTableCell(node, rIdx, cIdx, (e.target as HTMLInputElement).value);
@@ -5359,7 +5328,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                         class="card-top-drag-header kanban-header-bar"
                         onMouseDown={(e) => handleNodePointerDown(node, e as any)}
                       >
-                        <div class="card-drag-grip" title="Перетащить колонку">
+                        <div class="card-drag-grip" title={t('widget.kanban')}>
                           <Icon name="grip-vertical" size={14} />
                         </div>
                         <div class="kanban-title-group" style={{ flex: 1, minWidth: 0 }}>
@@ -5368,7 +5337,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                             type="text"
                             class="kanban-title"
                             style={{ background: 'transparent', border: 'none', outline: 'none', width: '100%' }}
-                            value={node.text || 'К выполнению'}
+                            value={node.text || t('widget.todo')}
                             readOnly={isViewerMode.value}
                             onMouseDown={(e) => e.stopPropagation()}
                             onInput={(e) => {
@@ -5401,7 +5370,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                                   e.stopPropagation();
                                   handleDeleteKanbanCard(node, idx);
                                 }}
-                                title="Удалить карточку"
+                                title={t("widget.delete_item")}
                               >
                                 <Icon name="x" size={12} />
                               </button>
@@ -5417,7 +5386,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                           onClick={() => handleAddKanbanCard(node)}
                         >
                           <Icon name="plus" size={13} />
-                          <span>Карточка</span>
+                          <span>{t("widget.add_card")}</span>
                         </button>
                       )}
                     </div>
@@ -5438,7 +5407,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                         class="card-top-drag-header code-header-bar"
                         onMouseDown={(e) => handleNodePointerDown(node, e as any)}
                       >
-                        <div class="card-drag-grip" title="Перетащить блок кода">
+                        <div class="card-drag-grip" title={t('widget.code')}>
                           <Icon name="grip-vertical" size={14} />
                         </div>
                         <div class="card-header-actions" onMouseDown={(e) => e.stopPropagation()} style={{ display: 'flex', alignItems: 'center', gap: '6px', marginLeft: 'auto' }}>
@@ -5466,12 +5435,12 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                             class="code-copy-btn"
                             onClick={() => {
                               navigator.clipboard.writeText(node.text || '');
-                              showToast('Код скопирован в буфер');
+                              showToast(t('widget.code_copied'));
                             }}
-                            title="Скопировать код"
+                            title={t("widget.copy_code")}
                           >
                             <Icon name="copy" size={12} />
-                            <span>Копировать</span>
+                            <span>{t("widget.copy_code")}</span>
                           </button>
                         </div>
                       </div>
@@ -5479,7 +5448,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                         class="code-textarea-editor"
                         value={node.text}
                         readOnly={isViewerMode.value}
-                        placeholder="// Напишите код здесь..."
+                        placeholder={`// ${t('widget.code_placeholder')}`}
                         spellcheck={false}
                         onWheel={(e) => {
                           if (!e.ctrlKey && !e.metaKey) e.stopPropagation();
@@ -5514,8 +5483,8 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                   const data = (node.chartData && node.chartData.length > 0)
                     ? node.chartData
                     : [
-                        { id: '1', label: 'Категория А', value: 75, color: '#6366f1' },
-                        { id: '2', label: 'Категория Б', value: 25, color: '#10b981' }
+                        { id: '1', label: `${t('widget.category')} A`, value: 75, color: '#6366f1' },
+                        { id: '2', label: `${t('widget.category')} B`, value: 25, color: '#10b981' }
                       ];
                   const total = data.reduce((sum, d) => sum + (Math.max(0, Number(d.value)) || 0), 0) || 1;
                   const palette = ['#6366f1', '#10b981', '#f59e0b', '#ec4899', '#3b82f6', '#8b5cf6', '#06b6d4', '#f97316'];
@@ -5542,13 +5511,13 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                         class="card-top-drag-header chart-header"
                         onMouseDown={(e) => handleNodePointerDown(node, e as any)}
                       >
-                        <div class="card-drag-grip" title="Перетащить диаграмму">
+                        <div class="card-drag-grip" title={t('widget.chart')}>
                           <Icon name="grip-vertical" size={14} />
                         </div>
                         <input
                           class="chart-title-input"
-                          value={node.text || 'Диаграмма долей'}
-                          placeholder="Название диаграммы"
+                          value={node.text || t('widget.chart')}
+                          placeholder={t('widget.chart')}
                           readOnly={isViewerMode.value}
                           onMouseDown={(e) => e.stopPropagation()}
                           onInput={(e) => {
@@ -5566,33 +5535,33 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                               type="button"
                               class={`chart-mode-btn ${chartType === 'pie' ? 'active' : ''}`}
                               onClick={() => setChartMode('pie')}
-                              title="Круговая"
+                              title={t('widget.chart_pie')}
                             >
-                              Круг
+                              {t('widget.chart_pie')}
                             </button>
                             <button
                               type="button"
                               class={`chart-mode-btn ${chartType === 'donut' ? 'active' : ''}`}
                               onClick={() => setChartMode('donut')}
-                              title="Кольцевая"
+                              title={t('widget.chart_donut')}
                             >
-                              Кольцо
+                              {t('widget.chart_donut')}
                             </button>
                             <button
                               type="button"
                               class={`chart-mode-btn ${chartType === 'square' ? 'active' : ''}`}
                               onClick={() => setChartMode('square')}
-                              title="100% блок"
+                              title={t('widget.chart_bar')}
                             >
-                              Блок
+                              {t('widget.chart_bar')}
                             </button>
                             <button
                               type="button"
                               class={`chart-mode-btn ${chartType === 'bar' ? 'active' : ''}`}
                               onClick={() => setChartMode('bar')}
-                              title="Столбцы"
+                              title={t('widget.chart_columns')}
                             >
-                              Столбцы
+                              {t('widget.chart_columns')}
                             </button>
                           </div>
                         )}
@@ -5709,7 +5678,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                               <div
                                 class="chart-color-dot"
                                 style={{ background: seg.color }}
-                                title="Сменить цвет"
+                                title={t("dock.sticky_color")}
                                 onClick={() => {
                                   if (isViewerMode.value) return;
                                   const colorIdx = palette.indexOf(seg.color);
@@ -5721,7 +5690,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                               <input
                                 class="chart-row-input label"
                                 value={seg.label}
-                                placeholder="Категория"
+                                placeholder={t("widget.sector_label")}
                                 readOnly={isViewerMode.value}
                                 onInput={(e) => {
                                   if (isViewerMode.value) return;
@@ -5754,7 +5723,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                                 <button
                                   type="button"
                                   class="chart-del-btn"
-                                  title="Удалить сектор"
+                                  title={t('widget.delete_item')}
                                   disabled={data.length <= 1}
                                   style={{ opacity: data.length <= 1 ? 0.3 : 1 }}
                                   onClick={() => {
@@ -5776,7 +5745,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                             onClick={() => {
                               const newId = String(Date.now());
                               const nextColor = palette[data.length % palette.length];
-                              const updated = [...data, { id: newId, label: `Сектор ${data.length + 1}`, value: 10, color: nextColor }];
+                              const updated = [...data, { id: newId, label: `${t('widget.sector')} ${data.length + 1}`, value: 10, color: nextColor }];
                               updateData(updated);
                               const map = yNodes.get(node.id);
                               if (map) {
@@ -5788,7 +5757,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                             }}
                           >
                             <Icon name="plus" size={12} />
-                            <span>Добавить сектор</span>
+                            <span>{t("widget.add_sector")}</span>
                           </button>
                         )}
                       </div>
@@ -5804,7 +5773,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                     pointerEvents: editingNodeId === node.id ? 'auto' : 'none'
                   }}
                   value={node.text}
-                  placeholder="Введите текст..."
+                  placeholder={t('canvas.enter_text')}
                   onWheel={(e) => {
                     if (!e.ctrlKey && !e.metaKey) e.stopPropagation();
                   }}
@@ -5844,7 +5813,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
 
               {/* Author micro-badge in Team Scope (never show debug 'Tester') */}
               {node.type === 'sticky' && effectiveScope === 'team' && node.author && node.author !== 'Tester' && (
-                <span class="node-author-microbadge" title={`Автор: ${node.author}`}>
+                <span class="node-author-microbadge" title={`${t('canvas.author')}: ${node.author}`}>
                   {node.author}
                 </span>
               )}
@@ -5905,7 +5874,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                       map.set('reactions', { thumbsUp: (node.reactions?.thumbsUp || 0) + 1 });
                     }
                   }}
-                  title="Реакция (+1)"
+                  title={`${t('canvas.add_reaction')} (+1)`}
                 >
                   <Icon name="sparkles" size={12} />
                   <span>{node.reactions?.thumbsUp}</span>
@@ -6014,7 +5983,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
           onMouseDown={(e) => e.stopPropagation()}
           onClick={(e) => e.stopPropagation()}
         >
-          <div class="quick-connect-header">Создать и соединить:</div>
+          <div class="quick-connect-header">{t('canvas.create_and_connect')}</div>
           <button
             class="quick-connect-btn"
             onClick={() => {
@@ -6031,7 +6000,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                   h: 130,
                   text: '',
                   color: activeColor,
-                  author: agentStatus.value?.memberName || 'Вы',
+                  author: agentStatus.value?.memberName || 'User',
                   done: false,
                   z: 1,
                   deleted: false,
@@ -6053,7 +6022,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
             }}
           >
             <Icon name="sticky" size={14} />
-            <span>Стикер</span>
+            <span>{t('toolbar.sticky')}</span>
           </button>
           <button
             class="quick-connect-btn"
@@ -6068,7 +6037,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
             }}
           >
             <Icon name="note-card" size={14} />
-            <span>Заметка</span>
+            <span>{t('canvas.note')}</span>
           </button>
           <button
             class="quick-connect-btn"
@@ -6078,7 +6047,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
             }}
           >
             <Icon name="text" size={14} />
-            <span>Текст</span>
+            <span>{t('canvas.text')}</span>
           </button>
         </div>
       )}
@@ -6099,7 +6068,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
             }}
           >
             <Icon name="sticky" size={14} />
-            <span>Создать стикер здесь</span>
+            <span>{t("context.sticky_here")}</span>
           </div>
           <div
             class="context-menu-item"
@@ -6110,7 +6079,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
             }}
           >
             <Icon name="note-card" size={14} />
-            <span>Создать заметку</span>
+            <span>{t("context.create_note")}</span>
           </div>
           <div
             class="context-menu-item"
@@ -6120,7 +6089,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
             }}
           >
             <Icon name="copy" size={14} />
-            <span>Вставить из буфера</span>
+            <span>{t("context.paste")}</span>
           </div>
           <div class="context-menu-divider" />
           <div
@@ -6132,7 +6101,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
             }}
           >
             <Icon name="select" size={14} />
-            <span>Выделить всё</span>
+            <span>{t("context.select_all")}</span>
           </div>
           <div
             class="context-menu-item"
@@ -6142,7 +6111,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
             }}
           >
             <Icon name="cpu" size={14} />
-            <span>Экспортировать для ИИ</span>
+            <span>{t("context.ai_export")}</span>
           </div>
           <div
             class="context-menu-item"
@@ -6153,7 +6122,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
             }}
           >
             <Icon name={effectiveScope === 'solo' ? 'promote' : 'fork'} size={14} />
-            <span>{effectiveScope === 'solo' ? 'Перенести на общую доску...' : 'Перенести в личный черновик...'}</span>
+            <span>{effectiveScope === 'solo' ? t('canvas.move_to_team') : t('canvas.move_to_solo')}</span>
           </div>
           {contextMenu.nodeId && (
             <>
@@ -6166,7 +6135,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                 }}
               >
                 <Icon name="trash" size={14} />
-                <span>Удалить</span>
+                <span>{t("context.delete")}</span>
               </div>
             </>
           )}
@@ -6226,6 +6195,13 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
         onClose={() => setIsCreateBoardOpen(false)}
       />
 
+      <LanShareModal
+        isOpen={isLanShareOpen}
+        onClose={() => setIsLanShareOpen(false)}
+        boardId={boardId}
+        boardTitle={currentBoardMeta?.title || t('topbar.boards')}
+      />
+
       <BoardSettingsModal
         isOpen={isBoardSettingsOpen}
         onClose={() => {
@@ -6234,7 +6210,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
         }}
         boardId={settingsTargetBoard?.id || boardId}
         scope={settingsTargetBoard?.scope || (currentBoardMeta?.scope || effectiveScope)}
-        boardTitle={settingsTargetBoard?.title || currentBoardMeta?.title || 'Доска'}
+        boardTitle={settingsTargetBoard?.title || currentBoardMeta?.title || t('boards.default_title')}
         onClearBoard={() => {
           const targetId = settingsTargetBoard?.id || boardId;
           const targetScope = settingsTargetBoard?.scope || (currentBoardMeta?.scope || effectiveScope);
@@ -6253,9 +6229,9 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
             });
           }, 'clear-board');
           if (count > 0) {
-            showToast(`Холст очищен (${count} объектов удалено)`, 'info');
+            showToast(`${t('toast.board_cleared')} (${count})`, 'info');
           } else {
-            showToast('Холст уже пуст', 'info');
+            showToast(t('toast.board_already_empty'), 'info');
           }
         }}
         onSeedTemplate={() => {
@@ -6264,8 +6240,8 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
           const targetDoc = (targetId === boardId && targetScope === effectiveScope)
             ? boardDoc
             : yjsClient.getOrCreateDoc(getScopedBoardDocName(targetScope, targetId));
-          seedDefaultBoard(targetDoc, agentStatus.value?.memberName || 'Вы');
-          showToast('Шаблон задач загружен на доску', 'success');
+          seedDefaultBoard(targetDoc, agentStatus.value?.memberName || t('canvas.you'));
+          showToast(t('toast.template_loaded'), 'success');
         }}
       />
 
@@ -6303,21 +6279,21 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
           <button
             class="hud-btn"
             onClick={() => handleZoomByFactor(0.8)}
-            title="Отдалить (-)"
+            title={t("board.zoom_out")}
           >
             <Icon name="zoom-out" size={14} />
           </button>
           <button
             class="hud-btn zoom-value-btn"
             onClick={handleResetZoom}
-            title="Сбросить масштаб (100%)"
+            title={t("board.reset_zoom")}
           >
             {Math.round(viewport.zoom * 100)}%
           </button>
           <button
             class="hud-btn"
             onClick={() => handleZoomByFactor(1.25)}
-            title="Приблизить (+)"
+            title={t("board.zoom_in")}
           >
             <Icon name="zoom-in" size={14} />
           </button>
@@ -6325,7 +6301,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
           <button
             class="hud-btn"
             onClick={fitToContent}
-            title="Вписать всё содержимое (Fit)"
+            title={t("board.hand")}
           >
             <Icon name="layout-canvas" size={14} />
             <span class="hud-btn-text">Fit</span>
@@ -6333,7 +6309,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
           <button
             class={`hud-btn ${showMinimap ? 'active' : ''}`}
             onClick={() => setShowMinimap(!showMinimap)}
-            title="Миникарта"
+            title={t("board.minimap")}
           >
             <Icon name="frame" size={14} />
           </button>

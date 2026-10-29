@@ -44,14 +44,14 @@ export function SettingsModal({
 
   const [activeTab, setActiveTab] = useState<'profile' | 'canvas' | 'backup'>('profile');
   const [name, setName] = useState<string>(() => {
-    return localStorage.getItem('doks_member_name') || agentStatus.value?.memberName || 'Пользователь';
+    return localStorage.getItem('doks_member_name') || agentStatus.value?.memberName || t('settings.user_default');
   });
   const [color, setColor] = useState<string>(() => {
     return localStorage.getItem('doks_member_color') || agentStatus.value?.memberColor || '#8b5cf6';
   });
 
   const handleSaveProfile = () => {
-    const trimmed = name.trim() || 'Пользователь';
+    const trimmed = name.trim() || t('settings.user_default');
     localStorage.setItem('doks_member_name', trimmed);
     localStorage.setItem('doks_member_color', color);
     if (agentStatus.value) {
@@ -61,13 +61,13 @@ export function SettingsModal({
         memberColor: color
       };
     }
-    showToast('Профиль сохранён');
+    showToast(t('settings.save_profile'));
   };
 
   const handleExportZip = async () => {
     try {
       const res = await api.fetch(`/api/export/vault?scope=${currentScope.value}`);
-      if (!res.ok) throw new Error('Ошибка экспорта архива');
+      if (!res.ok) throw new Error(t('settings.export_error'));
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -75,9 +75,9 @@ export function SettingsModal({
       a.download = `doks-backup-${currentScope.value}-${Date.now()}.zip`;
       a.click();
       URL.revokeObjectURL(url);
-      showToast('Резервная копия скачана');
+      showToast(t('settings.full_backup'));
     } catch {
-      showToast('Не удалось скачать архив');
+      showToast(t('lan.connect_failed'), 'error');
     }
   };
 
@@ -88,9 +88,9 @@ export function SettingsModal({
         <div class="modal-header">
           <div class="modal-header-icon-title">
             <Icon name="settings" size={20} class="text-accent" />
-            <h3 class="modal-title" style={{ margin: 0, fontSize: '17px', fontWeight: 600 }}>Настройки</h3>
+            <h3 class="modal-title" style={{ margin: 0, fontSize: '17px', fontWeight: 600 }}>{t('settings.title')}</h3>
           </div>
-          <button class="modal-close-btn" onClick={onClose} aria-label="Закрыть">
+          <button class="modal-close-btn" onClick={onClose} aria-label={t('ai.close')}>
             <Icon name="x" size={18} />
           </button>
         </div>
@@ -130,7 +130,7 @@ export function SettingsModal({
                   type="text"
                   value={name}
                   onInput={(e) => setName((e.target as HTMLInputElement).value)}
-                  placeholder="Имя или позывной"
+                  placeholder={t('settings.name_placeholder')}
                 />
               </div>
 

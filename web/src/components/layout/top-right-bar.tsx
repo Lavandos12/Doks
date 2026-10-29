@@ -46,7 +46,7 @@ export function TopRightBar({
         transition: 'right 0.2s ease'
       }}
     >
-      {/* [ Заметки ] Drawer Toggle Button */}
+      {/* [ Notes ] Drawer Toggle Button */}
       <button
         class={`miro-action-pill ${isNotesOpen ? 'active' : ''}`}
         data-testid="notes-drawer-toggle-btn"
@@ -59,7 +59,7 @@ export function TopRightBar({
 
       {!isViewer && (
         <>
-          {/* [ ИИ-Контекст ] */}
+          {/* [ AI Context ] */}
           <button
             class="miro-action-pill"
             data-testid="ai-export-btn"
@@ -70,31 +70,7 @@ export function TopRightBar({
             <span>{t('topbar.ai_context')}</span>
           </button>
 
-          {/* [ ● Radmin / Локально ] */}
-          <div
-            class="miro-network-pill"
-            onClick={onOpenNetwork}
-            title="Radmin VPN / P2P"
-            style={{ cursor: 'pointer' }}
-          >
-            <span class={`status-dot ${isRadminFound ? 'green' : 'gray'}`} />
-            <span>{isRadminFound ? `Radmin: ${status?.radminIp || effectiveIp}` : t('topbar.local')}</span>
-          </div>
-
-          {/* [ Мост (QR) ] */}
-          {onOpenBridge && (
-            <button
-              class="miro-action-pill"
-              data-testid="bridge-toggle-btn"
-              onClick={onOpenBridge}
-              title={t('topbar.bridge')}
-            >
-              <Icon name="smartphone" size={13} />
-              <span>{t('topbar.bridge')}</span>
-            </button>
-          )}
-
-          {/* [ Trash / Корзина ] */}
+          {/* [ Trash / History ] */}
           {onOpenTrash && (
             <button
               class="miro-action-pill"
@@ -123,7 +99,7 @@ export function TopRightBar({
             <span>{currentLanguage.value.toUpperCase()}</span>
           </button>
 
-          {/* [ Settings / Настройки ] */}
+          {/* [ Settings ] */}
           <button
             class="miro-action-pill settings-trigger-btn"
             onClick={onOpenSettings}
