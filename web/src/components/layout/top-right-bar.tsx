@@ -63,20 +63,31 @@ export function TopRightBar({
 
       {!isViewer && (
         <>
-          {/* 2. [ Phone ] Restored between Notes and Trash */}
+          {/* 2. [ AI Context ] */}
+          <button
+            class="miro-action-pill"
+            data-testid="ai-export-btn"
+            onClick={onOpenAiExport}
+            title={t('topBar.aiContext')}
+          >
+            <Icon name="sparkles" size={14} />
+            <span>{t('topBar.aiContext')}</span>
+          </button>
+
+          {/* 3. [ Phone Bridge ] */}
           {onOpenBridge && (
             <button
               class="miro-action-pill"
               data-testid="phone-bridge-btn"
               onClick={onOpenBridge}
-              title={t('topBar.phone')}
+              title={t('share.phoneBridge')}
             >
               <Icon name="smartphone" size={14} />
-              <span>{t('topBar.phone')}</span>
+              <span>{t('share.phoneBridge')}</span>
             </button>
           )}
 
-          {/* 3. [ Trash ] Upgraded with clear violet styling & count badge */}
+          {/* 4. [ Trash ] with counter badge */}
           {onOpenTrash && (
             <button
               class="miro-action-pill"
@@ -107,20 +118,7 @@ export function TopRightBar({
             </button>
           )}
 
-          {/* 4. [ AI Context ] */}
-          <button
-            class="miro-action-pill"
-            data-testid="ai-export-btn"
-            onClick={onOpenAiExport}
-            title={t('topBar.aiContext')}
-          >
-            <Icon name="sparkles" size={14} />
-            <span>{t('topBar.aiContext')}</span>
-          </button>
-
-
-
-          {/* 6. [ Settings ] */}
+          {/* 5. [ Settings ] */}
           <button
             class="miro-action-pill settings-trigger-btn"
             onClick={onOpenSettings}

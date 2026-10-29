@@ -166,13 +166,13 @@ test.describe('F12: Playwright E2E Scenarios for Doks', () => {
     const p2 = await ctx2.newPage();
 
     await p1.goto(`http://127.0.0.1:${port1}`);
-    await p1.click('button[title*="Доски"]');
+    await p1.click('button[title*="Доски"], button[title*="Boards"], .miro-board-selector-btn');
     await p1.waitForSelector('.tree-board-item:has-text("Синхронизация F1")');
     await p1.click('.tree-board-item:has-text("Синхронизация F1")');
     await p1.waitForSelector('.board-container');
 
     await p2.goto(`http://127.0.0.1:${port2}`);
-    await p2.click('button[title*="Доски"]');
+    await p2.click('button[title*="Доски"], button[title*="Boards"], .miro-board-selector-btn');
     await p2.waitForSelector('.tree-board-item:has-text("Синхронизация F1")', { timeout: 10000 });
     await p2.click('.tree-board-item:has-text("Синхронизация F1")');
     await p2.waitForSelector('.board-container');
@@ -225,7 +225,7 @@ test.describe('F12: Playwright E2E Scenarios for Doks', () => {
     // Verify modal opened
     const modal = page.locator('.ai-export-modal');
     await expect(modal).toBeVisible();
-    await expect(modal).toContainText(/Экспорт доски для ИИ|Export Board Context for AI/);
+    await expect(modal).toContainText(/Экспорт доски для ИИ|Export Board Context for AI|AI Context Export/);
 
     // Preview contains structured doks-ai/1 format in textarea
     const preview = page.locator('.ai-export-preview');
@@ -503,7 +503,7 @@ test.describe('F12: Playwright E2E Scenarios for Doks', () => {
     await expect(nodes).toHaveCount(1);
 
     // Click Undo in the HUD
-    const undoBtn = page.locator('button[title*="Отменить действие"], button[title*="Undo action"]');
+    const undoBtn = page.locator('button[title*="Отменить"], button[title*="Undo"]');
     await expect(undoBtn).toBeVisible();
     await undoBtn.click();
 
@@ -511,7 +511,7 @@ test.describe('F12: Playwright E2E Scenarios for Doks', () => {
     await expect(nodes).toHaveCount(0);
 
     // Click Redo in the HUD
-    const redoBtn = page.locator('button[title*="Повторить действие"], button[title*="Redo action"]');
+    const redoBtn = page.locator('button[title*="Повторить"], button[title*="Redo"]');
     await expect(redoBtn).toBeVisible();
     await redoBtn.click();
 

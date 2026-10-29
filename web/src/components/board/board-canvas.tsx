@@ -25,6 +25,7 @@ import {
   deleteBoard,
   renameBoard,
   setScope,
+  convertBoardScope,
   maps,
   restoreNote,
   createNote,
@@ -614,6 +615,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
   const [settingsTargetBoard, setSettingsTargetBoard] = useState<{ id: string; scope: WorkspaceScope; title: string } | null>(null);
   const [isLanShareOpen, setIsLanShareOpen] = useState(false);
   const [shareModalTab, setShareModalTab] = useState<'share' | 'direct' | 'phone'>('share');
+  const [confirmConvertModal, setConfirmConvertModal] = useState<{ isOpen: boolean; targetScope: WorkspaceScope }>({ isOpen: false, targetScope: 'team' });
 
   const handleOpenTransferModal = (ids?: string[]) => {
     let targetIds = ids && ids.length > 0 ? ids : Array.from(selectedNodeIds);
@@ -3247,8 +3249,8 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
         if (e.currentTarget.scrollTop !== 0) e.currentTarget.scrollTop = 0;
         if (e.currentTarget.scrollLeft !== 0) e.currentTarget.scrollLeft = 0;
       }}
-      onPointerLeave={() => setCursorScreenPos(null)}
-      onMouseLeave={() => setCursorScreenPos(null)}
+      onPointerLeave={() => { setCursorScreenPos(null); awareness.setLocalStateField('cursor', null); }}
+      onMouseLeave={() => { setCursorScreenPos(null); awareness.setLocalStateField('cursor', null); }}
       onMouseDown={handleBackgroundPointerDown}
       onDblClick={(e) => {
         if (isViewerMode.value) return;
@@ -3344,7 +3346,50 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
           <Icon name="doks-cat" size={26} />
         </div>
 
-        {/* 1. Board Switcher Button */}
+        {/* Workspace Scope Status Badge */}
+        {currentScope.value === 'solo' ? (
+          <div
+            class="miro-scope-status-pill solo"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '4px 10px',
+              background: 'rgba(109, 40, 217, 0.15)',
+              border: '1px solid rgba(139, 92, 246, 0.35)',
+              borderRadius: '20px',
+              fontSize: '11px',
+              color: '#c084fc',
+              fontWeight: 600
+            }}
+            title="Solo workspace — private to this computer"
+          >
+            <Icon name="lock" size={12} />
+            <span>{t('workspace.solo')}</span>
+          </div>
+        ) : (
+          <div
+            class="miro-scope-status-pill team"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '4px 10px',
+              background: 'rgba(16, 185, 129, 0.12)',
+              border: '1px solid rgba(16, 185, 129, 0.35)',
+              borderRadius: '20px',
+              fontSize: '11px',
+              color: '#34d399',
+              fontWeight: 600
+            }}
+            title={`Shared (Live LAN) • ${agentStatus.value?.radminIp || agentStatus.value?.effectiveIp || '127.0.0.1'}:${agentStatus.value?.webPort || 4780}`}
+          >
+            <span style={{ width: '7px', height: '7px', borderRadius: '50%', backgroundColor: '#10b981', display: 'inline-block' }} />
+            <span>Shared (Live LAN) • {agentStatus.value?.radminIp || agentStatus.value?.effectiveIp || '127.0.0.1'}:{agentStatus.value?.webPort || 4780}</span>
+          </div>
+        )}
+
+        {/* Board Title Dropdown Button */}
         <button
           class="miro-board-selector-btn"
           onClick={() => {
@@ -3358,46 +3403,114 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
           <Icon name="chevron-down" size={12} />
         </button>
 
-        {/* 2. Universal Share Button */}
-        <button
-          class="miro-scope-status-pill team"
-          style={{ background: 'rgba(109, 40, 217, 0.18)', borderColor: 'rgba(167, 139, 250, 0.4)', color: '#c084fc' }}
-          onClick={() => {
-            setShareModalTab('share');
-            setIsLanShareOpen(true);
-          }}
-          title={t('share.tabShare')}
-        >
-          <Icon name="globe-mesh" size={13} />
-          <span>{t('share.tabShare')}</span>
-        </button>
+        {/* Actions according to active scope */}
+        {currentScope.value === 'solo' ? (
+          !isViewerMode.value && (
+            <button
+              class="miro-scope-action-btn"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '4px 10px',
+                background: 'rgba(124, 58, 237, 0.2)',
+                border: '1px solid rgba(139, 92, 246, 0.4)',
+                borderRadius: '20px',
+                fontSize: '11px',
+                color: '#e9d5ff',
+                fontWeight: 600,
+                cursor: 'pointer',
+                transition: 'all 0.15s ease'
+              }}
+              onClick={() => setConfirmConvertModal({ isOpen: true, targetScope: 'team' })}
+              title="Convert this board to collaborative mode"
+            >
+              <Icon name="users" size={13} />
+              <span>{t('workspace.moveToShared')}</span>
+            </button>
+          )
+        ) : (
+          <>
+            {/* Copy Invite Link */}
+            <button
+              class="miro-scope-action-btn"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '5px',
+                padding: '4px 10px',
+                background: 'rgba(255, 255, 255, 0.05)',
+                border: '1px solid rgba(255, 255, 255, 0.12)',
+                borderRadius: '20px',
+                fontSize: '11px',
+                color: '#e2e8f0',
+                fontWeight: 500,
+                cursor: 'pointer'
+              }}
+              onClick={() => {
+                const ip = agentStatus.value?.radminIp || agentStatus.value?.effectiveIp || window.location.hostname || '127.0.0.1';
+                const port = agentStatus.value?.webPort || window.location.port || '4780';
+                const url = `http://${ip}:${port}/?board=${boardId}`;
+                navigator.clipboard.writeText(url);
+                showToast(t('common.copied'), 'success');
+              }}
+              title="Copy collaborative board link"
+            >
+              <Icon name="link" size={12} />
+              <span>{t('share.copyLink')}</span>
+            </button>
 
-        {/* 3. Online Network Status Pill */}
-        {(agentStatus.value?.radminIp || (agentStatus.value?.effectiveIp && agentStatus.value?.effectiveIp !== '127.0.0.1')) && (
-          <div
-            class="miro-online-badge-pill"
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '6px',
-              padding: '4px 10px',
-              background: 'rgba(16, 185, 129, 0.1)',
-              border: '1px solid rgba(16, 185, 129, 0.3)',
-              borderRadius: '20px',
-              fontSize: '11px',
-              color: '#34d399',
-              fontWeight: 500,
-              cursor: 'pointer'
-            }}
-            onClick={() => {
-              setShareModalTab('share');
-              setIsLanShareOpen(true);
-            }}
-            title={`${t('share.onlineBadge')} (${agentStatus.value?.radminIp || agentStatus.value?.effectiveIp}:${agentStatus.value?.webPort || 4780})`}
-          >
-            <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#10b981', display: 'inline-block' }} />
-            <span>{t('share.onlineBadge')} ({agentStatus.value?.radminIp || agentStatus.value?.effectiveIp}:{agentStatus.value?.webPort || 4780})</span>
-          </div>
+            {/* Make Private */}
+            {!isViewerMode.value && (
+              <button
+                class="miro-scope-action-btn"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '5px',
+                  padding: '4px 10px',
+                  background: 'rgba(255, 255, 255, 0.05)',
+                  border: '1px solid rgba(255, 255, 255, 0.12)',
+                  borderRadius: '20px',
+                  fontSize: '11px',
+                  color: '#e2e8f0',
+                  fontWeight: 500,
+                  cursor: 'pointer'
+                }}
+                onClick={() => setConfirmConvertModal({ isOpen: true, targetScope: 'solo' })}
+                title="Move back to private solo workspace"
+              >
+                <Icon name="lock" size={12} />
+                <span>{t('workspace.makePrivate')}</span>
+              </button>
+            )}
+
+            {/* Direct Connect */}
+            <button
+              class="miro-scope-action-btn"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '5px',
+                padding: '4px 10px',
+                background: 'rgba(139, 92, 246, 0.15)',
+                border: '1px solid rgba(139, 92, 246, 0.3)',
+                borderRadius: '20px',
+                fontSize: '11px',
+                color: '#c084fc',
+                fontWeight: 600,
+                cursor: 'pointer'
+              }}
+              onClick={() => {
+                setShareModalTab('direct');
+                setIsLanShareOpen(true);
+              }}
+              title="Direct Connect to friend's IP"
+            >
+              <Icon name="network" size={12} />
+              <span>{t('share.directConnect')}</span>
+            </button>
+          </>
         )}
 
         {/* 3. Export Dropdown Button */}
@@ -3431,6 +3544,58 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                   <span>{t('topbar.create_board')}</span>
                 </button>
               )}
+            </div>
+
+            {/* 2-Segment Scope Switcher */}
+            <div style={{ display: 'flex', padding: '3px', background: '#090a0f', border: '1px solid rgba(255, 255, 255, 0.08)', borderRadius: '10px', margin: '4px 8px 10px' }}>
+              <button
+                type="button"
+                onClick={() => setScope('solo')}
+                style={{
+                  flex: 1,
+                  padding: '5px 8px',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  borderRadius: '7px',
+                  border: 'none',
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '6px',
+                  transition: 'all 0.15s ease',
+                  ...(currentScope.value === 'solo'
+                    ? { background: '#7c3aed', color: '#ffffff', boxShadow: '0 2px 8px rgba(124, 58, 237, 0.4)' }
+                    : { background: 'transparent', color: '#94a3b8' })
+                }}
+              >
+                <Icon name="lock" size={12} />
+                <span>Solo</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setScope('team')}
+                style={{
+                  flex: 1,
+                  padding: '5px 8px',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  borderRadius: '7px',
+                  border: 'none',
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '6px',
+                  transition: 'all 0.15s ease',
+                  ...(currentScope.value === 'team'
+                    ? { background: '#7c3aed', color: '#ffffff', boxShadow: '0 2px 8px rgba(124, 58, 237, 0.4)' }
+                    : { background: 'transparent', color: '#94a3b8' })
+                }}
+              >
+                <Icon name="users" size={12} />
+                <span>Shared</span>
+              </button>
             </div>
             <div class="miro-boards-list">
               {allBoards.value.map((b) => (
@@ -6226,6 +6391,72 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
         isOpen={isCreateBoardOpen}
         onClose={() => setIsCreateBoardOpen(false)}
       />
+
+      {/* Confirmation Modal for Workspace Conversion */}
+      {confirmConvertModal.isOpen && (
+        <div
+          class="modal-backdrop doks-modal-backdrop"
+          onClick={() => setConfirmConvertModal({ isOpen: false, targetScope: 'team' })}
+          role="dialog"
+          aria-modal="true"
+          style={{ zIndex: 2200 }}
+        >
+          <div
+            class="modal-card doks-modal-dialog liquid-glass-surface"
+            onClick={(e) => e.stopPropagation()}
+            style={{ maxWidth: '440px', padding: '24px', borderRadius: '16px' }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
+              <div style={{
+                width: '36px',
+                height: '36px',
+                borderRadius: '10px',
+                background: 'rgba(124, 58, 237, 0.2)',
+                border: '1px solid rgba(139, 92, 246, 0.4)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: '#c084fc'
+              }}>
+                <Icon name={confirmConvertModal.targetScope === 'team' ? 'users' : 'lock'} size={18} />
+              </div>
+              <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600, color: '#f8fafc' }}>
+                {t('workspace.convertTitle')}
+              </h3>
+            </div>
+            <p style={{ margin: '0 0 20px', fontSize: '13px', lineHeight: '1.5', color: '#cbd5e1' }}>
+              {confirmConvertModal.targetScope === 'team'
+                ? t('workspace.confirmToShared')
+                : t('workspace.confirmToSolo')}
+            </p>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+              <button
+                type="button"
+                class="btn-secondary-sm"
+                onClick={() => setConfirmConvertModal({ isOpen: false, targetScope: 'team' })}
+              >
+                {t('common.cancel')}
+              </button>
+              <button
+                type="button"
+                class="btn-primary-sm"
+                style={{ background: '#7c3aed', borderColor: '#8b5cf6', color: '#ffffff' }}
+                onClick={async () => {
+                  const target = confirmConvertModal.targetScope;
+                  setConfirmConvertModal({ isOpen: false, targetScope: 'team' });
+                  if (boardId) {
+                    await convertBoardScope(boardId, effectiveScope, target);
+                  }
+                }}
+              >
+                {confirmConvertModal.targetScope === 'team'
+                  ? t('workspace.moveToShared')
+                  : t('workspace.makePrivate')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <ShareModal
         isOpen={isLanShareOpen}

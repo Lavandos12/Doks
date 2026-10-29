@@ -6,6 +6,7 @@ import {
   renameNote,
   deleteNote,
   currentScope,
+  setScope,
   yjsClient,
   getScopedNoteDocName,
   isViewerMode
@@ -146,6 +147,58 @@ export function NotesDrawer({
             <Icon name="x" size={16} />
           </button>
         </div>
+      </div>
+
+      {/* 2-Segment Scope Switcher */}
+      <div style={{ display: 'flex', padding: '3px', background: '#090a0f', border: '1px solid rgba(255, 255, 255, 0.08)', borderRadius: '10px', margin: '4px 16px 12px' }}>
+        <button
+          type="button"
+          onClick={() => setScope('solo')}
+          style={{
+            flex: 1,
+            padding: '5px 8px',
+            fontSize: '12px',
+            fontWeight: 600,
+            borderRadius: '7px',
+            border: 'none',
+            cursor: 'pointer',
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '6px',
+            transition: 'all 0.15s ease',
+            ...(currentScope.value === 'solo'
+              ? { background: '#7c3aed', color: '#ffffff', boxShadow: '0 2px 8px rgba(124, 58, 237, 0.4)' }
+              : { background: 'transparent', color: '#94a3b8' })
+          }}
+        >
+          <Icon name="lock" size={12} />
+          <span>Solo</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setScope('team')}
+          style={{
+            flex: 1,
+            padding: '5px 8px',
+            fontSize: '12px',
+            fontWeight: 600,
+            borderRadius: '7px',
+            border: 'none',
+            cursor: 'pointer',
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '6px',
+            transition: 'all 0.15s ease',
+            ...(currentScope.value === 'team'
+              ? { background: '#7c3aed', color: '#ffffff', boxShadow: '0 2px 8px rgba(124, 58, 237, 0.4)' }
+              : { background: 'transparent', color: '#94a3b8' })
+          }}
+        >
+          <Icon name="users" size={12} />
+          <span>Shared</span>
+        </button>
       </div>
 
       {/* Body */}

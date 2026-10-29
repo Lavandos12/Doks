@@ -1485,29 +1485,82 @@ export class AgentHttpServer {
 
     // WebSocket bridge for browser client
     this.fastify.register(async (fastify) => {
+      interface ConnectedSocketClient {
+        socket: any;
+        id: string;
+        queryScope: WorkspaceScope;
+        isViewer: boolean;
+        isHost: boolean;
+        subscribedDocs: Set<string>;
+      }
+
+      const activeClients = new Set<ConnectedSocketClient>();
+
       fastify.get('/ws', { websocket: true }, (socket, req) => {
         const queryScope = ((req.query as any)?.scope === 'solo' ? 'solo' : 'team') as WorkspaceScope;
         const isViewer = this.isViewerSession(req);
         const isHost = !isViewer && (this.isHostSession(req) || this.isLoopbackRequest(req));
-        // Allow sync access for host, bridge viewer, and any LAN / Radmin co-author
-        const allowSync = true;
-        const allowSolo = true;
+        const clientId = `client-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
 
-        // B21: Selective doc subscription set per socket
-        const subscribedDocs = new Set<string>();
+        const currentClient: ConnectedSocketClient = {
+          socket,
+          id: clientId,
+          queryScope,
+          isViewer,
+          isHost,
+          subscribedDocs: new Set<string>()
+        };
 
-        const isDocSubscribed = (docName: string) => {
+        activeClients.add(currentClient);
+
+        const isDocSubscribed = (client: ConnectedSocketClient, docName: string) => {
           return (
-            subscribedDocs.size === 0 ||
-            subscribedDocs.has(docName) ||
+            client.subscribedDocs.size === 0 ||
+            client.subscribedDocs.has(docName) ||
             docName === DOC_INDEX ||
             docName.endsWith(`:${DOC_INDEX}`) ||
             docName.startsWith('board:') ||
-            docName === `${queryScope}:${DOC_INDEX}` ||
+            docName.includes(':board:') ||
+            docName === `${client.queryScope}:${DOC_INDEX}` ||
             docName === `solo:${DOC_INDEX}` ||
             docName === `team:${DOC_INDEX}`
           );
         };
+
+        // Forward doc updates to all connected browser clients EXCEPT the sender
+        const updateListener = ({ scope: docScope, docName, update, origin }: any) => {
+          if (socket.readyState !== socket.OPEN) return;
+          // Do not echo back to the same client that originated the change
+          if (origin === clientId) return;
+
+          if (isDocSubscribed(currentClient, docName)) {
+            const syncMsg = this.docManager.createUpdateSyncMessage(update);
+            socket.send(
+              encodeMessage({
+                type: 'sync',
+                docName,
+                data: uint8ArrayToBase64(syncMsg)
+              })
+            );
+          }
+        };
+
+        // Forward peer awareness updates to the browser (only for team scope)
+        const peerAwarenessListener = ({ docName, data }: { docName: string; data: Uint8Array }) => {
+          if (queryScope === 'solo') return;
+          if (socket.readyState === socket.OPEN && isDocSubscribed(currentClient, docName)) {
+            socket.send(
+              encodeMessage({
+                type: 'awareness',
+                docName,
+                data: uint8ArrayToBase64(data)
+              })
+            );
+          }
+        };
+
+        this.docManager.on('update', updateListener);
+        this.peerService.on('awareness', peerAwarenessListener);
 
         // Handle sync and awareness between local web UI and docManager
         socket.on('message', (raw: Buffer | string) => {
@@ -1529,10 +1582,11 @@ export class AgentHttpServer {
                 }
               }
 
+              // Pass clientId as origin so updateListener knows who sent it
               const response = this.docManager.handleSyncMessage(
                 msg.docName,
                 data,
-                isViewer ? 'viewer' : 'client'
+                isViewer ? 'viewer' : clientId
               );
               if (response) {
                 socket.send(
@@ -1548,8 +1602,24 @@ export class AgentHttpServer {
                 // Ignore awareness writes from viewer
                 return;
               }
+
+              // 1. Broadcast awareness (live cursor coordinates & user badge) to ALL OTHER connected clients!
+              for (const otherClient of activeClients) {
+                if (otherClient.socket !== socket && otherClient.socket.readyState === 1 /* OPEN */) {
+                  if (isDocSubscribed(otherClient, msg.docName)) {
+                    otherClient.socket.send(
+                      encodeMessage({
+                        type: 'awareness',
+                        docName: msg.docName,
+                        data: msg.data
+                      })
+                    );
+                  }
+                }
+              }
+
+              // 2. Apply awareness locally and broadcast to P2P mesh
               const isSolo = msg.docName?.startsWith('solo:');
-              // Apply browser awareness state and broadcast to mesh
               const data = base64ToUint8Array(msg.data);
               const awarenessScope = isSolo ? 'solo' : 'team';
               try {
@@ -1563,10 +1633,10 @@ export class AgentHttpServer {
             } else if (msg.type === 'subscribe') {
               // B21: selective subscription
               if (msg.docName) {
-                subscribedDocs.add(msg.docName);
+                currentClient.subscribedDocs.add(msg.docName);
               }
             } else if (msg.type === 'unsubscribe') {
-              subscribedDocs.delete(msg.docName);
+              currentClient.subscribedDocs.delete(msg.docName);
             } else if (msg.type === 'ping') {
               socket.send(encodeMessage({ type: 'pong', timestamp: Date.now() }));
             }
@@ -1575,40 +1645,8 @@ export class AgentHttpServer {
           }
         });
 
-        // Forward doc updates to the browser
-        const updateListener = ({ scope: docScope, docName, update, origin }: any) => {
-          if (origin === 'client' || socket.readyState !== socket.OPEN) return;
-
-          if (isDocSubscribed(docName)) {
-            const syncMsg = this.docManager.createUpdateSyncMessage(update);
-            socket.send(
-              encodeMessage({
-                type: 'sync',
-                docName,
-                data: uint8ArrayToBase64(syncMsg)
-              })
-            );
-          }
-        };
-
-        // Forward peer awareness updates to the browser (only for team scope)
-        const peerAwarenessListener = ({ docName, data }: { docName: string; data: Uint8Array }) => {
-          if (queryScope === 'solo') return;
-          if (socket.readyState === socket.OPEN && isDocSubscribed(docName)) {
-            socket.send(
-              encodeMessage({
-                type: 'awareness',
-                docName,
-                data: uint8ArrayToBase64(data)
-              })
-            );
-          }
-        };
-
-        this.docManager.on('update', updateListener);
-        this.peerService.on('awareness', peerAwarenessListener);
-
         socket.on('close', () => {
+          activeClients.delete(currentClient);
           this.docManager.off('update', updateListener);
           this.peerService.off('awareness', peerAwarenessListener);
         });
