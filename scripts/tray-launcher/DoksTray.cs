@@ -224,8 +224,9 @@ namespace DoksLauncher
             try
             {
                 string protectedBundle = Path.Combine(rootDir, "release", "doks-server.cjs");
+                string rootBundle = Path.Combine(rootDir, "doks-server.cjs");
                 string devBundle = Path.Combine(rootDir, "agent", "dist", "index.js");
-                string scriptPath = File.Exists(protectedBundle) ? protectedBundle : devBundle;
+                string scriptPath = File.Exists(protectedBundle) ? protectedBundle : (File.Exists(rootBundle) ? rootBundle : devBundle);
 
                 ProcessStartInfo psi = new ProcessStartInfo();
                 psi.FileName = "node";

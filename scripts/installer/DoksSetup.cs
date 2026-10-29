@@ -253,6 +253,10 @@ namespace DoksInstaller
                 if (Directory.Exists(releaseDir))
                 {
                     CopyDirectory(releaseDir, appDir);
+                    string destRelease = Path.Combine(appDir, "release");
+                    if (!Directory.Exists(destRelease)) Directory.CreateDirectory(destRelease);
+                    CopyDirectory(releaseDir, destRelease);
+
                     if (File.Exists(sourceDoksExe))
                     {
                         File.Copy(sourceDoksExe, Path.Combine(appDir, "Doks.exe"), true);

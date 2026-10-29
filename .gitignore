@@ -2,6 +2,7 @@
 **/dist/
 release/
 *.exe
+*.zip
 **/*.tsbuildinfo
 **/test-results/
 **/playwright-report/
