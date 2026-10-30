@@ -57,9 +57,11 @@ describe('F10: Streaming Vault ZIP Export', () => {
   });
 
   afterEach(() => {
-    if (fs.existsSync(tempDir)) {
-      fs.rmSync(tempDir, { recursive: true, force: true });
-    }
+    try {
+      if (fs.existsSync(tempDir)) {
+        fs.rmSync(tempDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+      }
+    } catch {}
   });
 
   it('streams directory as valid ZIP without execSync and preserves all files and paths', async () => {

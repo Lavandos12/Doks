@@ -26,9 +26,11 @@ describe('Stage F: Attachments, Chunked P2P Sync & Import/Export Wizard', () => 
   });
 
   afterEach(() => {
-    if (fs.existsSync(tempDir)) {
-      fs.rmSync(tempDir, { recursive: true, force: true });
-    }
+    try {
+      if (fs.existsSync(tempDir)) {
+        fs.rmSync(tempDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+      }
+    } catch {}
   });
 
   describe('AttachmentManager Unit Tests', () => {

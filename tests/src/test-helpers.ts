@@ -16,7 +16,7 @@ export function createTestDir(name: string): string {
 
 export function cleanupTestDir(dir: string): void {
   try {
-    fs.rmSync(dir, { recursive: true, force: true });
+    fs.rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   } catch {}
 }
 

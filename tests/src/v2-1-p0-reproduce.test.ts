@@ -69,7 +69,9 @@ describe('Stage B: P0 Reproductions (F1, F2)', () => {
     afterEach(async () => {
       await agent.stop();
       if (fs.existsSync(tempDir)) {
-        fs.rmSync(tempDir, { recursive: true, force: true });
+        try {
+          fs.rmSync(tempDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+        } catch {}
       }
     });
 
