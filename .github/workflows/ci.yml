@@ -29,14 +29,11 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Build shared workspace
-        run: npm run build --workspace=shared
+      - name: Build packages
+        run: npm run build
 
       - name: Typecheck
         run: npm run typecheck
 
       - name: Unit Tests
         run: npm run test
-
-      - name: Build
-        run: npm run build

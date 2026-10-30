@@ -40,9 +40,9 @@
     "dev": "npm run dev:web",
     "dev:agent": "npm run dev --workspace=agent",
     "dev:web": "npm run dev --workspace=web",
-    "test": "vitest run --fileParallelism=false",
+    "test": "vitest run --pool=forks --poolOptions.forks.singleFork=true",
     "e2e": "playwright test",
-    "check": "npm run build --workspace=shared && npm run typecheck && npm run test && npm run build",
+    "check": "npm run build && npm run typecheck && npm run test",
     "typecheck": "tsc --noEmit --project shared/tsconfig.json && tsc --noEmit --project agent/tsconfig.json && tsc --noEmit --project web/tsconfig.json && tsc --noEmit --project tests/tsconfig.json"
   },
   "devDependencies": {
