@@ -11,3 +11,16 @@ export {
   type TransportPeerMessage,
   type TransportPeerMessageType
 } from './transport.js';
+
+export const isSafeUrl = (url: string): boolean => {
+  if (!url) return false;
+  const trimmed = url.trim().toLowerCase();
+  // Strictly allow http, https, mailto, relative /api/ attachments, or anchors
+  return (
+    trimmed.startsWith('https://') ||
+    trimmed.startsWith('http://') ||
+    trimmed.startsWith('mailto:') ||
+    trimmed.startsWith('/') ||
+    trimmed.startsWith('#')
+  );
+};

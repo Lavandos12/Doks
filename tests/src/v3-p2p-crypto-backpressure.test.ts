@@ -20,6 +20,7 @@ import {
 } from '../../agent/src/security.js';
 import path from 'node:path';
 import fs from 'node:fs';
+import os from 'node:os';
 
 describe('V3 Security, CRDT Diffing & AEAD Cryptography', () => {
   it('applyStringDiffToYText merges concurrent edits from two peers without data loss or character duplication', () => {
@@ -56,7 +57,7 @@ describe('V3 Security, CRDT Diffing & AEAD Cryptography', () => {
   });
 
   it('generates persistent Ed25519 node identity and base58 peerId', () => {
-    const tmpDir = path.join(process.cwd(), 'tmp', `test-ident-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`);
+    const tmpDir = path.join(os.tmpdir(), `test-ident-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`);
     const identity = getOrGenerateNodeIdentity(tmpDir);
 
     expect(identity.peerId).toBeDefined();
@@ -73,7 +74,7 @@ describe('V3 Security, CRDT Diffing & AEAD Cryptography', () => {
   });
 
   it('signs and verifies handshake challenge with Ed25519 keypair', () => {
-    const tmpDir = path.join(process.cwd(), 'tmp', `test-sign-${Date.now()}`);
+    const tmpDir = path.join(os.tmpdir(), `test-sign-${Date.now()}`);
     const identity = getOrGenerateNodeIdentity(tmpDir);
 
     const challengePayload = 'nonce1234-nonce5678-' + identity.peerId;

@@ -211,12 +211,25 @@ export function MarkdownPreview({ content, onToggleCheckbox, onNavigateWikilink 
   return <div class="markdown-preview-root">{renderedElements}</div>;
 }
 
+export const isSafeUrl = (url: string): boolean => {
+  if (!url) return false;
+  const trimmed = url.trim().toLowerCase();
+  // Strictly allow http, https, mailto, relative /api/ attachments, or anchors
+  return (
+    trimmed.startsWith('https://') ||
+    trimmed.startsWith('http://') ||
+    trimmed.startsWith('mailto:') ||
+    trimmed.startsWith('/') ||
+    trimmed.startsWith('#')
+  );
+};
+
 /**
- * Parses inline markdown: **bold**, *italic*, `code`, and [[wikilinks|alias]]
+ * Parses inline markdown: **bold**, *italic*, `code`, [[wikilinks|alias]], and [text](url)
  */
 function renderInlineMarkdown(text: string, onNavigateWikilink?: (title: string) => void): (string | VNode)[] {
   const parts: (string | VNode)[] = [];
-  const regex = /(!\[\[.*?\]\]|\[\[.*?\]\]|!\[.*?\]\(.*?\)|\*\*.*?\*\*|\*.*?\*|`.*?`)/g;
+  const regex = /(!\[\[.*?\]\]|\[\[.*?\]\]|!\[.*?\]\(.*?\)|\*\*.*?\*\*|\*.*?\*|`.*?`|\[.*?\]\(.*?\))/g;
 
   let lastIndex = 0;
   let match: RegExpExecArray | null;
@@ -235,6 +248,7 @@ function renderInlineMarkdown(text: string, onNavigateWikilink?: (title: string)
       );
       const src = att ? `/api/attachments/${att.hash}` : `/api/attachments/${encodeURIComponent(targetName)}`;
       const isImage = !att || (att.mime ? att.mime.startsWith('image/') : /\.(png|jpe?g|gif|webp|svg)$/i.test(targetName));
+      const targetUrl = isSafeUrl(src) ? src : '#';
 
       if (isImage) {
         parts.push(
@@ -250,7 +264,7 @@ function renderInlineMarkdown(text: string, onNavigateWikilink?: (title: string)
         parts.push(
           <a
             key={match.index}
-            href={src}
+            href={targetUrl}
             target="_blank"
             rel="noopener noreferrer"
             class="preview-attachment-chip"
@@ -273,14 +287,33 @@ function renderInlineMarkdown(text: string, onNavigateWikilink?: (title: string)
     } else if (token.startsWith('![') && token.includes('](') && token.endsWith(')')) {
       const alt = token.slice(2, token.indexOf(']('));
       const url = token.slice(token.indexOf('](') + 2, -1);
+      const targetUrl = isSafeUrl(url) ? url : '';
+      if (targetUrl) {
+        parts.push(
+          <img
+            key={match.index}
+            src={targetUrl}
+            alt={alt}
+            class="preview-embedded-image"
+            style={{ maxWidth: '100%', borderRadius: '8px', margin: '8px 0', display: 'block' }}
+          />
+        );
+      }
+    } else if (token.startsWith('[') && token.includes('](') && token.endsWith(')')) {
+      const label = token.slice(1, token.indexOf(']('));
+      const rawUrl = token.slice(token.indexOf('](') + 2, -1);
+      const targetUrl = isSafeUrl(rawUrl) ? rawUrl : '#';
       parts.push(
-        <img
+        <a
           key={match.index}
-          src={url}
-          alt={alt}
-          class="preview-embedded-image"
-          style={{ maxWidth: '100%', borderRadius: '8px', margin: '8px 0', display: 'block' }}
-        />
+          href={targetUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          class="preview-link"
+          style={{ color: '#8b5cf6', textDecoration: 'underline' }}
+        >
+          {label}
+        </a>
       );
     } else if (token.startsWith('[[') && token.endsWith(']]')) {
       // Wikilink [[Title]] or [[Title|Alias]]

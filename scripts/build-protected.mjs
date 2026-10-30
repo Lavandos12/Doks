@@ -8,6 +8,10 @@ const rootDir = process.cwd();
 const releaseDir = path.join(rootDir, 'release');
 const releaseWebDist = path.join(releaseDir, 'web', 'dist');
 
+if (fs.existsSync(releaseWebDist)) {
+  fs.rmSync(releaseWebDist, { recursive: true, force: true });
+}
+
 console.log('Building @doks/shared and @doks/web...');
 execSync('npm run build --workspace=shared', { stdio: 'inherit', cwd: rootDir });
 execSync('npm run build --workspace=web', { stdio: 'inherit', cwd: rootDir });

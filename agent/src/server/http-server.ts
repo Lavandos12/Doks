@@ -187,58 +187,59 @@ export class AgentHttpServer {
     // Security hook: Host & Origin verification & Session Authentication
     this.fastify.addHook('onRequest', async (req, reply) => {
       const host = req.headers.host || '';
-      const [hostName, hostPortStr] = host.split(':');
-      const radminIp = detectRadminIp();
-      const allowedHostNames = ['127.0.0.1', 'localhost', '[::1]'];
-      if (radminIp) allowedHostNames.push(radminIp);
-      if (this.config.bindAddress && this.config.bindAddress !== 'auto' && this.config.bindAddress !== '0.0.0.0') {
-        allowedHostNames.push(this.config.bindAddress);
-      }
-      const hostPort = hostPortStr ? parseInt(hostPortStr, 10) : 80;
+      const [hostName] = host.split(':');
 
-      const isHostAllowed =
-        allowedHostNames.includes(hostName) ||
-        hostName.startsWith('26.') ||
+      // Allow standard loopback, private LAN, cloud domains (Railway, Render, Fly.io), and configured bind addresses
+      const isCloudOrLocal =
+        hostName === '127.0.0.1' ||
+        hostName === 'localhost' ||
+        hostName === '[::1]' ||
         hostName.startsWith('192.168.') ||
-        hostName.startsWith('10.');
+        hostName.startsWith('10.') ||
+        hostName.startsWith('172.') ||
+        hostName.startsWith('26.') ||
+        hostName.includes('railway.app') ||
+        hostName.includes('onrender.com') ||
+        hostName.includes('fly.dev') ||
+        process.env.DOKS_HOST === '0.0.0.0' ||
+        Boolean(process.env.PORT);
 
-      if (!isHostAllowed || (hostPortStr && hostPort !== this.config.webPort)) {
-        reply.code(403).send({ error: 'Forbidden: Invalid Host header' });
-        return;
+      if (!isCloudOrLocal && this.config.bindAddress && this.config.bindAddress !== 'auto' && this.config.bindAddress !== '0.0.0.0') {
+        if (hostName !== this.config.bindAddress) {
+          reply.code(403).send({ error: 'Forbidden: Invalid Host header' });
+          return;
+        }
       }
 
+      // Cross-Origin check
       const origin = req.headers.origin;
       if (origin) {
         try {
           const originUrl = new URL(origin);
+          const radminIp = detectRadminIp();
           const allowedOriginHosts = ['127.0.0.1', 'localhost', '[::1]'];
           if (radminIp) allowedOriginHosts.push(radminIp);
-          if (this.config.bindAddress && this.config.bindAddress !== 'auto') {
+          if (this.config.bindAddress && this.config.bindAddress !== 'auto' && this.config.bindAddress !== '0.0.0.0') {
             allowedOriginHosts.push(this.config.bindAddress);
           }
-          const isAllowedOriginHost =
-            allowedOriginHosts.includes(originUrl.hostname) ||
-            originUrl.hostname.startsWith('26.') ||
-            originUrl.hostname.startsWith('192.168.') ||
-            originUrl.hostname.startsWith('10.');
 
-          const originPort = originUrl.port
-            ? parseInt(originUrl.port, 10)
-            : originUrl.protocol === 'https:'
-              ? 443
-              : 80;
-          const isAllowedOriginPort =
-            originPort === this.config.webPort ||
-            originPort === 4780 ||
-            originPort === 5173 ||
-            originPort === 5174 ||
-            originPort === 3000 ||
-            (!originUrl.port && (this.config.webPort === 80 || this.config.webPort === 443));
+          const isAllowedOriginHost =
+            originUrl.host === host ||
+            originUrl.hostname === '127.0.0.1' ||
+            originUrl.hostname === 'localhost' ||
+            originUrl.hostname === '[::1]' ||
+            originUrl.hostname.startsWith('192.168.') ||
+            originUrl.hostname.startsWith('10.') ||
+            originUrl.hostname.startsWith('172.') ||
+            originUrl.hostname.startsWith('26.') ||
+            originUrl.hostname.includes('railway.app') ||
+            originUrl.hostname.includes('onrender.com') ||
+            originUrl.hostname.includes('fly.dev') ||
+            allowedOriginHosts.includes(originUrl.hostname);
 
           const isCloudflareOrigin = this.bridgeService.getStatus().enabled && originUrl.hostname.endsWith('.trycloudflare.com');
-          if (isCloudflareOrigin) {
-            // Allowed origin for active Cloudflare tunnel
-          } else if (!isAllowedOriginHost || !isAllowedOriginPort) {
+
+          if (!isAllowedOriginHost && !isCloudflareOrigin) {
             reply.code(403).send({ error: 'Forbidden: Invalid Origin header' });
             return;
           }
