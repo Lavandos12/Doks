@@ -1,4 +1,32 @@
-# Doks — Децентрализованное рабочее пространство
+<p align="center">
+  <a href="https://github.com/Lavandos12/Doks">
+    <img src="assets/logo.svg" alt="Doks Logo" width="104" height="104">
+  </a>
+</p>
+
+<h1 align="center">Doks</h1>
+
+<p align="center">
+  <strong>Децентрализованное рабочее пространство и бесконечный холст</strong><br>
+  <em>Локальные Markdown-заметки и Miro-холст с CRDT-синхронизацией в реальном времени.</em>
+</p>
+
+<p align="center">
+  <a href="https://opensource.org/licenses/Apache-2.0"><img src="https://img.shields.io/badge/Лицензия-Apache_2.0-blue.svg" alt="License"></a>
+  <a href="https://nodejs.org/"><img src="https://img.shields.io/badge/Node.js-%3E%3D20.0.0-green.svg" alt="Node.js"></a>
+  <a href="tests"><img src="https://img.shields.io/badge/Тесты-235%20пройдено-brightgreen.svg" alt="Tests"></a>
+  <a href="Dockerfile"><img src="https://img.shields.io/badge/Docker%20образ-%3C120MB-blue.svg" alt="Docker Size"></a>
+</p>
+
+<p align="center">
+  <a href="README.md">🌐 English Documentation</a> •
+  <a href="#1-матрица-возможностей-feature-matrix">Возможности</a> •
+  <a href="#2-бенчмарки-benchmarks">Бенчмарки</a> •
+  <a href="#4-быстрый-старт">Быстрый старт</a> •
+  <a href="#5-горячие-клавиши">Горячие клавиши</a>
+</p>
+
+---
 
 > **Doks** — локальная (local-first) совместная рабочая среда для небольших команд: markdown-заметки со связями `[[так]]` (Obsidian-совместимые), бесконечные доски со стикерами и рамками (Miro-уровня в формате JSON Canvas `.canvas`), децентрализованная P2P-синхронизация по сети Radmin VPN на базе CRDT (**Yjs**), вложения с чанковой докачкой и детерминированный экспорт контекста для ИИ (`doks-ai/1`).
 
@@ -44,17 +72,29 @@
 
 ## 4. Быстрый старт
 
-### Windows 10/11
-Запустите:
-```cmd
-doks.bat
-```
-Скрипт проверит окружение, при необходимости установит зависимости и запустит агент и пользовательский интерфейс.
-
-### Linux / macOS
-Запустите:
+### Вариант 1: Docker Compose (Рекомендуется)
+Запуск Doks в виде легковесного production-контейнера:
 ```bash
-./doks.sh
+docker compose up -d
+```
+Откройте `http://localhost:4780` в веб-браузере. Все заметки, холсты и вложения сохраняются в том `doks_data`.
+
+### Вариант 2: Запуск готового сервера
+```bash
+# Сборка защищенного production-бандла
+npm run pack:release
+
+# Запуск сервера
+npm start
+```
+
+### Вариант 3: Локальная разработка
+```bash
+# Установка зависимостей
+npm install
+
+# Запуск dev-серверов
+npm run dev
 ```
 
 ---

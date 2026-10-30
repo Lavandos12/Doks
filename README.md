@@ -1,11 +1,32 @@
-# Doks - Collaborative Workspace & Infinite Canvas
+<p align="center">
+  <a href="https://github.com/Lavandos12/Doks">
+    <img src="assets/logo.svg" alt="Doks Logo" width="104" height="104">
+  </a>
+</p>
 
-[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
-[![Node](https://img.shields.io/badge/Node.js-%3E%3D20.0.0-green.svg)](https://nodejs.org/)
-[![Tests](https://img.shields.io/badge/Tests-232%20passed-brightgreen.svg)]()
-[![Docker Image](https://img.shields.io/badge/Docker%20Size-%3C120MB-blue.svg)]()
+<h1 align="center">Doks</h1>
 
-> Read this documentation in Russian: [README.ru.md](README.ru.md).
+<p align="center">
+  <strong>Collaborative Workspace & Infinite Canvas</strong><br>
+  <em>Local-first Markdown notes & Miro-style whiteboard canvas powered by Yjs CRDT real-time sync.</em>
+</p>
+
+<p align="center">
+  <a href="https://opensource.org/licenses/Apache-2.0"><img src="https://img.shields.io/badge/License-Apache_2.0-blue.svg" alt="License"></a>
+  <a href="https://nodejs.org/"><img src="https://img.shields.io/badge/Node.js-%3E%3D20.0.0-green.svg" alt="Node.js"></a>
+  <a href="tests"><img src="https://img.shields.io/badge/Tests-235%20passed-brightgreen.svg" alt="Tests"></a>
+  <a href="Dockerfile"><img src="https://img.shields.io/badge/Docker%20Size-%3C120MB-blue.svg" alt="Docker Size"></a>
+</p>
+
+<p align="center">
+  <a href="README.ru.md">📖 Русская версия</a> •
+  <a href="#1-click-cloud-deployment">1-Click Deploy</a> •
+  <a href="#quickstart">Quickstart</a> •
+  <a href="#1-feature-matrix">Features</a> •
+  <a href="#6-architecture--documentation">Architecture</a>
+</p>
+
+---
 
 **Doks** is an open-source, local-first collaborative workspace combining Obsidian-compatible Markdown notes and Miro-style infinite canvas whiteboards. Powered by **Yjs** CRDT synchronization, Doks enables real-time collaborative editing, 60 FPS live player cursors, and zero-friction URL sharing (`/b/:boardId`) across local networks, Docker containers, and cloud deployments.
 
