@@ -1,0 +1,20 @@
+services:
+  doks:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: doks
+    restart: unless-stopped
+    ports:
+      - "4780:4780"
+    environment:
+      - PORT=4780
+      - DOKS_HOST=0.0.0.0
+      - DOKS_DATA_DIR=/app/data
+      - NODE_ENV=production
+    volumes:
+      - doks_data:/app/data
+
+volumes:
+  doks_data:
+    driver: local

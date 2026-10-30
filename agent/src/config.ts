@@ -34,31 +34,15 @@ export function loadOrCreateConfig(options: ConfigOptions = {}): AgentConfig {
   if (!baseDir) {
     if (process.env.DOKS_DATA_DIR) {
       baseDir = process.env.DOKS_DATA_DIR;
+    } else if (process.env.NODE_ENV === 'production' && !process.env.USERPROFILE && !process.env.HOME) {
+      baseDir = path.resolve('./data');
     } else {
-      const legacyElumaDir = path.join(os.homedir(), 'Eluma');
-      const defaultDoksDir = path.join(os.homedir(), 'Doks');
-      if (!fs.existsSync(defaultDoksDir) && fs.existsSync(legacyElumaDir)) {
-        try {
-          fs.cpSync(legacyElumaDir, defaultDoksDir, { recursive: true });
-          logger.info('[Migration] Migrated ~/Eluma to ~/Doks');
-        } catch (err) {
-          logger.warn('[Migration] Failed to migrate ~/Eluma to ~/Doks:', err);
-        }
-      }
-      baseDir = defaultDoksDir;
+      const home = os.homedir();
+      baseDir = home ? path.join(home, 'Doks') : path.resolve('./data');
     }
   }
 
   const doksDir = path.join(baseDir, '.doks');
-  const legacyDotEluma = path.join(baseDir, '.eluma');
-  if (fs.existsSync(legacyDotEluma) && !fs.existsSync(doksDir)) {
-    try {
-      fs.cpSync(legacyDotEluma, doksDir, { recursive: true });
-      logger.info('[Migration] Migrated .eluma to .doks');
-    } catch (err) {
-      logger.warn('[Migration] Failed to migrate .eluma to .doks:', err);
-    }
-  }
 
   const configPath = path.join(doksDir, 'config.json');
   const vaultPath = path.join(baseDir, 'vault');

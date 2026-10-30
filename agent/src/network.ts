@@ -123,12 +123,12 @@ export function listOverlayInterfaces(): NetworkInterfaceInfo[] {
     }
   }
 
-  // Sort priority: Radmin VPN first -> Tailscale -> ZeroTier -> LAN
+  // Sort priority: Standard LAN first -> Tailscale -> ZeroTier -> Radmin
   const priority: Record<NetworkInterfaceInfo['kind'], number> = {
-    radmin: 1,
+    lan: 1,
     tailscale: 2,
     zerotier: 3,
-    lan: 4,
+    radmin: 4,
     'vpn-tun': 99,
   };
 
@@ -167,7 +167,7 @@ export function detectNetworkOverview(params: {
   const lan = allIfaces.find((i) => i.kind === 'lan')?.address || null;
   const tailscale = allIfaces.find((i) => i.kind === 'tailscale')?.address || null;
 
-  const candidateIp = radmin || lan || tailscale || '127.0.0.1';
+  const candidateIp = lan || radmin || tailscale || '127.0.0.1';
   const effectiveIp = params.p2pEnabled ? candidateIp : '127.0.0.1';
   const inviteHost = candidateIp;
   const inviteUri = `doks://${inviteHost}:${params.port}#${params.teamKey}`;

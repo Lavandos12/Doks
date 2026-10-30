@@ -10,7 +10,6 @@ delete process.env.http_proxy;
 delete process.env.https_proxy;
 
 import { Agent } from './agent.js';
-import { findRadminIp } from './network.js';
 
 export * from './agent.js';
 export * from './config.js';
@@ -76,23 +75,22 @@ Options:
     if (args[i] === '--key' && args[i + 1]) teamKey = args[++i];
   }
 
+  if (!webPort && process.env.PORT) {
+    webPort = parseInt(process.env.PORT, 10);
+  }
+
   const agent = new Agent({ baseDir, webPort, peerPort, teamKey });
 
   agent.start().then(() => {
-    const localUrl = `http://127.0.0.1:${agent.config.webPort}`;
-    console.log(`[Doks Agent] Running at ${localUrl}`);
-    const radminIp = findRadminIp();
-    if (radminIp) {
-      console.log(`[Doks Agent] Radmin VPN: http://${radminIp}:${agent.config.webPort}`);
-    }
-    console.log(`[Doks Agent] Agent ID: ${agent.config.agentId}`);
+    const port = agent.config.webPort;
+    console.log(`[Doks Server] Collaborative Canvas listening on http://0.0.0.0:${port}`);
     if (openBrowser) {
-      console.log(`[Doks Agent] Opening browser at ${localUrl}`);
+      const localUrl = `http://127.0.0.1:${port}`;
       const openCmd = process.platform === 'win32' ? 'start' : process.platform === 'darwin' ? 'open' : 'xdg-open';
       exec(`${openCmd} ${localUrl}`);
     }
   }).catch((err) => {
-    console.error('[Doks Agent] Startup failed:', err);
+    console.error('[Doks Server] Startup failed:', err);
     process.exit(1);
   });
 

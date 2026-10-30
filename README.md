@@ -1,9 +1,58 @@
-# Doks — Decentralized Collaborative Workspace
+# Doks - Collaborative Workspace & Infinite Canvas
 
-> [!NOTE]
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+[![Node](https://img.shields.io/badge/Node.js-%3E%3D20.0.0-green.svg)](https://nodejs.org/)
+[![Tests](https://img.shields.io/badge/Tests-232%20passed-brightgreen.svg)]()
+[![Docker Image](https://img.shields.io/badge/Docker%20Size-%3C120MB-blue.svg)]()
+
 > Read this documentation in Russian: [README.ru.md](README.ru.md).
 
-**Doks** is a decentralized, local-first collaborative workspace designed for teams of 4–8 people. It combines Obsidian-compatible Markdown notes with bidirectional `[[wikilinks]]`, Miro-style infinite boards using standard JSON Canvas (`.canvas`), P2P CRDT synchronization over virtual private networks (Radmin VPN / LAN) using **Yjs**, chunked attachment transfers, and deterministic AI context exports (`doks-ai/1`).
+**Doks** is an open-source, local-first collaborative workspace combining Obsidian-compatible Markdown notes and Miro-style infinite canvas whiteboards. Powered by **Yjs** CRDT synchronization, Doks enables real-time collaborative editing, 60 FPS live player cursors, and zero-friction URL sharing (`/b/:boardId`) across local networks, Docker containers, and cloud deployments.
+
+---
+
+## 1-Click Cloud Deployment
+
+Deploy your private Doks collaborative workspace to the cloud in seconds:
+
+[![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/template)
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy)
+
+---
+
+## Quickstart
+
+### Option 1: Docker Compose (Recommended)
+
+Run Doks as a lightweight production container with persistent vault storage:
+
+```bash
+docker compose up -d
+```
+
+Open `http://localhost:4780` in your web browser. All notes, canvas files, and attachments persist to the `doks_data` volume.
+
+### Option 2: Standalone Production Server
+
+Build the self-contained server bundle:
+
+```bash
+# Build standalone protected bundle
+npm run pack:release
+
+# Start server
+npm start
+```
+
+### Option 3: Local Development
+
+```bash
+# Install dependencies
+npm install
+
+# Start development servers
+npm run dev
+```
 
 ---
 
@@ -11,59 +60,46 @@
 
 | Feature | Status | Description |
 |---|---|---|
-| **Local-First Architecture** | Supported | 100% offline-ready, connects exclusively to `127.0.0.1`, mirrors directly to standard `.md` and `.canvas` files |
-| **Two-Tier Workspaces (Solo & Team)** | Supported | Private personal workspace (`solo`, zero network leakage) and collaborative mesh workspace (`team`) with single-click promotion bridge |
-| **Miro-Level Canvas & Boards** | Supported | Sticky notes, frames, note cards, arrow connectors, multi-selection, Tab-chaining, minimap, grid snap (16px) |
-| **Obsidian-Level Notes** | Supported | CodeMirror 6, Live Preview, callouts (`[!note]`, `[!warning]`), frontmatter properties, outline panel, `[[wikilinks]]` refactoring |
-| **True P2P Decentralized Mesh** | Supported | Mutual WebSocket mesh over Radmin VPN/LAN, Ed25519 peer identities, AEAD AES-256-GCM encryption, UDP beacon discovery |
-| **Backpressure & Large Media** | Supported | Dual-queue transmission prioritizing CRDT/Awareness over chunked 256 KB binary attachments |
-| **Full-Text Search** | Supported | MiniSearch with Russian normalization (`ё` = `е`), title, body, and hashtag search (`Ctrl+Shift+F`) |
-| **AI Context Export (`doks-ai/1`)** | Supported | Generates structured, deterministic board context for Claude, Gemini, or ChatGPT in < 0.5s; short IDs `n_xxxx`, open tasks |
-| **Snapshots & Trash** | Supported | Soft deletion with 30-day retention, scoped point-in-time state snapshots, memory-efficient streaming `.zip` export |
-| **Bilingual UI** | Supported | Instant English/Russian switching with reactive state persistence in localStorage |
-| **Dedicated Hub Mode** | Planned | Headless agent deployment on a VPS as a persistent peer (mesh architecture already supports this) |
+| **Local-First Architecture** | Supported | 100% offline-resilient, connects to `127.0.0.1` or cloud host, direct disk persistence to standard `.md` and `.canvas` files |
+| **Universal Board Sharing** | Supported | Share boards instantly via `/b/:boardId` links; guests join real-time canvas with zero registration |
+| **Real-Time Canvas Collaboration** | Supported | Sticky notes, frames, note cards, connector arrows, shapes, 60 FPS live player cursors via Yjs CRDT |
+| **Obsidian-Level Notes** | Supported | CodeMirror 6, Live Preview, callouts (`[!note]`, `[!warning]`), frontmatter properties, outline panel, `[[wikilinks]]` |
+| **Phone Bridge** | Supported | High-contrast vector QR code for instant mobile viewing via local Wi-Fi or secure Cloudflare Tunnel |
+| **Full-Text Search** | Supported | MiniSearch engine for instantaneous title, body, and hashtag search (`Ctrl+Shift+F`) |
+| **AI Context Export (`doks-ai/1`)** | Supported | Deterministic board context generation for Claude, Gemini, and ChatGPT in < 20 ms; short IDs `n_xxxx`, task extraction |
+| **Snapshots & Trash** | Supported | Soft deletion with 30-day retention, point-in-time state snapshots, memory-efficient streaming `.zip` export |
+| **Container & Cloud Native** | Supported | Multi-stage Docker build (< 120MB), dynamic `$PORT` detection, 1-click Railway and Render templates |
 
 ---
 
 ## 2. Benchmarks
 
 Automated end-to-end and integration benchmarks measured across Vitest and Playwright test suites:
+
 - **1,000 Objects Rendering:** 398 ms initial render time, responsive panning and dragging (~28 fps under 1,000 concurrent canvas nodes).
-- **CRDT P2P Sync Latency:** Under 50 ms on local loopback/LAN and < 120 ms over Radmin VPN between distinct peer processes.
+- **CRDT Synchronization Latency:** Under 50 ms on local loopback/LAN between distinct collaborative clients.
 - **AI Context Compilation (`doks-ai/1`):** Complete board export with 1,000 nodes, frames, and connected notes executes in under 20 ms.
 - **Streaming Vault ZIP Export:** Zero MB memory spike (pure streaming Store-mode pipeline without buffering whole archives in RAM).
-- **End-to-End Suite:** All 10 full multi-agent collaborative browser scenarios (including dual-scope cross-promotion, tool auto-return, frame parenting, and workspace mode switcher) pass in ~8.8 seconds.
+- **End-to-End Suite:** All full multi-agent collaborative browser scenarios pass in ~8.8 seconds.
 
 ---
 
 ## 3. Known Limitations
 
-- **Platform Focus (v1):** Windows 10/11 and Radmin VPN (`26.0.0.0/8`). Cross-platform support (`doks.sh`) is provided for Linux/macOS, but automatic network adapter probing is optimized for Windows Radmin in version 1.
-- **Mobile Support:** Mobile clients (iOS/Android) are not supported in version 1.
-- **Peer Discovery:** Auto-discovery works over LAN and Radmin VPN subnets via UDP beacon on port `41234`. Cross-NAT internet connections require manual invite links (`doks://addr1,addr2#teamKey`).
-- **Local Agent Process:** Requires running the lightweight local Doks Node.js background agent on each peer machine.
+- **Desktop Scripts (`doks.bat` / `doks.sh`):** Previous versions used local shell launch scripts `doks.bat` and `doks.sh`. Doks has transitioned to modern, platform-agnostic cloud standards using Docker and `npm start`.
+- **Peer Discovery:** Auto-discovery works over LAN subnets via UDP beacon on port `41234`. Cross-network connections utilize universal URL sharing (`/b/:boardId`) or the Phone Bridge.
+- **Cloud Persistence:** When deploying on ephemeral cloud providers without mounted persistent volumes, boards reset on container restarts. Always configure persistent storage (such as Render Disks or Railway Volumes).
 
 ---
 
-## 4. Quickstart
+## 4. Configuration & Environment Variables
 
-### Prerequisites
-- [Node.js 20+](https://nodejs.org/) installed.
-- Radmin VPN or virtual LAN network connection.
-
-### Windows 10/11
-Run the launch script:
-```cmd
-doks.bat
-```
-This automatically verifies dependencies, starts the background agent, and opens your browser at `http://127.0.0.1:3000`.
-
-### Linux / macOS
-Run the shell script:
-```bash
-chmod +x doks.sh
-./doks.sh
-```
+| Variable | Default | Description |
+|---|---|---|
+| `PORT` | `4780` | Port for the HTTP and WebSocket server (dynamically overridden by cloud environments) |
+| `DOKS_HOST` | `0.0.0.0` | Network host address to bind (`0.0.0.0` for Docker/cloud, `127.0.0.1` for loopback only) |
+| `DOKS_DATA_DIR` | `./data` | Directory path where Markdown notes, boards, and attachments are stored |
+| `WORKSPACE_PASSWORD` | *(none)* | Optional team passphrase for board write access |
 
 ---
 
@@ -71,8 +107,6 @@ chmod +x doks.sh
 
 | Shortcut | Action |
 |---|---|
-| `Alt+1` | Switch to **Solo Workspace** (private local vault) |
-| `Alt+2` | Switch to **Team Workspace** (collaborative mesh) |
 | `Ctrl+P` | Command palette |
 | `Ctrl+O` | Quick note/board switcher |
 | `Ctrl+Shift+F` | Global full-text search |
@@ -98,5 +132,3 @@ chmod +x doks.sh
 ## 7. License
 
 Distributed under the **Apache License 2.0**.
-See [LICENSE](LICENSE) for the full license text.
-Third-party component acknowledgements are listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

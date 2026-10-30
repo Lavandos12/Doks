@@ -159,6 +159,15 @@ export class AgentHttpServer {
       });
     }
 
+    // Direct share route fallback for SPA routing
+    this.fastify.get('/b/:boardId', async (_req, reply) => {
+      if (fs.existsSync(this.webDistPath)) {
+        reply.sendFile('index.html');
+      } else {
+        reply.type('text/html').send('<!doctype html><html><body><h1>Doks</h1></body></html>');
+      }
+    });
+
     // Global security headers on all responses
     this.fastify.addHook('onSend', async (req, reply) => {
       reply.header('Referrer-Policy', 'no-referrer');
@@ -1681,9 +1690,8 @@ export class AgentHttpServer {
       port: this.config.webPort,
       host: hostToBind
     });
-    const radminIp = detectRadminIp();
     console.log(
-      `[HttpServer] Local UI & API listening at http://127.0.0.1:${this.config.webPort}${radminIp ? ` (Radmin: http://${radminIp}:${this.config.webPort})` : ''}`
+      `[HttpServer] Local UI & API listening at http://127.0.0.1:${this.config.webPort}`
     );
   }
 

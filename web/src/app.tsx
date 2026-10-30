@@ -14,7 +14,8 @@ import {
   theme,
   isImportWizardOpen,
   agentStatus,
-  isViewerMode
+  isViewerMode,
+  selectBoardWithScope
 } from './state/app-state.js';
 import { TopRightBar } from './components/layout/top-right-bar.js';
 import { NotesDrawer } from './components/layout/notes-drawer.js';
@@ -81,6 +82,26 @@ export function App() {
 
   const currentBoard = allBoards.value.find((b) => b.id === activeBoardId) || boards.value.find((b) => b.id === activeBoardId);
   const openBoardTitle = (currentBoard?.title || (activeTab?.type === 'board' ? activeTab.title : '') || '').trim();
+
+  // Universal Board URL routing (/b/:boardId or ?board=:id)
+  useEffect(() => {
+    const pathMatch = window.location.pathname.match(/\/b\/([a-zA-Z0-9_-]+)/);
+    const queryMatch = new URLSearchParams(window.location.search).get('board');
+    const requestedBoardId = pathMatch ? pathMatch[1] : (queryMatch || null);
+
+    if (requestedBoardId) {
+      selectBoardWithScope(requestedBoardId, 'team', 'Shared Board');
+    }
+  }, []);
+
+  useEffect(() => {
+    if (activeBoardId && activeBoardId !== 'default') {
+      const newPath = `/b/${activeBoardId}`;
+      if (window.location.pathname !== newPath) {
+        window.history.replaceState(null, '', newPath);
+      }
+    }
+  }, [activeBoardId]);
 
   // Dynamically update document title to show Doks and open board title
   useEffect(() => {

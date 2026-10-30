@@ -77,9 +77,10 @@ export function ShareModal({ isOpen, onClose, initialTab = 'share' }: ShareModal
 
   if (!isOpen) return null;
 
-  const currentIp = lanStatus.radminIp || lanStatus.ip || '127.0.0.1';
   const effectiveBoardId = currentBoardId || 'default';
-  const shareLink = `http://${currentIp}:${lanStatus.port}/?board=${effectiveBoardId}`;
+  const shareLink = typeof window !== 'undefined'
+    ? `${window.location.origin}/b/${effectiveBoardId}`
+    : `http://${lanStatus.ip || '127.0.0.1'}:${lanStatus.port}/b/${effectiveBoardId}`;
 
   const copyShareLink = () => {
     navigator.clipboard.writeText(shareLink);
@@ -287,10 +288,10 @@ export function ShareModal({ isOpen, onClose, initialTab = 'share' }: ShareModal
               >
                 <div>
                   <div style={{ fontSize: '13px', fontWeight: 600, color: '#f3f4f6' }}>
-                    {t('share.lanBroadcast')}
+                    Live Collaboration
                   </div>
                   <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '2px' }}>
-                    {t('share.lanBroadcastDesc')}
+                    Anyone with this link can collaborate in real time with live cursors
                   </div>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -337,7 +338,7 @@ export function ShareModal({ isOpen, onClose, initialTab = 'share' }: ShareModal
                     }}
                   >
                     <Icon name={copied ? 'check' : 'copy'} size={14} />
-                    <span>{copied ? t('lan.copied') : t('lan.copy_link')}</span>
+                    <span>{copied ? 'Copied' : 'Copy Link'}</span>
                   </button>
                 </div>
               </div>
@@ -353,11 +354,7 @@ export function ShareModal({ isOpen, onClose, initialTab = 'share' }: ShareModal
                   lineHeight: '1.5'
                 }}
               >
-                {lanStatus.radminIp ? (
-                  <span>{t('share.radminTip')}</span>
-                ) : (
-                  <span>{t('share.lanTip')}</span>
-                )}
+                <span>Anyone with this link can view and edit this board simultaneously. No sign-up required.</span>
               </div>
             </div>
           )}

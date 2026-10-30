@@ -68,7 +68,7 @@ Users can seamlessly promote local draft notes/cards into the team workspace or 
 1. **Deep Node Cloning:** Clones selected canvas cards, stickies, text nodes, and shapes.
 2. **Connector Remapping:** Edge connectors between selected nodes are preserved and mapped to the newly generated node IDs.
 3. **Linked Note Migration:** Referenced Markdown notes are read from the source scope, cloned into the target scope with fresh IDs, and title wikilinks are preserved.
-4. **Visual Grouping:** Imported nodes are grouped inside a dedicated framing box (e.g. `"📦 Promoted from Solo (YYYY-MM-DD)"`).
+4. **Visual Grouping:** Imported nodes are grouped inside a dedicated framing box (e.g. `"[Import] Promoted from Solo (YYYY-MM-DD)"`).
 
 ---
 

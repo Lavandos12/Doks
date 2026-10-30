@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: doks
+    runtime: docker
+    dockerfilePath: Dockerfile
+    plan: free
+    region: oregon
+    envVars:
+      - key: PORT
+        value: 10000
+      - key: DOKS_HOST
+        value: 0.0.0.0
+      - key: DOKS_DATA_DIR
+        value: /app/data
+    disk:
+      name: doks-data
+      mountPath: /app/data
+      sizeGB: 1
