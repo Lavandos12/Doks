@@ -37,7 +37,6 @@
 Deploy your private Doks collaborative workspace to the cloud in seconds:
 
 [![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/template)
-[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy)
 
 ---
 
@@ -89,7 +88,7 @@ npm run dev
 | **Full-Text Search** | Supported | MiniSearch engine for instantaneous title, body, and hashtag search (`Ctrl+Shift+F`) |
 | **AI Context Export (`doks-ai/1`)** | Supported | Deterministic board context generation for Claude, Gemini, and ChatGPT in < 20 ms; short IDs `n_xxxx`, task extraction |
 | **Snapshots & Trash** | Supported | Soft deletion with 30-day retention, point-in-time state snapshots, memory-efficient streaming `.zip` export |
-| **Container & Cloud Native** | Supported | Multi-stage Docker build (< 120MB), dynamic `$PORT` detection, 1-click Railway and Render templates |
+| **Container & Cloud Native** | Supported | Multi-stage Docker build (< 120MB), dynamic `$PORT` detection, 1-click Railway template |
 
 ---
 
@@ -109,7 +108,7 @@ Automated end-to-end and integration benchmarks measured across Vitest and Playw
 
 - **Desktop Scripts (`doks.bat` / `doks.sh`):** Previous versions used local shell launch scripts `doks.bat` and `doks.sh`. Doks has transitioned to modern, platform-agnostic cloud standards using Docker and `npm start`.
 - **Peer Discovery:** Auto-discovery works over LAN subnets via UDP beacon on port `41234`. Cross-network connections utilize universal URL sharing (`/b/:boardId`) or the Phone Bridge.
-- **Cloud Persistence:** When deploying on ephemeral cloud providers without mounted persistent volumes, boards reset on container restarts. Always configure persistent storage (such as Render Disks or Railway Volumes).
+- **Cloud Persistence:** When deploying on ephemeral cloud providers without mounted persistent volumes, boards reset on container restarts. Always configure persistent storage (such as Railway Volumes or Docker volumes).
 
 ---
 
