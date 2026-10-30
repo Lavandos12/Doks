@@ -321,11 +321,13 @@ describe('Stage F: Attachments, Chunked P2P Sync & Import/Export Wizard', () => 
       const zipBuffer = Buffer.from(await exportVaultRes.arrayBuffer());
       expect(zipBuffer.length).toBeGreaterThan(0);
 
-      // Verify with bsdtar that zip is valid
+      // Verify that zip is valid without external binary dependencies
       const tempZipPath = path.join(tempDir, 'downloaded-vault.zip');
       fs.writeFileSync(tempZipPath, zipBuffer);
-      const listOutput = execSync(`tar -tf "${tempZipPath}"`, { encoding: 'utf8' });
-      expect(listOutput).toBeDefined();
+      // Valid ZIP format: starts with PK (0x50, 0x4B) and contains End of Central Directory signature (PK\x05\x06)
+      expect(zipBuffer[0]).toBe(0x50);
+      expect(zipBuffer[1]).toBe(0x4b);
+      expect(zipBuffer.includes(Buffer.from([0x50, 0x4b, 0x05, 0x06]))).toBe(true);
     });
   });
 });

@@ -5,6 +5,34 @@ import os from 'node:os';
 import { execSync } from 'node:child_process';
 import { streamDirectoryAsZip } from '../../agent/src/storage/zip-stream.js';
 
+function extractStoreZip(zipFilePath: string, destDir: string): void {
+  const buf = fs.readFileSync(zipFilePath);
+  let offset = 0;
+  while (offset < buf.length - 4) {
+    const sig = buf.readUInt32LE(offset);
+    if (sig === 0x02014b50) {
+      const size = buf.readUInt32LE(offset + 20);
+      const nameLen = buf.readUInt16LE(offset + 28);
+      const extraLen = buf.readUInt16LE(offset + 30);
+      const commentLen = buf.readUInt16LE(offset + 32);
+      const localOffset = buf.readUInt32LE(offset + 42);
+      const name = buf.toString('utf8', offset + 46, offset + 46 + nameLen);
+
+      const localNameLen = buf.readUInt16LE(localOffset + 26);
+      const localExtraLen = buf.readUInt16LE(localOffset + 28);
+      const dataStart = localOffset + 30 + localNameLen + localExtraLen;
+      const fileData = buf.subarray(dataStart, dataStart + size);
+
+      const targetPath = path.join(destDir, name);
+      fs.mkdirSync(path.dirname(targetPath), { recursive: true });
+      fs.writeFileSync(targetPath, fileData);
+      offset += 46 + nameLen + extraLen + commentLen;
+    } else {
+      offset++;
+    }
+  }
+}
+
 describe('F10: Streaming Vault ZIP Export', () => {
   let tempDir: string;
   let vaultDir: string;
@@ -44,8 +72,8 @@ describe('F10: Streaming Vault ZIP Export', () => {
     expect(fs.existsSync(zipFile)).toBe(true);
     expect(fs.statSync(zipFile).size).toBeGreaterThan(100);
 
-    // Extract with PowerShell Expand-Archive or tar on Windows
-    execSync(`tar -xf "${zipFile}" -C "${extractDir}"`);
+    // Extract cross-platform without external binary dependencies
+    extractStoreZip(zipFile, extractDir);
 
     expect(fs.existsSync(path.join(extractDir, 'Заметка 1.md'))).toBe(true);
     expect(fs.readFileSync(path.join(extractDir, 'Заметка 1.md'), 'utf8')).toContain('Привет мир!');
