@@ -189,7 +189,7 @@ export class AgentHttpServer {
       const host = req.headers.host || '';
       const [hostName] = host.split(':');
 
-      // Allow standard loopback, private LAN, cloud domains (Railway, Render, Fly.io), and configured bind addresses
+      // Allow standard loopback, private LAN, cloud domains (Northflank, Zeabur, Fly.io), and configured bind addresses
       const isCloudOrLocal =
         hostName === '127.0.0.1' ||
         hostName === 'localhost' ||
@@ -198,8 +198,9 @@ export class AgentHttpServer {
         hostName.startsWith('10.') ||
         hostName.startsWith('172.') ||
         hostName.startsWith('26.') ||
-        hostName.includes('railway.app') ||
-        hostName.includes('onrender.com') ||
+        hostName.includes('code.run') ||
+        hostName.includes('northflank.app') ||
+        hostName.includes('zeabur.app') ||
         hostName.includes('fly.dev') ||
         process.env.DOKS_HOST === '0.0.0.0' ||
         Boolean(process.env.PORT);
@@ -232,8 +233,9 @@ export class AgentHttpServer {
             originUrl.hostname.startsWith('10.') ||
             originUrl.hostname.startsWith('172.') ||
             originUrl.hostname.startsWith('26.') ||
-            originUrl.hostname.includes('railway.app') ||
-            originUrl.hostname.includes('onrender.com') ||
+            originUrl.hostname.includes('code.run') ||
+            originUrl.hostname.includes('northflank.app') ||
+            originUrl.hostname.includes('zeabur.app') ||
             originUrl.hostname.includes('fly.dev') ||
             allowedOriginHosts.includes(originUrl.hostname);
 

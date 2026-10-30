@@ -32,27 +32,34 @@
 
 ---
 
-## 1-Click Cloud Deployment
+## 🚀 24/7 Cloud Deployment (Free & Self-Hostable)
 
-Deploy your private Doks collaborative workspace to the cloud in seconds:
+### Option 1: Deploy to Northflank (Free, No Credit Card Required)
 
-[![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/template)
+Deploy Doks to the cloud with 24/7 uptime, persistent storage, and WebSockets:
 
----
+1. Sign up on [Northflank](https://northflank.com) with your GitHub account.
+2. Click **Create Project** $\rightarrow$ **Combined Service**.
+3. Select **Build from Git repository** and pick `Lavandos12/Doks`.
+4. Under **Ports**, expose port `4780` (HTTP/WebSocket).
+5. Under **Volumes**, mount a persistent volume to `/app/data`.
+6. Click **Deploy** and get your permanent HTTPS domain!
 
-## Quickstart
+> **Universal Cloud & PaaS Support:** While Northflank offers an instant free tier with persistent storage volumes, Doks is 100% container-native. You can deploy it seamlessly on any modern cloud platform or PaaS host (Zeabur, Coolify, Fly.io, CapRover, DigitalOcean, Hetzner, AWS, or any Linux VPS running Docker).
 
-### Option 1: Docker Compose (Recommended)
+### Option 2: Self-Host with Docker Compose (Universal)
 
-Run Doks as a lightweight production container with persistent vault storage:
+Run Doks anywhere with zero vendor lock-in:
 
 ```bash
+git clone https://github.com/Lavandos12/Doks.git
+cd Doks
 docker compose up -d
 ```
 
 Open `http://localhost:4780` in your web browser. All notes, canvas files, and attachments persist to the `doks_data` volume.
 
-### Option 2: Standalone Production Server
+### Option 3: Standalone Production Server
 
 Build the self-contained server bundle:
 
@@ -64,7 +71,7 @@ npm run pack:release
 npm start
 ```
 
-### Option 3: Local Development
+### Option 4: Local Development
 
 ```bash
 # Install dependencies
@@ -88,7 +95,7 @@ npm run dev
 | **Full-Text Search** | Supported | MiniSearch engine for instantaneous title, body, and hashtag search (`Ctrl+Shift+F`) |
 | **AI Context Export (`doks-ai/1`)** | Supported | Deterministic board context generation for Claude, Gemini, and ChatGPT in < 20 ms; short IDs `n_xxxx`, task extraction |
 | **Snapshots & Trash** | Supported | Soft deletion with 30-day retention, point-in-time state snapshots, memory-efficient streaming `.zip` export |
-| **Container & Cloud Native** | Supported | Multi-stage Docker build (< 120MB), dynamic `$PORT` detection, 1-click Railway template |
+| **Container & Cloud Native** | Supported | Multi-stage Docker build (< 120MB), dynamic `$PORT` detection, 1-click Northflank / Docker Compose templates |
 
 ---
 
@@ -108,7 +115,7 @@ Automated end-to-end and integration benchmarks measured across Vitest and Playw
 
 - **Desktop Scripts (`doks.bat` / `doks.sh`):** Previous versions used local shell launch scripts `doks.bat` and `doks.sh`. Doks has transitioned to modern, platform-agnostic cloud standards using Docker and `npm start`.
 - **Peer Discovery:** Auto-discovery works over LAN subnets via UDP beacon on port `41234`. Cross-network connections utilize universal URL sharing (`/b/:boardId`) or the Phone Bridge.
-- **Cloud Persistence:** When deploying on ephemeral cloud providers without mounted persistent volumes, boards reset on container restarts. Always configure persistent storage (such as Railway Volumes or Docker volumes).
+- **Cloud Persistence:** When deploying on ephemeral cloud providers without mounted persistent volumes, boards reset on container restarts. Always configure persistent storage (such as Northflank Volumes, Docker volumes, or any persistent cloud disk).
 
 ---
 
