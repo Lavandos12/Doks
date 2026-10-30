@@ -214,7 +214,7 @@ const teamIndexDoc = yjsClient.getOrCreateDoc(getScopedIndexDocName('team'));
 export const soloMaps = getIndexMaps(soloIndexDoc);
 export const teamMaps = getIndexMaps(teamIndexDoc);
 
-export function ensureDefaultBoard(): void {
+export function ensureInitialBoard(): void {
   let hasAnyBoard = false;
   soloMaps.boards.forEach((b) => {
     if (!b.deleted) hasAnyBoard = true;
@@ -224,10 +224,10 @@ export function ensureDefaultBoard(): void {
   });
 
   if (!hasAnyBoard) {
-    const id = SOLO_MAIN_BOARD_ID;
+    const id = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : 'b_' + Math.random().toString(36).slice(2, 10);
     soloMaps.boards.set(id, {
       id,
-      title: t('sidebar.new_board'),
+      title: t('sidebar.new_board') || 'Main Board',
       folder: null,
       deleted: false,
       createdAt: Date.now(),
@@ -237,9 +237,11 @@ export function ensureDefaultBoard(): void {
   }
 }
 
+export const ensureDefaultBoard = ensureInitialBoard;
+
 // Backward compatibility alias
 export function ensureCanonicalBoards(): void {
-  ensureDefaultBoard();
+  ensureInitialBoard();
 }
 
 // Initial ensure of default board
@@ -266,7 +268,7 @@ export const maps = new Proxy({} as ReturnType<typeof getIndexMaps>, {
 });
 
 function syncIndexSignals() {
-  ensureDefaultBoard();
+  ensureInitialBoard();
   const activeMaps = getActiveMaps();
 
   // Unified allBoards across both scopes, sorted by updatedAt desc

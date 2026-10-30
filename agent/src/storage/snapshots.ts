@@ -13,15 +13,20 @@ import {
   type SnapshotMeta
 } from '@doks/shared';
 import { DocManager } from './doc-manager.js';
+import type { R2Storage } from './r2-storage.js';
 
 export class SnapshotManager {
   private snapshotsDir: string;
   private docManager: DocManager;
   private snapshotInterval?: NodeJS.Timeout;
+  private r2Storage?: R2Storage;
+  private r2SyncInterval?: NodeJS.Timeout;
+  private lastR2UploadedHash = '';
 
-  constructor(snapshotsDir: string, docManager: DocManager, autoIntervalMs = 600000) {
+  constructor(snapshotsDir: string, docManager: DocManager, autoIntervalMs = 600000, r2Storage?: R2Storage) {
     this.snapshotsDir = snapshotsDir;
     this.docManager = docManager;
+    this.r2Storage = r2Storage;
 
     fs.mkdirSync(this.snapshotsDir, { recursive: true });
 
@@ -33,6 +38,12 @@ export class SnapshotManager {
       this.snapshotInterval = setInterval(() => {
         this.createSnapshot();
       }, autoIntervalMs);
+    }
+
+    if (this.r2Storage?.isConfigured()) {
+      this.r2SyncInterval = setInterval(() => {
+        this.syncToR2();
+      }, 60000);
     }
   }
 
@@ -76,6 +87,7 @@ export class SnapshotManager {
     );
 
     this.rotateSnapshots();
+    this.syncToR2().catch(() => {});
     return meta;
   }
 
@@ -301,10 +313,43 @@ export class SnapshotManager {
     }
   }
 
+  public async syncToR2(): Promise<void> {
+    if (!this.r2Storage?.isConfigured()) return;
+    try {
+      const docs = this.docManager.getAllDocs();
+      if (docs.size === 0) return;
+
+      const payload: Record<string, string> = {};
+      for (const [docName, doc] of docs.entries()) {
+        const update = Y.encodeStateAsUpdate(doc);
+        payload[docName] = Buffer.from(update).toString('base64');
+      }
+
+      const jsonStr = JSON.stringify(payload);
+      if (jsonStr === this.lastR2UploadedHash) return;
+
+      const tmpPath = path.join(this.snapshotsDir, 'r2-sync-temp.json');
+      fs.writeFileSync(tmpPath, jsonStr, 'utf8');
+      const uploaded = await this.r2Storage.uploadFile('doks-latest-snapshot.json', tmpPath);
+      if (uploaded) {
+        this.lastR2UploadedHash = jsonStr;
+      }
+      try {
+        fs.unlinkSync(tmpPath);
+      } catch {}
+    } catch (err) {
+      console.error('[SnapshotManager] Failed to sync snapshot to R2:', err);
+    }
+  }
+
   public destroy(): void {
     if (this.snapshotInterval) {
       clearInterval(this.snapshotInterval);
       this.snapshotInterval = undefined;
+    }
+    if (this.r2SyncInterval) {
+      clearInterval(this.r2SyncInterval);
+      this.r2SyncInterval = undefined;
     }
   }
 }

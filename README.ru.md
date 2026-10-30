@@ -71,16 +71,30 @@
 
 ---
 
-## 4. Быстрый старт
+## 4. Развертывание и быстрый старт
 
-### Вариант 1: Docker Compose (Рекомендуется)
-Запуск Doks в виде легковесного production-контейнера:
+### Вариант 1: Бесплатное облако Northflank (24/7 без засыпания с постоянным диском)
+1. Зарегистрируйтесь на [Northflank](https://northflank.com) через GitHub.
+2. Создайте **Combined Service** из репозитория `Lavandos12/Doks`.
+3. В разделе **Ports** откройте порт `4780` (HTTP/WebSocket).
+4. В разделе **Volumes** примонтируйте постоянный том к `/app/data`.
+5. Нажмите **Deploy** и получите постоянный публичный HTTPS-домен.
+
+### Вариант 2: Бесплатный Render + Cloudflare R2 / AWS S3
+1. Разверните бесплатный Web Service на [Render](https://render.com) из репозитория `Lavandos12/Doks` (файл `render.yaml`).
+2. В переменных окружения настройте бесплатное объектное хранилище S3/R2 (`R2_ENDPOINT`, `R2_BUCKET`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`).
+3. Doks автоматически восстанавливает актуальное состояние из S3/R2 при старте контейнера и синхронизирует снимки.
+4. **Local-First надежность:** Все доски также сохраняются прямо в браузере через нативный IndexedDB (`doks_local_vault`).
+
+### Вариант 3: Docker Compose (Локально или на VPS)
 ```bash
+git clone https://github.com/Lavandos12/Doks.git
+cd Doks
 docker compose up -d
 ```
 Откройте `http://localhost:4780` в веб-браузере. Все заметки, холсты и вложения сохраняются в том `doks_data`.
 
-### Вариант 2: Запуск готового сервера
+### Вариант 4: Автономный production-сервер
 ```bash
 # Сборка защищенного production-бандла
 npm run pack:release
@@ -89,7 +103,7 @@ npm run pack:release
 npm start
 ```
 
-### Вариант 3: Локальная разработка
+### Вариант 5: Локальная разработка
 ```bash
 # Установка зависимостей
 npm install

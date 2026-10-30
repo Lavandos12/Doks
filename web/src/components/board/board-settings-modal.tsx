@@ -215,13 +215,13 @@ export function BoardSettingsModal({
                   }}
                 >
                   <Icon name="globe-mesh" size={15} />
-                  <span>{isConverting ? 'Converting...' : 'Make Collaborative (LAN / Radmin)'}</span>
+                  <span>{isConverting ? 'Converting...' : 'Make Collaborative (Shared)'}</span>
                 </button>
               </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.4 }}>
-                  Collaborative board (synced over LAN / Radmin with live cursors).
+                  Collaborative board (synced with live cursors).
                 </div>
                 <button
                   type="button"
@@ -257,7 +257,7 @@ export function BoardSettingsModal({
                 Network Connection
               </span>
               <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-                Share this link with collaborators on LAN / Radmin VPN:
+                Share this link with collaborators:
               </div>
               <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                 <input
@@ -319,7 +319,7 @@ export function BoardSettingsModal({
                 }}
               >
                 <Icon name="network" size={13} />
-                <span>Open LAN / Radmin Share</span>
+                <span>Open Share Link</span>
               </button>
               <button
                 type="button"

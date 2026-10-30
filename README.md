@@ -32,19 +32,35 @@
 
 ---
 
-## 🚀 1-Click Cloud Deploy (24/7 Free)
+## 🚀 24/7 Cloud Deployment & Quickstart
+
+### Option 1: Northflank (Free Sandbox, 24/7 No Sleep, Persistent Volume)
+
+Deploy Doks to Northflank with 24/7 uptime, persistent storage, and WebSockets:
+
+1. Sign up on [Northflank](https://northflank.com) with your GitHub account.
+2. Click **Create Project** $\rightarrow$ **Combined Service**.
+3. Select **Build from Git repository** and pick `Lavandos12/Doks`.
+4. Under **Ports**, expose port `4780` (HTTP/WebSocket).
+5. Under **Volumes**, mount a persistent volume to `/app/data`.
+6. Click **Deploy** and get your permanent HTTPS domain!
+
+### Option 2: Render Free Tier + Cloudflare R2 (Free S3 Object Storage)
 
 Deploy your private collaborative Doks canvas to Render for free:
 
 [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy)
 
-> **Local-First Resilience:** Boards are backed up directly in the browser's native IndexedDB (`doks_local_vault`). Even on free ephemeral cloud tiers, your data is always preserved locally on your device and automatically synced upon reconnection.
+1. Click the button above to deploy the 100% free Docker service on Render.
+2. In the Render Dashboard under **Environment**, add the Cloudflare R2 / AWS S3 credentials:
+   - `R2_ENDPOINT`: `https://<ACCOUNT_ID>.r2.cloudflarestorage.com`
+   - `R2_BUCKET`: `doks-vault`
+   - `R2_ACCESS_KEY_ID`: `<your_access_key>`
+   - `R2_SECRET_ACCESS_KEY`: `<your_secret_key>`
+3. Doks automatically restores state from R2 on container startup and synchronizes periodic snapshots.
+4. **Local-First Resilience:** In addition to cloud storage, boards are backed up directly in the browser's native IndexedDB (`doks_local_vault`).
 
----
-
-## Quickstart
-
-### Option 1: Docker Compose (Universal & Recommended)
+### Option 3: Local / VPS Docker Compose (Universal & Recommended)
 
 Run Doks anywhere with zero vendor lock-in:
 
@@ -56,7 +72,7 @@ docker compose up -d
 
 Open `http://localhost:4780` in your web browser. All notes, canvas files, and attachments persist to the `doks_data` volume.
 
-### Option 3: Standalone Production Server
+### Option 4: Standalone Production Server
 
 Build the self-contained server bundle:
 
@@ -68,7 +84,7 @@ npm run pack:release
 npm start
 ```
 
-### Option 4: Local Development
+### Option 5: Local Development
 
 ```bash
 # Install dependencies

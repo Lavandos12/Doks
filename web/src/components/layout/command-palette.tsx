@@ -100,7 +100,7 @@ export function CommandPalette() {
       },
       {
         id: 'cmd-scope-team',
-        title: `${t('topbar.team')} (LAN / P2P)`,
+        title: `${t('topbar.team')} (Live Sync)`,
         subtitle: 'Sync with co-authors (Alt+2)',
         icon: 'globe-mesh',
         action: () => {

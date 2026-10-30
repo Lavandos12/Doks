@@ -3430,10 +3430,10 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
               color: '#34d399',
               fontWeight: 600
             }}
-            title={`Shared (Live LAN) • ${agentStatus.value?.radminIp || agentStatus.value?.effectiveIp || '127.0.0.1'}:${agentStatus.value?.webPort || 4780}`}
+            title={`Shared (Live Sync) • ${agentStatus.value?.radminIp || agentStatus.value?.effectiveIp || '127.0.0.1'}:${agentStatus.value?.webPort || 4780}`}
           >
             <span style={{ width: '7px', height: '7px', borderRadius: '50%', backgroundColor: '#10b981', display: 'inline-block' }} />
-            <span>Shared (Live LAN) • {agentStatus.value?.radminIp || agentStatus.value?.effectiveIp || '127.0.0.1'}:{agentStatus.value?.webPort || 4780}</span>
+            <span>Shared (Live Sync) • {agentStatus.value?.radminIp || agentStatus.value?.effectiveIp || '127.0.0.1'}:{agentStatus.value?.webPort || 4780}</span>
           </div>
         )}
 
