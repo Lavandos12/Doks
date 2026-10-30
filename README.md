@@ -1,57 +1,107 @@
-<p align="center">
+<div align="center">
+
   <a href="https://github.com/Lavandos12/Doks">
-    <img src="assets/logo.svg" alt="Doks Logo" width="104" height="104">
+    <img src="assets/logo.svg" alt="Doks Logo" width="100" height="100" />
   </a>
-</p>
 
-<h1 align="center">Doks</h1>
+  <h1>Doks</h1>
+  <p><b>Collaborative Workspace & Infinite Canvas</b></p>
+  <p><i>The modern, local-first open-source alternative to Miro & Obsidian. Real-time CRDT sync, Markdown vault & 24/7 cloud deployment.</i></p>
 
-<p align="center">
-  <strong>Collaborative Workspace & Infinite Canvas</strong><br>
-  <em>Local-first Markdown notes & Miro-style whiteboard canvas powered by Yjs CRDT real-time sync.</em>
-</p>
+  <p align="center">
+    <a href="https://github.com/Lavandos12/Doks/actions/workflows/ci.yml">
+      <img src="https://img.shields.io/github/actions/workflow/status/Lavandos12/Doks/ci.yml?branch=main&style=for-the-badge&logo=githubactions&logoColor=white&label=CI%20BUILD" alt="CI Status" />
+    </a>
+    <a href="https://opensource.org/licenses/Apache-2.0">
+      <img src="https://img.shields.io/badge/LICENSE-APACHE%202.0-blue?style=for-the-badge&logo=apache&logoColor=white" alt="License" />
+    </a>
+    <a href="https://nodejs.org/">
+      <img src="https://img.shields.io/badge/NODE.JS-%3E%3D20.0-339933?style=for-the-badge&logo=node.js&logoColor=white" alt="Node.js" />
+    </a>
+    <a href="https://hub.docker.com/">
+      <img src="https://img.shields.io/badge/DOCKER%20IMAGE-%3C120MB-2496ED?style=for-the-badge&logo=docker&logoColor=white" alt="Docker Size" />
+    </a>
+  </p>
 
-<p align="center">
-  <a href="https://opensource.org/licenses/Apache-2.0"><img src="https://img.shields.io/badge/License-Apache_2.0-blue.svg" alt="License"></a>
-  <a href="https://nodejs.org/"><img src="https://img.shields.io/badge/Node.js-%3E%3D20.0.0-green.svg" alt="Node.js"></a>
-  <a href="tests"><img src="https://img.shields.io/badge/Tests-235%20passed-brightgreen.svg" alt="Tests"></a>
-  <a href="Dockerfile"><img src="https://img.shields.io/badge/Docker%20Size-%3C120MB-blue.svg" alt="Docker Size"></a>
-</p>
+  <p align="center">
+    <a href="README.ru.md">📖 <b>Русская версия</b></a> •
+    <a href="#-1-click-cloud-deployment">🚀 <b>1-Click Deploy</b></a> •
+    <a href="#-quickstart">⚡ <b>Quickstart</b></a> •
+    <a href="#1-feature-matrix">✨ <b>Feature Matrix</b></a> •
+    <a href="#2-benchmarks">📊 <b>Benchmarks</b></a>
+  </p>
 
-<p align="center">
-  <a href="README.ru.md">📖 Русская версия</a> •
-  <a href="#1-click-cloud-deployment">1-Click Deploy</a> •
-  <a href="#quickstart">Quickstart</a> •
-  <a href="#1-feature-matrix">Features</a> •
-  <a href="#6-architecture--documentation">Architecture</a>
-</p>
+  <p align="center">
+    <img src="assets/preview.svg" alt="Doks Canvas & Markdown Preview" width="100%" style="border-radius: 14px; box-shadow: 0 20px 50px rgba(0,0,0,0.5);" />
+  </p>
+
+</div>
 
 ---
 
-**Doks** is an open-source, local-first collaborative workspace combining Obsidian-compatible Markdown notes and Miro-style infinite canvas whiteboards. Powered by **Yjs** CRDT synchronization, Doks enables real-time collaborative editing, 60 FPS live player cursors, and zero-friction URL sharing (`/b/:boardId`) across local networks, Docker containers, and cloud deployments.
+## ✨ Feature Highlights
+
+<table>
+  <tr>
+    <td width="50%">
+      <h3>🎨 Miro-Style Infinite Canvas</h3>
+      <ul>
+        <li><b>60 FPS Pan & Zoom</b>: Silky smooth infinite viewport with dot grid matrix.</li>
+        <li><b>Smart Connectors</b>: Magnetic Bézier, orthogonal, and straight lines that follow cards.</li>
+        <li><b>Rich Widgets</b>: Color-coded stickies, Checklists, Kanban boards, and Tables.</li>
+      </ul>
+    </td>
+    <td width="50%">
+      <h3>📝 Obsidian-Compatible Vault</h3>
+      <ul>
+        <li><b>Standard Markdown</b>: Bidirectional <code>[[Wikilinks]]</code> and live backlinks.</li>
+        <li><b>Split-Screen Workspace</b>: Work simultaneously with Markdown notes and infinite canvas.</li>
+        <li><b>Universal Importer</b>: Import <code>.canvas</code>, <code>.md</code>, Word <code>.docx</code>, and <code>.csv</code>.</li>
+      </ul>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%">
+      <h3>⚡ Real-Time CRDT Multiplayer</h3>
+      <ul>
+        <li><b>Zero Conflicts</b>: State resolution managed by conflict-free replicated data types (Yjs).</li>
+        <li><b>Live Awareness</b>: Neon collaborator cursors, selections, and presence indicator.</li>
+        <li><b>Dynamic Links</b>: Share collaborative rooms with private <code>/b/:boardId</code> UUIDs.</li>
+      </ul>
+    </td>
+    <td width="50%">
+      <h3>☁️ Flexible 24/7 Deployment</h3>
+      <ul>
+        <li><b>Northflank</b>: Free Sandbox with persistent volume and zero sleeping.</li>
+        <li><b>Render + Cloudflare R2</b>: Free compute paired with 10 GB free S3 snapshot storage.</li>
+        <li><b>Docker Compose</b>: Self-host on any VPS with a single command.</li>
+      </ul>
+    </td>
+  </tr>
+</table>
 
 ---
 
-## 🚀 24/7 Cloud Deployment & Quickstart
+## 🚀 1-Click Cloud Deployment
 
-### Option 1: Northflank (Free Sandbox, 24/7 No Sleep, Persistent Volume)
+### Option 1: Northflank (Recommended — Always On + Persistent Disk)
 
-Deploy Doks to Northflank with 24/7 uptime, persistent storage, and WebSockets:
+Northflank's free developer Sandbox tier provides an always-on service with a **1 GB persistent volume** without sleep cycles or credit card requirements:
 
-1. Sign up on [Northflank](https://northflank.com) with your GitHub account.
+1. Sign up on [Northflank](https://northflank.com/) with your GitHub account.
 2. Click **Create Project** $\rightarrow$ **Combined Service**.
 3. Select **Build from Git repository** and pick `Lavandos12/Doks`.
 4. Under **Ports**, expose port `4780` (HTTP/WebSocket).
 5. Under **Volumes**, mount a persistent volume to `/app/data`.
 6. Click **Deploy** and get your permanent HTTPS domain!
 
-### Option 2: Render Free Tier + Cloudflare R2 (Free S3 Object Storage)
+### Option 2: Render + Cloudflare R2 (Free Hosting + S3 Snapshots)
 
-Deploy your private collaborative Doks canvas to Render for free:
+Deploy on Render's free tier and pair it with Cloudflare R2 for permanent snapshots across sleep cycles:
 
 [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy)
 
-1. Click the button above to deploy the 100% free Docker service on Render.
+1. Deploy the 100% free Docker service on Render via the button above.
 2. In the Render Dashboard under **Environment**, add the Cloudflare R2 / AWS S3 credentials:
    - `R2_ENDPOINT`: `https://<ACCOUNT_ID>.r2.cloudflarestorage.com`
    - `R2_BUCKET`: `doks-vault`
@@ -60,7 +110,11 @@ Deploy your private collaborative Doks canvas to Render for free:
 3. Doks automatically restores state from R2 on container startup and synchronizes periodic snapshots.
 4. **Local-First Resilience:** In addition to cloud storage, boards are backed up directly in the browser's native IndexedDB (`doks_local_vault`).
 
-### Option 3: Local / VPS Docker Compose (Universal & Recommended)
+---
+
+## ⚡ Quickstart
+
+### Option 1: Docker Compose (Universal & Recommended)
 
 Run Doks anywhere with zero vendor lock-in:
 
@@ -72,7 +126,7 @@ docker compose up -d
 
 Open `http://localhost:4780` in your web browser. All notes, canvas files, and attachments persist to the `doks_data` volume.
 
-### Option 4: Standalone Production Server
+### Option 2: Standalone Production Server
 
 Build the self-contained server bundle:
 
@@ -84,7 +138,7 @@ npm run pack:release
 npm start
 ```
 
-### Option 5: Local Development
+### Option 3: Local Development
 
 ```bash
 # Install dependencies
@@ -171,4 +225,4 @@ Automated end-to-end and integration benchmarks measured across Vitest and Playw
 
 ## 7. License
 
-Distributed under the **Apache License 2.0**.
+Distributed under the **Apache License 2.0**. See [LICENSE](LICENSE) for details.
