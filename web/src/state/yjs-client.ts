@@ -30,6 +30,8 @@ export class YjsClient {
   private reconnectTimer?: number;
   private statusPollTimer?: number;
   private currentScope: WorkspaceScope = 'team';
+  private dbPromise?: Promise<IDBDatabase>;
+  private saveThrottleTimers = new Map<string, number>();
 
   constructor() {
     if (typeof localStorage !== 'undefined') {
@@ -137,14 +139,69 @@ export class YjsClient {
     }, 1500);
   }
 
+  private getDB(): Promise<IDBDatabase> {
+    if (this.dbPromise) return this.dbPromise;
+    this.dbPromise = new Promise((resolve, reject) => {
+      if (typeof window === 'undefined' || !window.indexedDB) {
+        reject(new Error('IndexedDB not supported in this environment'));
+        return;
+      }
+      const req = window.indexedDB.open('doks_local_vault', 1);
+      req.onupgradeneeded = () => {
+        const db = req.result;
+        if (!db.objectStoreNames.contains('docs')) {
+          db.createObjectStore('docs');
+        }
+      };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+    return this.dbPromise;
+  }
+
+  private async loadDocFromLocalStore(docName: string, doc: Y.Doc): Promise<void> {
+    try {
+      const db = await this.getDB();
+      const tx = db.transaction('docs', 'readonly');
+      const store = tx.objectStore('docs');
+      const req = store.get(docName);
+      req.onsuccess = () => {
+        if (req.result && req.result instanceof Uint8Array) {
+          Y.applyUpdate(doc, req.result, 'local-indexeddb');
+        }
+      };
+    } catch {}
+  }
+
+  private saveDocToLocalStore(docName: string, doc: Y.Doc): void {
+    if (typeof window === 'undefined') return;
+    if (this.saveThrottleTimers.has(docName)) return;
+    const timer = window.setTimeout(async () => {
+      this.saveThrottleTimers.delete(docName);
+      try {
+        const db = await this.getDB();
+        const state = Y.encodeStateAsUpdate(doc);
+        const tx = db.transaction('docs', 'readwrite');
+        tx.objectStore('docs').put(state, docName);
+      } catch {}
+    }, 500);
+    this.saveThrottleTimers.set(docName, timer as any);
+  }
+
   public getOrCreateDoc(docName: string): Y.Doc {
     let doc = this.docs.get(docName);
     if (!doc) {
-      doc = new Y.Doc();
-      this.docs.set(docName, doc);
+      const newDoc = new Y.Doc();
+      this.docs.set(docName, newDoc);
       this.activeSubscriptions.add(docName);
 
-      doc.on('update', (update: Uint8Array, origin: any) => {
+      // Rehydrate instantly from browser's local storage
+      this.loadDocFromLocalStore(docName, newDoc);
+
+      newDoc.on('update', (update: Uint8Array, origin: any) => {
+        // Save state locally
+        this.saveDocToLocalStore(docName, newDoc);
+
         if (origin !== 'agent') {
           const encoder = encoding.createEncoder();
           syncProtocol.writeUpdate(encoder, update);
@@ -153,6 +210,7 @@ export class YjsClient {
       });
 
       this.subscribeDoc(docName);
+      return newDoc;
     }
     return doc;
   }

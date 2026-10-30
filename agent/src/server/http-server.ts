@@ -200,6 +200,7 @@ export class AgentHttpServer {
         hostName.startsWith('26.') ||
         hostName.includes('code.run') ||
         hostName.includes('northflank.app') ||
+        hostName.includes('onrender.com') ||
         hostName.includes('zeabur.app') ||
         hostName.includes('fly.dev') ||
         process.env.DOKS_HOST === '0.0.0.0' ||
@@ -235,6 +236,7 @@ export class AgentHttpServer {
             originUrl.hostname.startsWith('26.') ||
             originUrl.hostname.includes('code.run') ||
             originUrl.hostname.includes('northflank.app') ||
+            originUrl.hostname.includes('onrender.com') ||
             originUrl.hostname.includes('zeabur.app') ||
             originUrl.hostname.includes('fly.dev') ||
             allowedOriginHosts.includes(originUrl.hostname);

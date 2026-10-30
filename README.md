@@ -32,22 +32,19 @@
 
 ---
 
-## 🚀 24/7 Cloud Deployment (Free & Self-Hostable)
+## 🚀 1-Click Cloud Deploy (24/7 Free)
 
-### Option 1: Deploy to Northflank (Free, No Credit Card Required)
+Deploy your private collaborative Doks canvas to Render for free:
 
-Deploy Doks to the cloud with 24/7 uptime, persistent storage, and WebSockets:
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy)
 
-1. Sign up on [Northflank](https://northflank.com) with your GitHub account.
-2. Click **Create Project** $\rightarrow$ **Combined Service**.
-3. Select **Build from Git repository** and pick `Lavandos12/Doks`.
-4. Under **Ports**, expose port `4780` (HTTP/WebSocket).
-5. Under **Volumes**, mount a persistent volume to `/app/data`.
-6. Click **Deploy** and get your permanent HTTPS domain!
+> **Local-First Resilience:** Boards are backed up directly in the browser's native IndexedDB (`doks_local_vault`). Even on free ephemeral cloud tiers, your data is always preserved locally on your device and automatically synced upon reconnection.
 
-> **Universal Cloud & PaaS Support:** While Northflank offers an instant free tier with persistent storage volumes, Doks is 100% container-native. You can deploy it seamlessly on any modern cloud platform or PaaS host (Zeabur, Coolify, Fly.io, CapRover, DigitalOcean, Hetzner, AWS, or any Linux VPS running Docker).
+---
 
-### Option 2: Self-Host with Docker Compose (Universal)
+## Quickstart
+
+### Option 1: Docker Compose (Universal & Recommended)
 
 Run Doks anywhere with zero vendor lock-in:
 
@@ -87,7 +84,7 @@ npm run dev
 
 | Feature | Status | Description |
 |---|---|---|
-| **Local-First Architecture** | Supported | 100% offline-resilient, connects to `127.0.0.1` or cloud host, direct disk persistence to standard `.md` and `.canvas` files |
+| **Local-First Architecture** | Supported | 100% offline-resilient with browser IndexedDB (`doks_local_vault`) backing and direct disk persistence to standard `.md` and `.canvas` files |
 | **Universal Board Sharing** | Supported | Share boards instantly via `/b/:boardId` links; guests join real-time canvas with zero registration |
 | **Real-Time Canvas Collaboration** | Supported | Sticky notes, frames, note cards, connector arrows, shapes, 60 FPS live player cursors via Yjs CRDT |
 | **Obsidian-Level Notes** | Supported | CodeMirror 6, Live Preview, callouts (`[!note]`, `[!warning]`), frontmatter properties, outline panel, `[[wikilinks]]` |
@@ -95,7 +92,7 @@ npm run dev
 | **Full-Text Search** | Supported | MiniSearch engine for instantaneous title, body, and hashtag search (`Ctrl+Shift+F`) |
 | **AI Context Export (`doks-ai/1`)** | Supported | Deterministic board context generation for Claude, Gemini, and ChatGPT in < 20 ms; short IDs `n_xxxx`, task extraction |
 | **Snapshots & Trash** | Supported | Soft deletion with 30-day retention, point-in-time state snapshots, memory-efficient streaming `.zip` export |
-| **Container & Cloud Native** | Supported | Multi-stage Docker build (< 120MB), dynamic `$PORT` detection, 1-click Northflank / Docker Compose templates |
+| **Container & Cloud Native** | Supported | Multi-stage Docker build (< 120MB), dynamic `$PORT` detection, 1-click Render free-tier & Docker Compose |
 
 ---
 
@@ -115,7 +112,7 @@ Automated end-to-end and integration benchmarks measured across Vitest and Playw
 
 - **Desktop Scripts (`doks.bat` / `doks.sh`):** Previous versions used local shell launch scripts `doks.bat` and `doks.sh`. Doks has transitioned to modern, platform-agnostic cloud standards using Docker and `npm start`.
 - **Peer Discovery:** Auto-discovery works over LAN subnets via UDP beacon on port `41234`. Cross-network connections utilize universal URL sharing (`/b/:boardId`) or the Phone Bridge.
-- **Cloud Persistence:** When deploying on ephemeral cloud providers without mounted persistent volumes, boards reset on container restarts. Always configure persistent storage (such as Northflank Volumes, Docker volumes, or any persistent cloud disk).
+- **Cloud Persistence & Local-First Resilience:** On ephemeral cloud tiers without mounted persistent volumes, container restarts reset in-memory server state. However, Doks automatically re-hydrates boards from collaborators' browser IndexedDB storage (`doks_local_vault`) upon reconnection.
 
 ---
 
