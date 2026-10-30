@@ -31,9 +31,6 @@
     <a href="#2-бенчмарки">📊 <b>Бенчмарки</b></a>
   </p>
 
-  <p align="center">
-    <img src="assets/preview.svg" alt="Doks Canvas & Markdown Preview" width="100%" style="border-radius: 14px; box-shadow: 0 20px 50px rgba(0,0,0,0.5);" />
-  </p>
 
 </div>
 
