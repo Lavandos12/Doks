@@ -25,12 +25,11 @@
 
   <p align="center">
     <a href="README.ru.md">📖 <b>Русская версия</b></a> •
-    <a href="#-1-click-cloud-deployment">🚀 <b>1-Click Deploy</b></a> •
+    <a href="#-100-free-cloud-deployment-no-credit-card-required">🚀 <b>1-Click Deploy</b></a> •
     <a href="#-quickstart">⚡ <b>Quickstart</b></a> •
     <a href="#1-feature-matrix">✨ <b>Feature Matrix</b></a> •
     <a href="#2-benchmarks">📊 <b>Benchmarks</b></a>
   </p>
-
 
 </div>
 
@@ -67,11 +66,11 @@
       </ul>
     </td>
     <td width="50%">
-      <h3>☁️ Flexible 24/7 Deployment</h3>
+      <h3>☁️ 100% Free 24/7 Deployment</h3>
       <ul>
-        <li><b>Northflank</b>: Free Sandbox with persistent volume and zero sleeping.</li>
-        <li><b>Render + Cloudflare R2</b>: Free compute paired with 10 GB free S3 snapshot storage.</li>
-        <li><b>Docker Compose</b>: Self-host on any VPS with a single command.</li>
+        <li><b>Render (Free)</b>: 100% free web container with zero credit card required.</li>
+        <li><b>Supabase S3 Storage</b>: Permanent snapshot persistence on standard free S3.</li>
+        <li><b>Docker Compose</b>: Self-host anywhere with zero vendor lock-in.</li>
       </ul>
     </td>
   </tr>
@@ -79,33 +78,33 @@
 
 ---
 
-## 🚀 1-Click Cloud Deployment
+## 🚀 100% Free Cloud Deployment (No Credit Card Required)
 
-### Option 1: Northflank (Recommended — Always On + Persistent Disk)
+Deploy Doks to the cloud in under 3 minutes with zero payment methods or billing cards:
 
-Northflank's free developer Sandbox tier provides an always-on service with a **1 GB persistent volume** without sleep cycles or credit card requirements:
+### Step 1: Deploy Web Container on Render (Free)
+1. Fork this repository to your GitHub account.
+2. Sign in to [Render.com](https://render.com/) with GitHub (**No credit card required**).
+3. Click **New +** → **Web Service** → Select your `Doks` repository.
+4. Select the **Free** instance type and deploy.
 
-1. Sign up on [Northflank](https://northflank.com/) with your GitHub account.
-2. Click **Create Project** $\rightarrow$ **Combined Service**.
-3. Select **Build from Git repository** and pick `Lavandos12/Doks`.
-4. Under **Ports**, expose port `4780` (HTTP/WebSocket).
-5. Under **Volumes**, mount a persistent volume to `/app/data`.
-6. Click **Deploy** and get your permanent HTTPS domain!
+### Step 2: Add Free S3 Persistence via Supabase (Free, No Card)
+Since Render's free tier has an ephemeral disk, connect Supabase S3 storage so your boards persist across restarts:
+1. Sign in to [Supabase.com](https://supabase.com/) with GitHub (**No credit card required**).
+2. Create a free project (e.g., `doks-storage`).
+3. Open **Storage** in the sidebar → Click **New bucket** → Name it `doks-vault`.
+4. Go to **Project Settings** (gear icon) → **Storage** → Scroll to **S3 Access Keys** → Click **Generate new key**.
+5. Copy the generated keys and set them in your Render dashboard under **Environment**:
+   * `S3_ENDPOINT` = `https://<PROJECT_REF>.storage.supabase.co/s3`
+   * `S3_BUCKET` = `doks-vault`
+   * `S3_ACCESS_KEY_ID` = `<YOUR_ACCESS_KEY_ID>`
+   * `S3_SECRET_ACCESS_KEY` = `<YOUR_SECRET_ACCESS_KEY>`
+   * `S3_REGION` = `<YOUR_PROJECT_REGION>` (e.g. `us-east-1`)
 
-### Option 2: Render + Cloudflare R2 (Free Hosting + S3 Snapshots)
-
-Deploy on Render's free tier and pair it with Cloudflare R2 for permanent snapshots across sleep cycles:
-
-[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy)
-
-1. Deploy the 100% free Docker service on Render via the button above.
-2. In the Render Dashboard under **Environment**, add the Cloudflare R2 / AWS S3 credentials:
-   - `R2_ENDPOINT`: `https://<ACCOUNT_ID>.r2.cloudflarestorage.com`
-   - `R2_BUCKET`: `doks-vault`
-   - `R2_ACCESS_KEY_ID`: `<your_access_key>`
-   - `R2_SECRET_ACCESS_KEY`: `<your_secret_key>`
-3. Doks automatically restores state from R2 on container startup and synchronizes periodic snapshots.
-4. **Local-First Resilience:** In addition to cloud storage, boards are backed up directly in the browser's native IndexedDB (`doks_local_vault`).
+### Step 3: Prevent Render Spindown (Optional)
+To keep your free Render instance awake 24/7 without delays:
+* Create a free account on [UptimeRobot](https://uptimerobot.com/) (**No card required**).
+* Add an **HTTP(s) Monitor** pointing to `https://your-doks.onrender.com/api/status` with a 10-minute interval.
 
 ---
 
@@ -151,7 +150,7 @@ npm run dev
 
 | Feature | Status | Description |
 |---|---|---|
-| **Local-First Architecture** | Supported | 100% offline-resilient with browser IndexedDB (`doks_local_vault`) backing and direct disk persistence to standard `.md` and `.canvas` files |
+| **Local-First Architecture** | Supported | 100% offline-resilient with browser IndexedDB (`doks_client_cache`) backing and direct disk persistence to standard `.md` and `.canvas` files |
 | **Universal Board Sharing** | Supported | Share boards instantly via `/b/:boardId` links; guests join real-time canvas with zero registration |
 | **Real-Time Canvas Collaboration** | Supported | Sticky notes, frames, note cards, connector arrows, shapes, 60 FPS live player cursors via Yjs CRDT |
 | **Obsidian-Level Notes** | Supported | CodeMirror 6, Live Preview, callouts (`[!note]`, `[!warning]`), frontmatter properties, outline panel, `[[wikilinks]]` |
@@ -179,7 +178,7 @@ Automated end-to-end and integration benchmarks measured across Vitest and Playw
 
 - **Desktop Scripts (`doks.bat` / `doks.sh`):** Previous versions used local shell launch scripts `doks.bat` and `doks.sh`. Doks has transitioned to modern, platform-agnostic cloud standards using Docker and `npm start`.
 - **Peer Discovery:** Auto-discovery works over LAN subnets via UDP beacon on port `41234`. Cross-network connections utilize universal URL sharing (`/b/:boardId`) or the Phone Bridge.
-- **Cloud Persistence & Local-First Resilience:** On ephemeral cloud tiers without mounted persistent volumes, container restarts reset in-memory server state. However, Doks automatically re-hydrates boards from collaborators' browser IndexedDB storage (`doks_local_vault`) upon reconnection.
+- **Cloud Persistence & Local-First Resilience:** On ephemeral cloud tiers without mounted persistent volumes, container restarts reset in-memory server state. However, Doks automatically re-hydrates boards from collaborators' browser IndexedDB storage (`doks_client_cache`) upon reconnection.
 
 ---
 
