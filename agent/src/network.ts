@@ -18,8 +18,15 @@ let lastRadminCheckResult = false;
  * This verifies if the actual Radmin VPN process or service is running.
  */
 export function isRadminTunnelOperational(): boolean {
-  if (process.platform !== 'win32') return true;
-  if (process.env.NODE_ENV === 'test' || process.env.VITEST || process.env.DOKS_FORCE_RADMIN) {
+  // On non-Windows platforms (Linux, macOS, Docker) or in CI/test environments,
+  // Radmin Windows daemon checks are bypassed and return true immediately without child processes.
+  if (
+    process.platform !== 'win32' ||
+    process.env.NODE_ENV === 'test' ||
+    process.env.VITEST ||
+    process.env.DOKS_FORCE_RADMIN ||
+    process.env.CI
+  ) {
     return true;
   }
   const now = Date.now();

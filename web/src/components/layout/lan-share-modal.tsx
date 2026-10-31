@@ -97,7 +97,7 @@ export function LanShareModal({ isOpen, onClose, boardId, boardTitle }: LanShare
                   {isLanOpen ? t('lan.status_open') : t('lan.status_closed')}
                 </div>
                 <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '2px' }}>
-                  {boardTitle} · {radminIp ? 'Radmin VPN' : 'LAN / Wi-Fi'}
+                  {boardTitle} · Direct Connect & Cloud Sync
                 </div>
               </div>
               <button

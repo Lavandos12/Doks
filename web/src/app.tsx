@@ -218,7 +218,7 @@ export function App() {
         />
       )}
 
-      {/* Radmin VPN / LAN Modal */}
+      {/* Direct Connect & Cloud Sync Modal */}
       {isNetworkOpen && (
         <ShareModal
           isOpen={isNetworkOpen}

@@ -16,8 +16,13 @@ export interface AgentStatusResponse {
   peerPort: number;
   webPort: number;
   effectiveIp: string;
-  radminFound: boolean;
+  /** @deprecated Lingering legacy identifier; prefer tailscaleIp, lanIp, or publicUrl */
+  radminFound?: boolean;
+  /** @deprecated Lingering legacy identifier; prefer tailscaleIp, lanIp, or publicUrl */
   radminIp?: string | null;
+  tailscaleIp?: string | null;
+  lanIp?: string | null;
+  publicUrl?: string | null;
   preferredMeshIp?: string | null;
   meshInterfaceKind?: string;
   interfaces?: any[];
@@ -31,6 +36,8 @@ export interface AgentStatusResponse {
   allowSolo?: boolean;
   bridge?: any;
 }
+
+export type StatusResponse = AgentStatusResponse;
 
 class ApiClient {
   private sessionToken: string = '';

@@ -27,17 +27,18 @@ export * from './peer/peer-service.js';
 export * from './server/http-server.js';
 
 // If run directly from CLI
+const argv1 = (typeof process !== 'undefined' && process.argv && process.argv[1])
+  ? process.argv[1].replace(/\\/g, '/')
+  : '';
+
 const isCliEntry =
-  !process.env.VITEST &&
-  ((typeof require !== 'undefined' && typeof module !== 'undefined' && require.main === module) ||
-  (typeof process !== 'undefined' && Boolean(process.argv[1]) && (
-    process.argv[1].endsWith('doks-server.cjs') ||
-    process.argv[1].endsWith('agent/dist/index.js') ||
-    process.argv[1].endsWith('agent\\dist\\index.js') ||
-    process.argv[1].endsWith('dist/index.js') ||
-    process.argv[1].endsWith('dist\\index.js') ||
-    (process.argv[1].endsWith('doks') && !process.argv[1].includes('node_modules'))
-  )));
+  argv1.endsWith('doks-server.cjs') ||
+  (!process.env.VITEST && (
+    (typeof require !== 'undefined' && typeof module !== 'undefined' && require.main === module) ||
+    argv1.endsWith('agent/dist/index.js') ||
+    argv1.endsWith('dist/index.js') ||
+    (argv1.endsWith('/doks') && !argv1.includes('node_modules'))
+  ));
 
 if (isCliEntry) {
   const args = process.argv.slice(2);

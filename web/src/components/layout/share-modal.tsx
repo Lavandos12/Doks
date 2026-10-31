@@ -368,7 +368,7 @@ export function ShareModal({ isOpen, onClose, initialTab = 'share' }: ShareModal
                 </label>
                 <input
                   type="text"
-                  placeholder="26.153.49.50:4780, 192.168.1.120:4780"
+                  placeholder="192.168.1.120:4780, 100.64.0.5:4780"
                   value={directAddress}
                   onInput={(e: any) => setDirectAddress(e.target.value)}
                   style={{

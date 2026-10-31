@@ -710,7 +710,8 @@ input:focus, select:focus, textarea:focus {
 .status-dot.amber { background-color: var(--warning); }
 .status-dot.red { background-color: var(--danger); }
 
-.radmin-badge {
+.radmin-badge,
+.network-badge {
   display: flex;
   align-items: center;
   gap: 5px;
@@ -719,19 +720,23 @@ input:focus, select:focus, textarea:focus {
   border-radius: 4px;
 }
 
-.radmin-badge.found {
+.radmin-badge.found,
+.network-badge.found {
   color: var(--success);
 }
 
-.radmin-badge.solo-mode {
+.radmin-badge.solo-mode,
+.network-badge.solo-mode {
   color: var(--accent);
 }
 
-.radmin-badge.missing {
+.radmin-badge.missing,
+.network-badge.missing {
   color: var(--warning);
 }
 
-.radmin-badge:hover {
+.radmin-badge:hover,
+.network-badge:hover {
   background-color: var(--bg-card);
 }
 
@@ -2189,7 +2194,8 @@ input:focus, select:focus, textarea:focus {
   color: var(--text-muted);
 }
 
-.radmin-screen-badge {
+.radmin-screen-badge,
+.sync-status-badge {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -2199,12 +2205,14 @@ input:focus, select:focus, textarea:focus {
   font-weight: 500;
 }
 
-.radmin-screen-badge.ok {
+.radmin-screen-badge.ok,
+.sync-status-badge.ok {
   background: rgba(52, 211, 153, 0.15);
   color: var(--success);
 }
 
-.radmin-screen-badge.warn {
+.radmin-screen-badge.warn,
+.sync-status-badge.warn {
   background: rgba(251, 191, 36, 0.15);
   color: var(--warning);
 }
