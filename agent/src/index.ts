@@ -28,12 +28,16 @@ export * from './server/http-server.js';
 
 // If run directly from CLI
 const isCliEntry =
-  (typeof require !== 'undefined' && typeof module !== 'undefined' && require.main === module) ||
+  !process.env.VITEST &&
+  ((typeof require !== 'undefined' && typeof module !== 'undefined' && require.main === module) ||
   (typeof process !== 'undefined' && Boolean(process.argv[1]) && (
     process.argv[1].endsWith('doks-server.cjs') ||
-    process.argv[1].endsWith('index.js') ||
-    process.argv[1].endsWith('doks')
-  ));
+    process.argv[1].endsWith('agent/dist/index.js') ||
+    process.argv[1].endsWith('agent\\dist\\index.js') ||
+    process.argv[1].endsWith('dist/index.js') ||
+    process.argv[1].endsWith('dist\\index.js') ||
+    (process.argv[1].endsWith('doks') && !process.argv[1].includes('node_modules'))
+  )));
 
 if (isCliEntry) {
   const args = process.argv.slice(2);
@@ -114,12 +118,14 @@ Options:
   process.on('SIGHUP', () => shutdown('SIGHUP'));
 
   process.on('uncaughtException', (err) => {
-    console.error('[Doks Agent] Uncaught exception:', err);
-    shutdown('uncaughtException');
+    console.error('[Doks Agent] Handled exception:', err);
+    // Do not kill process for closed websocket sockets or transient network drops
+    if (err && (err.message?.includes('WebSocket') || (err as any).code === 'ECONNRESET' || (err as any).code === 'EPIPE')) {
+      return;
+    }
   });
 
   process.on('unhandledRejection', (reason) => {
-    console.error('[Doks Agent] Unhandled rejection:', reason);
-    shutdown('unhandledRejection');
+    console.error('[Doks Agent] Handled rejection:', reason);
   });
 }

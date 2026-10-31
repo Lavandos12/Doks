@@ -618,13 +618,9 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
   const [shareModalTab, setShareModalTab] = useState<'share' | 'direct' | 'phone'>('share');
   const [confirmConvertModal, setConfirmConvertModal] = useState<{ isOpen: boolean; targetScope: WorkspaceScope }>({ isOpen: false, targetScope: 'team' });
 
-  // 1. Detect if the user is a remote guest whose host is currently disconnected
-  const isGuestUser = typeof window !== 'undefined' && 
-    window.location.hostname !== 'localhost' && 
-    window.location.hostname !== '127.0.0.1';
-
-  const isHostDisconnected = isGuestUser && connectionState.value !== 'connected';
-  const isBoardLockedReadOnly = Boolean(isViewerMode.value || isHostDisconnected);
+  // Detect if the board is locked in read-only mode
+  const isBoardLockedReadOnly = Boolean(isViewerMode.value);
+  const isHostDisconnected = Boolean(!isViewerMode.value && connectionState.value === 'disconnected' && nodesList.length > 0);
 
   // 2. Clone snapshot into local private vault if host is gone
   const handleSaveAsSolo = () => {
@@ -3607,7 +3603,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                 boxShadow: '0 0 8px #f59e0b'
               }}
             />
-            <span>Host is offline • Viewing cached snapshot (Read-Only)</span>
+            <span>Connection lost • Reconnecting...</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <button
@@ -3623,7 +3619,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                 cursor: 'pointer',
                 fontWeight: 500
               }}
-              title="Attempt to reconnect to host"
+              title="Reconnect to server"
             >
               Retry
             </button>

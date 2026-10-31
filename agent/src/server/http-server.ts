@@ -81,6 +81,18 @@ function resolveWebDist(custom?: string): string {
   return path.resolve(process.cwd(), 'web/dist');
 }
 
+function safeSocketSend(socket: any, data: string): boolean {
+  try {
+    if (socket && socket.readyState === 1 /* OPEN */) {
+      socket.send(data);
+      return true;
+    }
+  } catch (err) {
+    // Socket was closed or closing during send; gracefully ignore to prevent crash
+  }
+  return false;
+}
+
 export interface HttpServerOptions {
   config: AgentConfig;
   docManager: DocManager;
@@ -265,11 +277,30 @@ export class AgentHttpServer {
 
       // Check route authentication
       const urlPath = req.url.split('?')[0];
-      const isApiOrWs = urlPath.startsWith('/api') || urlPath.startsWith('/ws');
-      const isAttachmentContentGet = req.method === 'GET' && urlPath.endsWith('/content');
-      const isAttachmentGet = req.method === 'GET' && urlPath.startsWith('/api/attachments/') && !isAttachmentContentGet;
-
       const isViewer = this.isViewerSession(req);
+      const isLoopback = this.isLoopbackRequest(req);
+
+      // Public bootstrap routes accessible without prior cookies:
+      // Static UI (/ and /b/), network status, and on remote/cloud (/api/status, /api/network-status)
+      const isPublicBootstrapRoute =
+        urlPath === '/' ||
+        urlPath.startsWith('/b/') ||
+        urlPath === '/api/network-status' ||
+        urlPath === '/api/network' ||
+        urlPath.startsWith('/assets/') ||
+        urlPath === '/favicon.svg' ||
+        (!isLoopback && urlPath === '/api/status');
+
+      // Auto-issue session cookie on any web visit if not in viewer mode
+      if (!isViewer && !req.cookies?.doks_session && !req.cookies?.doks_peer) {
+        const tokenToIssue = isLoopback ? this.sessionToken : this.peerSessionToken;
+        const cookieName = isLoopback ? 'doks_session' : 'doks_peer';
+        reply.setCookie(cookieName, tokenToIssue, {
+          path: '/',
+          httpOnly: false, // allow JS to read token
+          sameSite: 'lax'
+        });
+      }
 
       // If client is in Bridge Viewer Mode:
       if (isViewer) {
@@ -280,7 +311,11 @@ export class AgentHttpServer {
         }
       }
 
-      if (isApiOrWs && !isAttachmentGet) {
+      const isApiOrWs = urlPath.startsWith('/api') || urlPath.startsWith('/ws');
+      const isAttachmentContentGet = req.method === 'GET' && urlPath.endsWith('/content');
+      const isAttachmentGet = req.method === 'GET' && urlPath.startsWith('/api/attachments/') && !isAttachmentContentGet;
+
+      if (isApiOrWs && !isAttachmentGet && !isPublicBootstrapRoute) {
         const isBridgeViewerAllowed =
           isViewer &&
           req.method === 'GET' &&
@@ -290,23 +325,6 @@ export class AgentHttpServer {
         if (!this.isValidSession(req) && !isBridgeViewerAllowed) {
           reply.code(401).send({ error: 'Unauthorized: Valid doks_session or doks_peer cookie required' });
           return;
-        }
-      } else {
-        // Issue session cookie for static routes if missing and not in viewer mode
-        if (!isViewer) {
-          if (this.isLoopbackRequest(req) && !req.cookies?.doks_session) {
-            reply.setCookie('doks_session', this.sessionToken, {
-              path: '/',
-              httpOnly: true,
-              sameSite: 'lax'
-            });
-          } else if (this.isPrivateNetworkRequest(req) && !req.cookies?.doks_peer) {
-            reply.setCookie('doks_peer', this.peerSessionToken, {
-              path: '/',
-              httpOnly: true,
-              sameSite: 'lax'
-            });
-          }
         }
       }
     });
@@ -450,11 +468,11 @@ export class AgentHttpServer {
       });
 
       let token: string | undefined = undefined;
-      if (isHost) {
-        token = this.sessionToken;
-      } else if (isPeer) {
-        token = this.peerSessionToken;
+      if (!isViewer) {
+        token = isHost ? this.sessionToken : this.peerSessionToken;
       }
+      const effectiveHost = isHost;
+      const effectivePeer = isPeer || (!isViewer && !isHost);
 
       return {
         agentId: this.config.agentId,
@@ -475,8 +493,8 @@ export class AgentHttpServer {
         connectedCount: this.peerService.getConnectedCount(),
         discoveredLanRooms: this.peerService.getDiscoveredLanRooms(),
         token,
-        isHost,
-        isPeer,
+        isHost: effectiveHost,
+        isPeer: effectivePeer,
         // B17: Do not expose raw teamKey without session authentication (host only)
         teamKey: isHost ? this.config.teamKey : undefined,
         keyFingerprint:
@@ -1549,7 +1567,8 @@ export class AgentHttpServer {
 
           if (isDocSubscribed(currentClient, docName)) {
             const syncMsg = this.docManager.createUpdateSyncMessage(update);
-            socket.send(
+            safeSocketSend(
+              socket,
               encodeMessage({
                 type: 'sync',
                 docName,
@@ -1563,7 +1582,8 @@ export class AgentHttpServer {
         const peerAwarenessListener = ({ docName, data }: { docName: string; data: Uint8Array }) => {
           if (queryScope === 'solo') return;
           if (socket.readyState === socket.OPEN && isDocSubscribed(currentClient, docName)) {
-            socket.send(
+            safeSocketSend(
+              socket,
               encodeMessage({
                 type: 'awareness',
                 docName,
@@ -1603,7 +1623,8 @@ export class AgentHttpServer {
                 isViewer ? 'viewer' : clientId
               );
               if (response) {
-                socket.send(
+                safeSocketSend(
+                  socket,
                   encodeMessage({
                     type: 'sync',
                     docName: msg.docName,
@@ -1621,7 +1642,8 @@ export class AgentHttpServer {
               for (const otherClient of activeClients) {
                 if (otherClient.socket !== socket && otherClient.socket.readyState === 1 /* OPEN */) {
                   if (isDocSubscribed(otherClient, msg.docName)) {
-                    otherClient.socket.send(
+                    safeSocketSend(
+                      otherClient.socket,
                       encodeMessage({
                         type: 'awareness',
                         docName: msg.docName,
@@ -1652,7 +1674,7 @@ export class AgentHttpServer {
             } else if (msg.type === 'unsubscribe') {
               currentClient.subscribedDocs.delete(msg.docName);
             } else if (msg.type === 'ping') {
-              socket.send(encodeMessage({ type: 'pong', timestamp: Date.now() }));
+              safeSocketSend(socket, encodeMessage({ type: 'pong', timestamp: Date.now() }));
             }
           } catch (err) {
             console.error('[HttpServer] WS error:', err);

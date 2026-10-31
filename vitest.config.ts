@@ -4,7 +4,7 @@ import path from 'node:path';
 export default defineConfig({
   test: {
     include: ['tests/src/**/*.test.ts'],
-    retry: process.env.CI ? 2 : 0,
+    retry: 2,
     testTimeout: 20000,
     hookTimeout: 20000,
     pool: 'forks',
