@@ -1715,12 +1715,12 @@ export class AgentHttpServer {
     // Fallback for SPA routing if dist exists
     if (fs.existsSync(this.webDistPath)) {
       this.fastify.setNotFoundHandler((req, reply) => {
-        const url = req.raw.url || req.url || '';
-        if (url.startsWith('/api') || isScannerProbe(url)) {
+        const url = req.raw.url || '';
+        if (isScannerProbe(url) || url.startsWith('/api')) {
           reply.code(404).send({ error: 'Not found' });
-        } else {
-          reply.sendFile('index.html');
+          return;
         }
+        reply.sendFile('index.html');
       });
     }
   }
