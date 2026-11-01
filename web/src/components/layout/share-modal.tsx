@@ -39,10 +39,13 @@ export function ShareModal({ isOpen, onClose, initialTab = 'share' }: ShareModal
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const phoneShareLink = `${shareLink}${shareLink.includes('?') ? '&' : '?'}bridge=1`;
+
   // Generate vector SVG QR code path for instant rendering
   let qrSvg: { size: number; path: string } | null = null;
   try {
-    qrSvg = renderQrSvgPath(generateQrMatrix(shareLink), 4);
+    const targetLink = activeTab === 'phone' ? phoneShareLink : shareLink;
+    qrSvg = renderQrSvgPath(generateQrMatrix(targetLink), 4);
   } catch {}
 
   return (
@@ -240,7 +243,7 @@ export function ShareModal({ isOpen, onClose, initialTab = 'share' }: ShareModal
               </div>
 
               <div style={{ fontSize: '12px', fontFamily: 'monospace', color: '#a78bfa', wordBreak: 'break-all', maxWidth: '420px' }}>
-                {shareLink}
+                {phoneShareLink}
               </div>
 
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: '#34d399', fontWeight: 500 }}>

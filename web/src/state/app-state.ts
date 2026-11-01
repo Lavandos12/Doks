@@ -54,10 +54,22 @@ const isCloudHost = typeof window !== 'undefined' && window.location.hostname !=
 const savedScope = typeof localStorage !== 'undefined' ? (localStorage.getItem('doks_scope') as WorkspaceScope) : null;
 export const currentScope = signal<WorkspaceScope>(savedScope || (isCloudHost ? 'team' : 'solo'));
 
-const initialViewer = typeof window !== 'undefined' && (
+export function isMobilePhoneDevice(): boolean {
+  if (typeof window === 'undefined') return false;
+  const ua = navigator.userAgent || navigator.vendor || (window as any).opera || '';
+  const isMobileUA = /Android|webOS|iPhone|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua);
+  const isTouch = 'ontouchstart' in window || (navigator.maxTouchPoints && navigator.maxTouchPoints > 0);
+  const isSmallScreen = window.innerWidth <= 768 || (typeof window.matchMedia === 'function' && window.matchMedia('(max-width: 768px)').matches);
+  return isMobileUA || (Boolean(isTouch) && isSmallScreen);
+}
+
+const hasViewerParam = typeof window !== 'undefined' && (
   window.location.search.includes('b=') ||
-  window.location.search.includes('bridge=')
+  window.location.search.includes('bridge=') ||
+  window.location.search.includes('viewer=')
 );
+
+const initialViewer = isMobilePhoneDevice() || hasViewerParam;
 export const isViewerMode = signal<boolean>(initialViewer);
 export const isViewerAllowSolo = signal<boolean>(false);
 
@@ -66,9 +78,17 @@ export const appState = computed(() => ({
   viewerAllowSolo: isViewerAllowSolo.value || Boolean(agentStatus.value?.allowSolo)
 }));
 
+let userDismissedViewer = false;
+
 export function setViewerMode(enabled: boolean, allowSolo = false): void {
   isViewerMode.value = enabled;
   isViewerAllowSolo.value = allowSolo;
+  if (!enabled) {
+    userDismissedViewer = true;
+    if (agentStatus.value?.viewerMode) {
+      agentStatus.value = { ...agentStatus.value, viewerMode: false };
+    }
+  }
   if (enabled && allowSolo) {
     yjsClient.subscribeDoc(getScopedIndexDocName('solo'));
     yjsClient.subscribeDoc(getScopedIndexDocName('team'));
@@ -85,6 +105,7 @@ export function initAppState(): void {
 
 if (typeof window !== 'undefined') {
   agentStatus.subscribe((st) => {
+    if (userDismissedViewer) return;
     if (st?.viewerMode || initialViewer) {
       const allowSolo = Boolean(st?.allowSolo);
       setViewerMode(true, allowSolo);

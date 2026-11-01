@@ -15,6 +15,7 @@ import {
   isImportWizardOpen,
   agentStatus,
   isViewerMode,
+  setViewerMode,
   selectBoardWithScope,
   TEAM_MAIN_BOARD_ID,
   SOLO_MAIN_BOARD_ID,
@@ -161,20 +162,36 @@ export function App() {
             zIndex: 9999,
             background: 'rgba(99, 102, 241, 0.95)',
             color: '#ffffff',
-            padding: '5px 12px',
-            fontSize: 12,
+            padding: '6px 14px',
+            fontSize: '12px',
             fontWeight: 600,
             textAlign: 'center',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            gap: 8,
+            gap: '10px',
             backdropFilter: 'blur(8px)',
             boxShadow: '0 2px 10px rgba(0, 0, 0, 0.3)'
           }}
         >
-          <Icon name="lock" size={14} />
-          <span>{t('topbar.viewer_banner')}</span>
+          <Icon name="smartphone" size={14} />
+          <span>Mobile Viewer Mode (Read-Only)</span>
+          <button
+            type="button"
+            onClick={() => setViewerMode(false)}
+            style={{
+              background: 'rgba(255, 255, 255, 0.2)',
+              border: '1px solid rgba(255, 255, 255, 0.4)',
+              color: '#ffffff',
+              borderRadius: '6px',
+              padding: '2px 8px',
+              fontSize: '11px',
+              cursor: 'pointer',
+              marginLeft: '8px'
+            }}
+          >
+            Switch to Editor
+          </button>
         </div>
       )}
 

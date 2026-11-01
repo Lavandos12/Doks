@@ -1987,13 +1987,14 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
   };
 
   // Kanban helpers
-  const parseKanbanCards = (text: string): string[] => {
-    if (!text) return [t('widget.new_task'), t('widget.in_progress')];
+  const parseKanbanCards = (text: string | undefined): string[] => {
+    if (text === undefined) return [t('widget.new_task'), t('widget.in_progress')];
+    if (!text) return [];
     return text.split('\n').map((l) => l.trim()).filter((l) => l.length > 0);
   };
 
   const handleAddKanbanCard = (node: BoardNodeData) => {
-    const cards = parseKanbanCards(node.description || '');
+    const cards = parseKanbanCards(node.description);
     cards.push(t('widget.new_card'));
     const map = yNodes.get(node.id);
     if (map) {
@@ -2006,7 +2007,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
   };
 
   const handleUpdateKanbanCard = (node: BoardNodeData, idx: number, val: string) => {
-    const cards = parseKanbanCards(node.description || '');
+    const cards = parseKanbanCards(node.description);
     if (cards[idx] !== undefined) {
       cards[idx] = val;
       const map = yNodes.get(node.id);
@@ -2015,7 +2016,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
   };
 
   const handleDeleteKanbanCard = (node: BoardNodeData, idx: number) => {
-    const cards = parseKanbanCards(node.description || '');
+    const cards = parseKanbanCards(node.description);
     cards.splice(idx, 1);
     const map = yNodes.get(node.id);
     if (map) setNodeProperties(map, { description: cards.join('\n') });
@@ -5558,7 +5559,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                         <input
                           type="text"
                           class="checklist-title-input"
-                          value={node.fileName || t('widget.checklist')}
+                          value={node.fileName ?? ''}
                           placeholder={t('widget.checklist_title')}
                           readOnly={isViewerMode.value}
                           onMouseDown={(e) => e.stopPropagation()}
@@ -5680,7 +5681,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                 })()
               ) : node.type === 'kanban' ? (
                 (() => {
-                  const cards = parseKanbanCards(node.description || '');
+                  const cards = parseKanbanCards(node.description);
                   return (
                     <div
                       class="node-kanban-column"
@@ -5702,7 +5703,8 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                             type="text"
                             class="kanban-title"
                             style={{ background: 'transparent', border: 'none', outline: 'none', width: '100%' }}
-                            value={node.text || t('widget.todo')}
+                            value={node.text ?? ''}
+                            placeholder={t('widget.todo')}
                             readOnly={isViewerMode.value}
                             onMouseDown={(e) => e.stopPropagation()}
                             onInput={(e) => {
@@ -5881,7 +5883,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                         </div>
                         <input
                           class="chart-title-input"
-                          value={node.text || t('widget.chart')}
+                          value={node.text ?? ''}
                           placeholder={t('widget.chart')}
                           readOnly={isViewerMode.value}
                           onMouseDown={(e) => e.stopPropagation()}
@@ -5994,7 +5996,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                             <div style={{ width: '100%', height: '32px', display: 'flex', borderRadius: '6px', overflow: 'hidden', boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.4)' }}>
                               {data.map((seg) => {
                                 const val = Math.max(0, Number(seg.value) || 0);
-                                const pct = Math.round((val / total) * 100);
+                                const pct = total > 0 ? Math.round((val / total) * 100) : 0;
                                 return (
                                   <div
                                     key={seg.id}
@@ -6021,7 +6023,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                           <div style={{ width: '100%', height: '100%', minHeight: '110px', flex: 1, display: 'flex', alignItems: 'flex-end', justifyContent: 'center', gap: '14px', padding: '0 12px 6px' }}>
                             {data.map((seg) => {
                               const val = Math.max(0, Number(seg.value) || 0);
-                              const pct = Math.round((val / total) * 100);
+                              const pct = total > 0 ? Math.round((val / total) * 100) : 0;
                               return (
                                 <div key={seg.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flex: 1, maxWidth: '64px', height: '100%', justifyContent: 'flex-end', gap: '4px' }}>
                                   <span style={{ fontSize: '10px', color: '#94a3b8', fontWeight: 600 }}>{pct}%</span>
@@ -6037,7 +6039,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                       <div class="chart-data-editor" onMouseDown={(e) => e.stopPropagation()}>
                         {data.map((seg) => {
                           const val = Math.max(0, Number(seg.value) || 0);
-                          const pct = Math.round((val / total) * 100);
+                          const pct = total > 0 ? Math.round((val / total) * 100) : 0;
                           return (
                             <div key={seg.id} class="chart-data-row">
                               <div
