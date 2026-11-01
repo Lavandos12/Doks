@@ -2550,12 +2550,18 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
               newW = Math.max(80, startW - dx);
               newX = startXPos + (startW - newW);
             }
-            if (handle.includes('s')) {
-              newH = Math.max(48, startH + dy);
-            }
-            if (handle.includes('n')) {
-              newH = Math.max(48, startH - dy);
-              newY = startYPos + (startH - newH);
+            if (nodeType === 'table') {
+              // Tables hug their rows: vertical resizing is driven by + Row / - Row
+              const table = parseTableData((nodeMap.get('text') as string) || '');
+              newH = Math.max(120, 44 + table.length * 38);
+            } else {
+              if (handle.includes('s')) {
+                newH = Math.max(48, startH + dy);
+              }
+              if (handle.includes('n')) {
+                newH = Math.max(48, startH - dy);
+                newY = startYPos + (startH - newH);
+              }
             }
           }
 
@@ -4032,10 +4038,11 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
               class={`miro-dock-btn ${activeTool === 'line' ? 'active' : ''}`}
               data-tool="line"
               onClick={() => {
+                activeToolRef.current = 'line';
                 setActiveTool('line');
                 setActiveFlyout('none');
               }}
-              title="Straight Line / Divider (L)"
+              title="Straight Line (L)"
             >
               <Icon name="line" size={20} />
             </button>
@@ -4048,10 +4055,11 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
               data-tool="draw"
               style={{ position: 'relative' }}
               onClick={() => {
+                activeToolRef.current = 'draw';
                 setActiveTool('draw');
                 setActiveFlyout(activeFlyout === 'draw' ? 'none' : 'draw');
               }}
-              title={t('dock.draw')}
+              title={t('dock.pen')}
             >
               <Icon name={activeTool === 'eraser' ? 'eraser' : 'pen'} size={20} />
               {activeTool !== 'eraser' && (
@@ -5606,8 +5614,8 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                       <div
                         class="node-table-grid scrollable-card-content"
                         style={{
-                          gridTemplateColumns: `repeat(${table[0]?.length || 3}, minmax(80px, 1fr))`,
-                          gridTemplateRows: `repeat(${table.length}, minmax(36px, 1fr))`
+                          gridTemplateColumns: `repeat(${table[0]?.length || 3}, minmax(100px, 1fr))`,
+                          gridAutoRows: '38px'
                         }}
                         onWheel={(e) => { if (!e.ctrlKey && !e.metaKey) e.stopPropagation(); }}
                       >
