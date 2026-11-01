@@ -1730,6 +1730,18 @@ export class AgentHttpServer {
                   })
                 );
               }
+              // If client sent SyncStep1 (0), send server's SyncStep1 back to request client's updates
+              if (data[0] === 0) {
+                const serverStep1 = this.docManager.createSyncStep1Message(msg.docName);
+                safeSocketSend(
+                  socket,
+                  encodeMessage({
+                    type: 'sync',
+                    docName: msg.docName,
+                    data: uint8ArrayToBase64(serverStep1)
+                  })
+                );
+              }
             } else if (msg.type === 'awareness') {
               if (isViewer) {
                 // Ignore awareness writes from viewer
@@ -1768,6 +1780,16 @@ export class AgentHttpServer {
               // B21: selective subscription
               if (msg.docName) {
                 currentClient.subscribedDocs.add(msg.docName);
+                // Send server's SyncStep1 to prompt client to upload any cached/offline data
+                const serverStep1 = this.docManager.createSyncStep1Message(msg.docName);
+                safeSocketSend(
+                  socket,
+                  encodeMessage({
+                    type: 'sync',
+                    docName: msg.docName,
+                    data: uint8ArrayToBase64(serverStep1)
+                  })
+                );
               }
             } else if (msg.type === 'unsubscribe') {
               currentClient.subscribedDocs.delete(msg.docName);

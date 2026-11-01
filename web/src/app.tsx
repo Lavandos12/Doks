@@ -18,7 +18,8 @@ import {
   selectBoardWithScope,
   TEAM_MAIN_BOARD_ID,
   SOLO_MAIN_BOARD_ID,
-  soloMaps
+  soloMaps,
+  currentScope
 } from './state/app-state.js';
 import { PasswordModal } from './components/layout/password-modal.js';
 import { api } from './api/client.js';
@@ -80,10 +81,23 @@ export function App() {
   const splitTab = isSplitView.value ? openTabs.value.find((t) => t.id === splitTabId.value) : null;
   const isSplitMode = Boolean(isSplitView.value && splitTab);
 
-  // Fallback board ID if no tab is currently selected
-  const activeBoardId = activeTab?.type === 'board'
-    ? activeTab.id
-    : (allBoards.value.find((b) => !b.deleted)?.id || boards.value.find((b) => !b.deleted)?.id || TEAM_MAIN_BOARD_ID);
+  // Fallback board ID: ensure activeBoardId actually exists in allBoards and is not deleted
+  const activeBoardId = (() => {
+    if (activeTab?.type === 'board') {
+      const exists = allBoards.value.some((b) => b.id === activeTab.id && !b.deleted);
+      if (exists) return activeTab.id;
+    }
+    const isCloud = typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
+    const canonicalId = isCloud ? TEAM_MAIN_BOARD_ID : SOLO_MAIN_BOARD_ID;
+    const matchingCanonical = allBoards.value.find((b) => b.id === canonicalId && !b.deleted);
+    if (matchingCanonical) return matchingCanonical.id;
+
+    const activeInScope = allBoards.value.find((b) => (b.scope || 'solo') === currentScope.value && !b.deleted);
+    if (activeInScope) return activeInScope.id;
+
+    const anyValid = allBoards.value.find((b) => !b.deleted);
+    return anyValid?.id || canonicalId;
+  })();
 
   const currentBoard = allBoards.value.find((b) => b.id === activeBoardId) || boards.value.find((b) => b.id === activeBoardId);
   const openBoardTitle = (currentBoard?.title || (activeTab?.type === 'board' ? activeTab.title : '') || '').trim();
