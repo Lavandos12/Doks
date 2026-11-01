@@ -53,7 +53,9 @@ export function SettingsModal({
   const handleSaveProfile = () => {
     const trimmed = name.trim() || t('settings.user_default');
     localStorage.setItem('doks_member_name', trimmed);
+    localStorage.setItem('doks_display_name', trimmed);
     localStorage.setItem('doks_member_color', color);
+    localStorage.setItem('doks_cursor_color', color);
     if (agentStatus.value) {
       agentStatus.value = {
         ...agentStatus.value,
@@ -61,6 +63,7 @@ export function SettingsModal({
         memberColor: color
       };
     }
+    window.dispatchEvent(new Event('doks_profile_updated'));
     showToast(t('settings.save_profile'));
   };
 

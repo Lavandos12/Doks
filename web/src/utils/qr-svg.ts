@@ -206,7 +206,8 @@ export function generateQrMatrix(text: string): boolean[][] {
 
   // Format bits for ECC Level L (01) + Mask 0 (000) -> 0x77c4 (30660)
   const formatBits = 0x77c4;
-  const getFmtBit = (i: number) => ((formatBits >>> i) & 1) === 1;
+  // ISO/IEC 18004 Section 6.9: Format info is placed MSB first (bit 14 down to bit 0)
+  const getFmtBit = (i: number) => ((formatBits >>> (14 - i)) & 1) === 1;
 
   for (let i = 0; i <= 5; i++) modules[8][i] = getFmtBit(i);
   modules[8][7] = getFmtBit(6);
@@ -220,7 +221,7 @@ export function generateQrMatrix(text: string): boolean[][] {
   return modules;
 }
 
-export function renderQrSvgPath(matrix: boolean[][], margin = 3): { size: number; path: string } {
+export function renderQrSvgPath(matrix: boolean[][], margin = 4): { size: number; path: string } {
   const n = matrix.length;
   const total = n + margin * 2;
   const parts: string[] = [];

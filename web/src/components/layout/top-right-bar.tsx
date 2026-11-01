@@ -1,4 +1,5 @@
 import { h, VNode } from 'preact';
+import { useState, useEffect } from 'preact/hooks';
 import {
   agentStatus,
   isViewerMode,
@@ -32,6 +33,44 @@ export function TopRightBar({
   const status = agentStatus.value;
   const isViewer = Boolean(isViewerMode.value || status?.viewerMode);
   const deletedCount = allTrashNotes.value.length + allTrashBoards.value.length;
+
+  const [showQuickProfile, setShowQuickProfile] = useState(false);
+  const [profileName, setProfileName] = useState(() =>
+    localStorage.getItem('doks_display_name') || localStorage.getItem('doks_member_name') || 'You'
+  );
+  const [profileColor, setProfileColor] = useState(() =>
+    localStorage.getItem('doks_cursor_color') || localStorage.getItem('doks_member_color') || '#8b5cf6'
+  );
+
+  useEffect(() => {
+    const handleProfileUpdated = () => {
+      const updatedName = localStorage.getItem('doks_display_name') || localStorage.getItem('doks_member_name') || 'You';
+      const updatedColor = localStorage.getItem('doks_cursor_color') || localStorage.getItem('doks_member_color') || '#8b5cf6';
+      setProfileName(updatedName);
+      setProfileColor(updatedColor);
+    };
+    window.addEventListener('doks_profile_updated', handleProfileUpdated);
+    return () => window.removeEventListener('doks_profile_updated', handleProfileUpdated);
+  }, []);
+
+  const handleSaveQuickProfile = (newName: string, newColor: string) => {
+    const trimmed = newName.trim() || 'Collaborator';
+    localStorage.setItem('doks_display_name', trimmed);
+    localStorage.setItem('doks_member_name', trimmed);
+    localStorage.setItem('doks_cursor_color', newColor);
+    localStorage.setItem('doks_member_color', newColor);
+    if (agentStatus.value) {
+      agentStatus.value = {
+        ...agentStatus.value,
+        memberName: trimmed,
+        memberColor: newColor
+      };
+    }
+    setProfileName(trimmed);
+    setProfileColor(newColor);
+    setShowQuickProfile(false);
+    window.dispatchEvent(new Event('doks_profile_updated'));
+  };
 
   return (
     <div
@@ -118,7 +157,90 @@ export function TopRightBar({
             </button>
           )}
 
-          {/* 5. [ Settings ] */}
+          {/* 5. [ Quick Collaborator Profile Pill ] */}
+          <div style={{ position: 'relative' }}>
+            <button
+              class="miro-action-pill"
+              onClick={() => setShowQuickProfile(!showQuickProfile)}
+              title="Customize Your Name & Color"
+              style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '5px 10px' }}
+            >
+              <span style={{ width: '10px', height: '10px', borderRadius: '50%', backgroundColor: profileColor }} />
+              <span style={{ maxWidth: '85px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: '12px' }}>
+                {profileName}
+              </span>
+            </button>
+
+            {showQuickProfile && (
+              <div
+                class="liquid-glass-surface"
+                style={{
+                  position: 'absolute',
+                  top: '38px',
+                  right: '0',
+                  width: '210px',
+                  padding: '12px',
+                  borderRadius: '12px',
+                  boxShadow: '0 10px 25px rgba(0, 0, 0, 0.5)',
+                  border: '1px solid rgba(139, 92, 246, 0.3)',
+                  zIndex: 3100,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '10px'
+                }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div style={{ fontSize: '11px', fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase' }}>
+                  Your Signature
+                </div>
+                <input
+                  type="text"
+                  value={profileName}
+                  onInput={(e) => setProfileName((e.target as HTMLInputElement).value)}
+                  placeholder="Your Name"
+                  style={{
+                    padding: '6px 10px',
+                    background: 'rgba(0, 0, 0, 0.4)',
+                    border: '1px solid rgba(255, 255, 255, 0.15)',
+                    borderRadius: '6px',
+                    color: '#fff',
+                    fontSize: '12px',
+                    outline: 'none'
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleSaveQuickProfile(profileName, profileColor);
+                  }}
+                />
+                <div style={{ display: 'flex', gap: '6px', justifyContent: 'center' }}>
+                  {['#8b5cf6', '#ec4899', '#3b82f6', '#10b981', '#f59e0b', '#06b6d4'].map((c) => (
+                    <button
+                      key={c}
+                      type="button"
+                      onClick={() => setProfileColor(c)}
+                      style={{
+                        width: '20px',
+                        height: '20px',
+                        borderRadius: '50%',
+                        backgroundColor: c,
+                        border: profileColor === c ? '2px solid #fff' : 'none',
+                        cursor: 'pointer'
+                      }}
+                    />
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  class="btn-primary"
+                  style={{ padding: '6px', fontSize: '12px', borderRadius: '6px', fontWeight: 600 }}
+                  onClick={() => handleSaveQuickProfile(profileName, profileColor)}
+                >
+                  Save
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* 6. [ Settings ] */}
           <button
             class="miro-action-pill settings-trigger-btn"
             onClick={onOpenSettings}

@@ -2039,7 +2039,10 @@ input:focus, select:focus, textarea:focus {
   position: absolute;
   pointer-events: none;
   z-index: 999;
-  transition: left 0.05s linear, top 0.05s linear;
+  top: 0;
+  left: 0;
+  will-change: transform;
+  transition: transform 0.08s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .remote-cursor-badge {

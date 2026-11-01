@@ -126,8 +126,8 @@ interface RemoteCursor {
 }
 
 const getLocalCollaborator = () => {
-  if (typeof window === 'undefined') return { name: 'User', color: '#ec4899' };
-  let name = localStorage.getItem('doks_display_name');
+  if (typeof window === 'undefined') return { name: 'User', color: '#8b5cf6' };
+  let name = localStorage.getItem('doks_display_name') || localStorage.getItem('doks_member_name');
   if (!name || name === 'You') {
     let guestId = sessionStorage.getItem('doks_guest_id');
     if (!guestId) {
@@ -136,9 +136,9 @@ const getLocalCollaborator = () => {
     }
     name = `Collaborator #${guestId}`;
   }
-  let color = localStorage.getItem('doks_cursor_color');
+  let color = localStorage.getItem('doks_cursor_color') || localStorage.getItem('doks_member_color');
   if (!color) {
-    const PALETTE = ['#ec4899', '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#06b6d4', '#f97316'];
+    const PALETTE = ['#8b5cf6', '#ec4899', '#3b82f6', '#10b981', '#f59e0b', '#06b6d4', '#f97316'];
     let savedColor = sessionStorage.getItem('doks_guest_color');
     if (!savedColor) {
       savedColor = PALETTE[Math.floor(Math.random() * PALETTE.length)];
@@ -147,7 +147,7 @@ const getLocalCollaborator = () => {
     color = savedColor;
   }
   return { name, color };
-}
+};
 
 interface ContextMenuState {
   x: number;
@@ -614,6 +614,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
 
   // Exact cursor canvas coordinates for paste
   const lastMouseCanvasPosRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const lastCursorBroadcastRef = useRef<number>(0);
   const lastPasteTimeRef = useRef<number>(0);
   const lastInternalCopyTimeRef = useRef<number>(0);
   const pendingConnectFromRef = useRef<{ fromNodeId: string; fromSide?: PortSide } | null>(null);
@@ -2381,13 +2382,17 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
       }
       const pos = screenToCanvas(e.clientX, e.clientY);
       lastMouseCanvasPosRef.current = pos;
-      const collaborator = getLocalCollaborator();
-      awareness.setLocalStateField('cursor', {
-        x: pos.x,
-        y: pos.y,
-        name: collaborator.name,
-        color: collaborator.color
-      });
+      const now = performance.now();
+      if (now - lastCursorBroadcastRef.current > 32) {
+        lastCursorBroadcastRef.current = now;
+        const collaborator = getLocalCollaborator();
+        awareness.setLocalStateField('cursor', {
+          x: Math.round(pos.x),
+          y: Math.round(pos.y),
+          name: collaborator.name,
+          color: collaborator.color
+        });
+      }
 
       // Panning (immediate 1:1 direct pointer tracking)
       if (panState) {
@@ -6321,8 +6326,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
             key={c.clientId}
             class="remote-cursor-pointer"
             style={{
-              left: `${c.x}px`,
-              top: `${c.y}px`
+              transform: `translate3d(${c.x}px, ${c.y}px, 0)`
             }}
           >
             <svg width="20" height="20" viewBox="0 0 24 24" fill={c.color} stroke="#ffffff" stroke-width="1.5">
