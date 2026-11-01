@@ -307,31 +307,50 @@ export class AgentHttpServer {
         });
       }
 
+      // Check query parameter for magic link password ?pwd=... or ?key=...
+      const configuredPassword = process.env.DOKS_PASSWORD || process.env.TEAM_PASSWORD || '';
+      const queryPwd = (req.query as any)?.pwd || (req.query as any)?.key;
+      if (configuredPassword && queryPwd && typeof queryPwd === 'string' && queryPwd === configuredPassword) {
+        reply.setCookie('doks_session', this.sessionToken, {
+          path: '/',
+          httpOnly: false,
+          sameSite: 'lax'
+        });
+        reply.setCookie('doks_peer', this.peerSessionToken, {
+          path: '/',
+          httpOnly: false,
+          sameSite: 'lax'
+        });
+      }
+
       // Check route authentication
       const urlPath = req.url.split('?')[0];
       const isViewer = this.isViewerSession(req);
       const isLoopback = this.isLoopbackRequest(req);
 
       // Public bootstrap routes accessible without prior cookies:
-      // Static UI (/ and /b/), network status, and on remote/cloud (/api/status, /api/network-status)
+      // Static UI (/ and /b/), network status, auth login, and on remote/cloud (/api/status, /api/network-status)
       const isPublicBootstrapRoute =
         urlPath === '/' ||
         urlPath.startsWith('/b/') ||
         urlPath === '/api/status' ||
+        urlPath === '/api/auth/login' ||
         urlPath === '/api/network-status' ||
         urlPath === '/api/network' ||
         urlPath.startsWith('/assets/') ||
         urlPath === '/favicon.svg';
 
-      // Auto-issue session cookie on any web visit if not in viewer mode
+      // Auto-issue session cookie on any web visit if not in viewer mode and no team password configured
       if (!isViewer && !req.cookies?.doks_session && !req.cookies?.doks_peer) {
-        const tokenToIssue = isLoopback ? this.sessionToken : this.peerSessionToken;
-        const cookieName = isLoopback ? 'doks_session' : 'doks_peer';
-        reply.setCookie(cookieName, tokenToIssue, {
-          path: '/',
-          httpOnly: false, // allow JS to read token
-          sameSite: 'lax'
-        });
+        if (!configuredPassword) {
+          const tokenToIssue = isLoopback ? this.sessionToken : this.peerSessionToken;
+          const cookieName = isLoopback ? 'doks_session' : 'doks_peer';
+          reply.setCookie(cookieName, tokenToIssue, {
+            path: '/',
+            httpOnly: false, // allow JS to read token
+            sameSite: 'lax'
+          });
+        }
       }
 
       // If client is in Bridge Viewer Mode:
@@ -346,6 +365,13 @@ export class AgentHttpServer {
       const isApiOrWs = urlPath.startsWith('/api') || urlPath.startsWith('/ws');
       const isAttachmentContentGet = req.method === 'GET' && urlPath.endsWith('/content');
       const isAttachmentGet = req.method === 'GET' && urlPath.startsWith('/api/attachments/') && !isAttachmentContentGet;
+
+      if (configuredPassword && isApiOrWs && !isPublicBootstrapRoute) {
+        if (!this.isValidSession(req)) {
+          reply.code(401).send({ error: 'Password required', passwordRequired: true });
+          return;
+        }
+      }
 
       const isWs = urlPath === '/ws' || urlPath.startsWith('/ws');
       if (isApiOrWs && !isAttachmentGet && !isPublicBootstrapRoute && !isWs) {
@@ -485,6 +511,22 @@ export class AgentHttpServer {
   }
 
   private setupRoutes(): void {
+    // POST /api/auth/login: Team password authentication
+    this.fastify.post('/api/auth/login', async (req, reply) => {
+      const configuredPassword = process.env.DOKS_PASSWORD || process.env.TEAM_PASSWORD || '';
+      if (!configuredPassword) {
+        return { ok: true, token: this.sessionToken };
+      }
+      const body = req.body as any;
+      const candidate = body?.password || '';
+      if (candidate === configuredPassword) {
+        reply.setCookie('doks_session', this.sessionToken, { path: '/', httpOnly: false, sameSite: 'lax' });
+        reply.setCookie('doks_peer', this.peerSessionToken, { path: '/', httpOnly: false, sameSite: 'lax' });
+        return { ok: true, token: this.sessionToken };
+      }
+      reply.code(403).send({ ok: false, error: 'Invalid team password' });
+    });
+
     // API: Config & Peer status
     this.fastify.get('/api/status', async (req) => {
       const radminIp = detectRadminIp();
@@ -546,7 +588,9 @@ export class AgentHttpServer {
         inviteUri: networkOverview.inviteUri,
         viewerMode: isViewer,
         allowSolo: isViewer ? this.bridgeService.isSoloAllowed() : isHost,
-        bridge: this.bridgeService.getStatus()
+        bridge: this.bridgeService.getStatus(),
+        passwordRequired: Boolean(process.env.DOKS_PASSWORD || process.env.TEAM_PASSWORD),
+        authenticated: !(process.env.DOKS_PASSWORD || process.env.TEAM_PASSWORD) || this.isValidSession(req)
       };
     });
 

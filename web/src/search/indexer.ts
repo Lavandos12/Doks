@@ -66,7 +66,7 @@ export class NotesSearchIndex {
       return {
         id: r.id,
         type: (stored?.type || r.type || 'note') as 'note' | 'board',
-        title: (stored?.title || r.title || 'Документ') as string,
+        title: (stored?.title || r.title || 'Document') as string,
         snippet,
         score: r.score
       };

@@ -216,26 +216,29 @@ export const soloMaps = getIndexMaps(soloIndexDoc);
 export const teamMaps = getIndexMaps(teamIndexDoc);
 
 export function ensureInitialBoard(): void {
-  let hasAnyBoard = false;
-  soloMaps.boards.forEach((b) => {
-    if (!b.deleted) hasAnyBoard = true;
-  });
-  teamMaps.boards.forEach((b) => {
-    if (!b.deleted) hasAnyBoard = true;
-  });
-
-  if (!hasAnyBoard) {
-    const id = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : 'b_' + Math.random().toString(36).slice(2, 10);
-    const targetScope: WorkspaceScope = isCloudHost ? 'team' : 'solo';
-    const targetMap = targetScope === 'team' ? teamMaps.boards : soloMaps.boards;
-    targetMap.set(id, {
-      id,
-      title: t('sidebar.new_board') || 'Main Board',
+  // 1. Ensure private personal board in solo scope (saved locally)
+  if (!soloMaps.boards.has(SOLO_MAIN_BOARD_ID)) {
+    soloMaps.boards.set(SOLO_MAIN_BOARD_ID, {
+      id: SOLO_MAIN_BOARD_ID,
+      title: 'Personal Canvas',
       folder: null,
       deleted: false,
       createdAt: Date.now(),
       updatedAt: Date.now(),
-      scope: targetScope
+      scope: 'solo'
+    });
+  }
+
+  // 2. Ensure canonical shared team board in team scope
+  if (!teamMaps.boards.has(TEAM_MAIN_BOARD_ID)) {
+    teamMaps.boards.set(TEAM_MAIN_BOARD_ID, {
+      id: TEAM_MAIN_BOARD_ID,
+      title: 'Shared Team Canvas',
+      folder: null,
+      deleted: false,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      scope: 'team'
     });
   }
 }

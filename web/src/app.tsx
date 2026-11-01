@@ -15,8 +15,13 @@ import {
   isImportWizardOpen,
   agentStatus,
   isViewerMode,
-  selectBoardWithScope
+  selectBoardWithScope,
+  TEAM_MAIN_BOARD_ID,
+  SOLO_MAIN_BOARD_ID,
+  soloMaps
 } from './state/app-state.js';
+import { PasswordModal } from './components/layout/password-modal.js';
+import { api } from './api/client.js';
 import { TopRightBar } from './components/layout/top-right-bar.js';
 import { NotesDrawer } from './components/layout/notes-drawer.js';
 import { SettingsModal } from './components/layout/settings-modal.js';
@@ -78,7 +83,7 @@ export function App() {
   // Fallback board ID if no tab is currently selected
   const activeBoardId = activeTab?.type === 'board'
     ? activeTab.id
-    : (allBoards.value.find((b) => !b.deleted)?.id || boards.value.find((b) => !b.deleted)?.id || 'default');
+    : (allBoards.value.find((b) => !b.deleted)?.id || boards.value.find((b) => !b.deleted)?.id || TEAM_MAIN_BOARD_ID);
 
   const currentBoard = allBoards.value.find((b) => b.id === activeBoardId) || boards.value.find((b) => b.id === activeBoardId);
   const openBoardTitle = (currentBoard?.title || (activeTab?.type === 'board' ? activeTab.title : '') || '').trim();
@@ -90,7 +95,13 @@ export function App() {
     const requestedBoardId = pathMatch ? pathMatch[1] : (queryMatch || null);
 
     if (requestedBoardId) {
-      selectBoardWithScope(requestedBoardId, 'team', 'Shared Board');
+      const isSolo = soloMaps.boards.has(requestedBoardId);
+      selectBoardWithScope(requestedBoardId, isSolo ? 'solo' : 'team', isSolo ? 'Personal Board' : 'Shared Board');
+    } else {
+      const isCloud = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
+      const defaultId = isCloud ? TEAM_MAIN_BOARD_ID : SOLO_MAIN_BOARD_ID;
+      const defaultScope = isCloud ? 'team' : 'solo';
+      selectBoardWithScope(defaultId, defaultScope, isCloud ? 'Shared Team Canvas' : 'Personal Canvas');
     }
   }, []);
 
@@ -281,6 +292,18 @@ export function App() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Team Password Protection Modal */}
+      {agentStatus.value?.passwordRequired && !agentStatus.value?.authenticated && (
+        <PasswordModal
+          isOpen={true}
+          onSuccess={() => {
+            api.getStatus().then((status) => {
+              agentStatus.value = status;
+            });
+          }}
+        />
       )}
 
       {/* Global Command Palette & Modals */}

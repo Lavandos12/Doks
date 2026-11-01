@@ -35,6 +35,8 @@ export interface AgentStatusResponse {
   viewerMode?: boolean;
   allowSolo?: boolean;
   bridge?: any;
+  passwordRequired?: boolean;
+  authenticated?: boolean;
 }
 
 export type StatusResponse = AgentStatusResponse;
