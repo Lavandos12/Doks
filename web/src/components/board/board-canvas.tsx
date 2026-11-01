@@ -190,59 +190,6 @@ function renderShapeSvg(node: BoardNodeData, colorHex: string) {
         />
       );
       break;
-    case 'diamond': {
-      const pad = strokeWidth;
-      const pts = `${w / 2},${pad} ${w - pad},${h / 2} ${w / 2},${h - pad} ${pad},${h / 2}`;
-      pathElement = (
-        <polygon
-          points={pts}
-          fill={fillColor}
-          stroke={strokeColor}
-          strokeWidth={strokeWidth}
-          strokeLinejoin="round"
-          vectorEffect="non-scaling-stroke"
-        />
-      );
-      break;
-    }
-    case 'triangle': {
-      const pad = strokeWidth;
-      const pts = `${w / 2},${pad} ${w - pad},${h - pad} ${pad},${h - pad}`;
-      pathElement = (
-        <polygon
-          points={pts}
-          fill={fillColor}
-          stroke={strokeColor}
-          strokeWidth={strokeWidth}
-          strokeLinejoin="round"
-          vectorEffect="non-scaling-stroke"
-        />
-      );
-      break;
-    }
-    case 'star': {
-      const cx = w / 2;
-      const cy = h / 2;
-      const outerR = Math.min(w, h) / 2 - strokeWidth;
-      const innerR = outerR * 0.42;
-      const points: string[] = [];
-      for (let i = 0; i < 10; i++) {
-        const r = i % 2 === 0 ? outerR : innerR;
-        const angle = -Math.PI / 2 + (i * Math.PI) / 5;
-        points.push(`${cx + r * Math.cos(angle)},${cy + r * Math.sin(angle)}`);
-      }
-      pathElement = (
-        <polygon
-          points={points.join(' ')}
-          fill={fillColor}
-          stroke={strokeColor}
-          strokeWidth={strokeWidth}
-          strokeLinejoin="round"
-          vectorEffect="non-scaling-stroke"
-        />
-      );
-      break;
-    }
     case 'rounded':
       pathElement = (
         <rect
@@ -529,7 +476,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
   const [isBoardsPopoverOpen, setIsBoardsPopoverOpen] = useState(false);
   const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
   // network popover centralized in App
-  const [selectedShapeVariant, setSelectedShapeVariant] = useState<'rectangle' | 'rounded' | 'circle' | 'diamond' | 'triangle' | 'star'>('rectangle');
+  const [selectedShapeVariant, setSelectedShapeVariant] = useState<'rectangle' | 'rounded' | 'circle'>('rectangle');
   const [defaultLineStyle, setDefaultLineStyle] = useState<{ curveType: 'bezier' | 'orthogonal' | 'straight'; style: 'solid' | 'dashed'; color: string }>({
     curveType: 'bezier',
     style: 'solid',
@@ -3981,32 +3928,6 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                     <div class="shape-preview circle-preview" />
                     <span>{t("shapes.circle")}</span>
                   </button>
-                  <button
-                    class={`miro-shape-pick-btn ${selectedShapeVariant === 'diamond' ? 'active' : ''}`}
-                    onClick={() => { setSelectedShapeVariant('diamond'); setActiveTool('shape'); setActiveFlyout('none'); }}
-                    title={t("shapes.diamond")}
-                  >
-                    <div class="shape-preview diamond-preview" />
-                    <span>{t("shapes.diamond")}</span>
-                  </button>
-                  <button
-                    class={`miro-shape-pick-btn ${selectedShapeVariant === 'triangle' ? 'active' : ''}`}
-                    onClick={() => { setSelectedShapeVariant('triangle'); setActiveTool('shape'); setActiveFlyout('none'); }}
-                    title="Triangle"
-                  >
-                    <div class="shape-preview triangle-preview" />
-                    <span>Triangle</span>
-                  </button>
-                  <button
-                    class={`miro-shape-pick-btn ${selectedShapeVariant === 'star' ? 'active' : ''}`}
-                    onClick={() => { setSelectedShapeVariant('star'); setActiveTool('shape'); setActiveFlyout('none'); }}
-                    title="Star"
-                  >
-                    <div class="shape-preview star-preview" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <Icon name="sparkles" size={16} />
-                    </div>
-                    <span>Star</span>
-                  </button>
                 </div>
               </div>
             )}
@@ -4635,27 +4556,6 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                   onClick={() => setVariant('circle')}
                 >
                   <Icon name="circle" size={14} />
-                </button>
-                <button
-                  class={`inspector-btn ${curVariant === 'diamond' ? 'active' : ''}`}
-                  title="Diamond"
-                  onClick={() => setVariant('diamond')}
-                >
-                  <Icon name="diamond" size={14} />
-                </button>
-                <button
-                  class={`inspector-btn ${curVariant === 'triangle' ? 'active' : ''}`}
-                  title="Triangle"
-                  onClick={() => setVariant('triangle')}
-                >
-                  <Icon name="triangle" size={14} />
-                </button>
-                <button
-                  class={`inspector-btn ${curVariant === 'star' ? 'active' : ''}`}
-                  title="Star"
-                  onClick={() => setVariant('star')}
-                >
-                  <Icon name="sparkles" size={14} />
                 </button>
               </div>
             );
