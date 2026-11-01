@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 import { isSafeUrl } from '@doks/shared';
+import { isScannerProbe } from '@doks/agent';
 
 describe('V29 Garbage Elimination, XSS Sanitization & Cloud Host Compatibility', () => {
   it('strictly validates URL protocols and rejects javascript:, data:, and vbscript: URIs', () => {
@@ -37,5 +38,33 @@ describe('V29 Garbage Elimination, XSS Sanitization & Cloud Host Compatibility',
       expect(jsFiles.length).toBe(1);
       expect(cssFiles.length).toBe(1);
     }
+  });
+
+  it('detects scanner probes and allows legitimate SPA routes and ACME challenges', () => {
+    // Malicious scanner probe patterns
+    expect(isScannerProbe('/.env')).toBe(true);
+    expect(isScannerProbe('/.env.production')).toBe(true);
+    expect(isScannerProbe('/.git/config')).toBe(true);
+    expect(isScannerProbe('/.git/HEAD')).toBe(true);
+    expect(isScannerProbe('/index.php')).toBe(true);
+    expect(isScannerProbe('/index.php?foo=bar')).toBe(true);
+    expect(isScannerProbe('/wp-login.php')).toBe(true);
+    expect(isScannerProbe('/wp-admin/')).toBe(true);
+    expect(isScannerProbe('/phpmyadmin/index.php')).toBe(true);
+    expect(isScannerProbe('/xmlrpc.php')).toBe(true);
+    expect(isScannerProbe('/test.asp')).toBe(true);
+    expect(isScannerProbe('/shell.jsp')).toBe(true);
+    expect(isScannerProbe('/actuator/health')).toBe(true);
+    expect(isScannerProbe('/.well-known/security.txt')).toBe(true);
+
+    // Legitimate paths allowed through
+    expect(isScannerProbe('/.well-known/acme-challenge/token123')).toBe(false);
+    expect(isScannerProbe('/')).toBe(false);
+    expect(isScannerProbe('/b/solo-main')).toBe(false);
+    expect(isScannerProbe('/b/4d41fa33-8798-466d-a199-52e698889ff9')).toBe(false);
+    expect(isScannerProbe('/api/status')).toBe(false);
+    expect(isScannerProbe('/api/network-status')).toBe(false);
+    expect(isScannerProbe('/assets/index.js')).toBe(false);
+    expect(isScannerProbe('/favicon.svg')).toBe(false);
   });
 });

@@ -93,6 +93,24 @@ function safeSocketSend(socket: any, data: string): boolean {
   return false;
 }
 
+export const MALICIOUS_PATTERNS = [
+  /\.env/i,
+  /\.git/i,
+  /\.php$/i,
+  /wp-/i,
+  /phpmyadmin/i,
+  /xmlrpc/i,
+  /\.asp/i,
+  /\.jsp/i,
+  /actuator/i,
+  /\/\.well-known\/(?!acme-challenge)/i
+];
+
+export function isScannerProbe(url: string): boolean {
+  const pathname = url.split('?')[0];
+  return MALICIOUS_PATTERNS.some((pattern) => pattern.test(url) || pattern.test(pathname));
+}
+
 export interface HttpServerOptions {
   config: AgentConfig;
   docManager: DocManager;
@@ -198,6 +216,11 @@ export class AgentHttpServer {
 
     // Security hook: Host & Origin verification & Session Authentication
     this.fastify.addHook('onRequest', async (req, reply) => {
+      // Immediately drop scanner probes and crawlers before cookie issuance, origin verification, or SPA routing
+      if (isScannerProbe(req.url)) {
+        reply.code(404).send({ error: 'Not found' });
+        return;
+      }
       const host = req.headers.host || '';
       const [hostName] = host.split(':');
 
@@ -1692,10 +1715,11 @@ export class AgentHttpServer {
     // Fallback for SPA routing if dist exists
     if (fs.existsSync(this.webDistPath)) {
       this.fastify.setNotFoundHandler((req, reply) => {
-        if (!req.raw.url?.startsWith('/api')) {
-          reply.sendFile('index.html');
-        } else {
+        const url = req.raw.url || req.url || '';
+        if (url.startsWith('/api') || isScannerProbe(url)) {
           reply.code(404).send({ error: 'Not found' });
+        } else {
+          reply.sendFile('index.html');
         }
       });
     }
