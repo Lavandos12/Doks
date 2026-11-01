@@ -6495,16 +6495,16 @@ button.doks-color-dot.active {
   border: 1px solid rgba(255, 255, 255, 0.16);
   border-radius: 6px;
   overflow: auto;
-  grid-auto-rows: minmax(36px, auto);
-  align-content: start;
   height: 100%;
+  box-sizing: border-box;
 }
 
 .node-table-cell {
   background: #161822;
-  padding: 8px 10px;
+  padding: 6px 10px;
   display: flex;
   align-items: center;
+  height: 100%;
   min-height: 36px;
   box-sizing: border-box;
 }

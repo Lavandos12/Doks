@@ -467,6 +467,8 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
   };
 
   // Immediate refs to prevent stale closures during drawing and tool manipulation
+  const activeToolRef = useRef<CanvasTool>(activeTool);
+  activeToolRef.current = activeTool;
   const activeColorRef = useRef<string>(activeColor);
   activeColorRef.current = activeColor;
   const drawColorRef = useRef<string>(drawColor);
@@ -2341,7 +2343,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
   // Global Pointer Events
   useEffect(() => {
     const handleGlobalPointerMove = (e: PointerEvent) => {
-      if (activeTool === 'draw' || activeTool === 'line') {
+      if (activeToolRef.current === 'draw' || activeToolRef.current === 'line') {
         setCursorScreenPos({ x: e.clientX, y: e.clientY });
       } else {
         setCursorScreenPos(null);
@@ -2370,7 +2372,8 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
 
       // Drawing in-progress (Freehand or Straight Marker Line)
       if (currentStrokeRef.current) {
-        if (activeTool === 'line') {
+        const currentTool = activeToolRef.current;
+        if (currentTool === 'line') {
           const start = currentStrokeRef.current[0];
           let end = pos;
           if (e.shiftKey) {
@@ -2708,8 +2711,9 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
       if (stroke) {
         currentStrokeRef.current = null;
         setCurrentStroke(null);
+        const currentTool = activeToolRef.current;
         let finalStroke = stroke;
-        if (activeTool === 'line') {
+        if (currentTool === 'line') {
           const dist = Math.hypot(stroke[stroke.length - 1].x - stroke[0].x, stroke[stroke.length - 1].y - stroke[0].y);
           if (dist < 8) {
             // Quick click: spawn a 180px straight horizontal line
@@ -2956,7 +2960,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
       window.removeEventListener('mouseup', handleGlobalPointerUp as any);
       window.removeEventListener('blur', handleBlur);
     };
-  }, [panState, dragState, resizeState, marqueeBox, connectingState, viewport, nodesList, visibleNodes]);
+  }, [panState, dragState, resizeState, marqueeBox, connectingState, viewport, nodesList, visibleNodes, activeTool]);
 
   // Pointer down on canvas background
   const handleBackgroundPointerDown = (e: MouseEvent) => {
@@ -2983,13 +2987,13 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
       const pos = screenToCanvas(e.clientX, e.clientY);
 
       // Tool actions
-      if (activeTool === 'draw') {
+      if (activeToolRef.current === 'draw') {
         const p = screenToCanvas(e.clientX, e.clientY);
         currentStrokeRef.current = [p];
         setCurrentStroke([p]);
         return;
       }
-      if (activeTool === 'line') {
+      if (activeToolRef.current === 'line') {
         const p = screenToCanvas(e.clientX, e.clientY);
         currentStrokeRef.current = [p, p];
         setCurrentStroke([p, p]);
@@ -3075,9 +3079,9 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
     }
 
     // If drawing with pen or straight line tool, do NOT intercept click - let it draw right over frames/shapes!
-    if (activeTool === 'draw' || activeTool === 'line') {
+    if (activeToolRef.current === 'draw' || activeToolRef.current === 'line') {
       const p = screenToCanvas(e.clientX, e.clientY);
-      currentStrokeRef.current = activeTool === 'line' ? [p, p] : [p];
+      currentStrokeRef.current = activeToolRef.current === 'line' ? [p, p] : [p];
       setCurrentStroke(currentStrokeRef.current);
       return;
     }
@@ -5599,7 +5603,14 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                           </div>
                         )}
                       </div>
-                      <div class="node-table-grid scrollable-card-content" style={{ gridTemplateColumns: `repeat(${table[0]?.length || 3}, minmax(80px, 1fr))` }} onWheel={(e) => { if (!e.ctrlKey && !e.metaKey) e.stopPropagation(); }}>
+                      <div
+                        class="node-table-grid scrollable-card-content"
+                        style={{
+                          gridTemplateColumns: `repeat(${table[0]?.length || 3}, minmax(80px, 1fr))`,
+                          gridTemplateRows: `repeat(${table.length}, minmax(36px, 1fr))`
+                        }}
+                        onWheel={(e) => { if (!e.ctrlKey && !e.metaKey) e.stopPropagation(); }}
+                      >
                         {table.map((row, rIdx) =>
                           row.map((cell, cIdx) => (
                             <div key={`${rIdx}-${cIdx}`} class="node-table-cell">
