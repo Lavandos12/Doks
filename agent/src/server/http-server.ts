@@ -145,7 +145,8 @@ export class AgentHttpServer {
 
     this.fastify = Fastify({
       logger: false,
-      bodyLimit: 100 * 1024 * 1024 // 100MB for attachments (B22)
+      ignoreTrailingSlash: true,
+      bodyLimit: 10 * 1024 * 1024
     });
 
     this.setupPlugins();
@@ -192,9 +193,17 @@ export class AgentHttpServer {
     // Direct share route fallback for SPA routing
     this.fastify.get('/b/:boardId', async (_req, reply) => {
       if (fs.existsSync(this.webDistPath)) {
-        reply.sendFile('index.html');
+        return reply.sendFile('index.html');
       } else {
-        reply.type('text/html').send('<!doctype html><html><body><h1>Doks</h1></body></html>');
+        return reply.type('text/html').send('<!doctype html><html><body><h1>Doks</h1></body></html>');
+      }
+    });
+
+    this.fastify.get('/b/:boardId/*', async (_req, reply) => {
+      if (fs.existsSync(this.webDistPath)) {
+        return reply.sendFile('index.html');
+      } else {
+        return reply.type('text/html').send('<!doctype html><html><body><h1>Doks</h1></body></html>');
       }
     });
 
@@ -1720,7 +1729,7 @@ export class AgentHttpServer {
           reply.code(404).send({ error: 'Not found' });
           return;
         }
-        reply.sendFile('index.html');
+        return reply.sendFile('index.html');
       });
     }
   }
