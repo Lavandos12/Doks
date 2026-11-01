@@ -6,8 +6,7 @@ import {
   renameBoard,
   deleteBoard,
   convertBoardScope,
-  selectBoardWithScope,
-  agentStatus
+  selectBoardWithScope
 } from '../../state/app-state.js';
 import { Icon } from '../../ui/icons.js';
 import { showToast } from '../../ui/toast.js';
@@ -76,10 +75,9 @@ export function BoardSettingsModal({
     }
   };
 
-  const status = agentStatus.value;
-  const effectiveIp = status?.effectiveIp || '127.0.0.1';
-  const webPort = (status as any)?.webPort || window.location.port || '4780';
-  const browserLink = `http://${effectiveIp}:${webPort}`;
+  const browserLink = typeof window !== 'undefined'
+    ? `${window.location.origin}/b/${boardId}`
+    : `http://127.0.0.1:4780/b/${boardId}`;
 
   const handleCopyLink = () => {
     navigator.clipboard.writeText(browserLink);

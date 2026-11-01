@@ -615,7 +615,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
   const [isBoardSettingsOpen, setIsBoardSettingsOpen] = useState(false);
   const [settingsTargetBoard, setSettingsTargetBoard] = useState<{ id: string; scope: WorkspaceScope; title: string } | null>(null);
   const [isLanShareOpen, setIsLanShareOpen] = useState(false);
-  const [shareModalTab, setShareModalTab] = useState<'share' | 'direct' | 'phone'>('share');
+  const [shareModalTab, setShareModalTab] = useState<'share' | 'phone'>('share');
   const [confirmConvertModal, setConfirmConvertModal] = useState<{ isOpen: boolean; targetScope: WorkspaceScope }>({ isOpen: false, targetScope: 'team' });
 
   // Detect if the board is locked in read-only mode
@@ -3426,10 +3426,10 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
               color: '#34d399',
               fontWeight: 600
             }}
-            title={`Shared (Live Sync) • ${agentStatus.value?.effectiveIp || '127.0.0.1'}:${agentStatus.value?.webPort || 4780}`}
+            title="Shared (Live Sync)"
           >
             <span style={{ width: '7px', height: '7px', borderRadius: '50%', backgroundColor: '#10b981', display: 'inline-block' }} />
-            <span>Shared (Live Sync) • {agentStatus.value?.effectiveIp || '127.0.0.1'}:{agentStatus.value?.webPort || 4780}</span>
+            <span>Shared (Live Sync)</span>
           </div>
         )}
 
@@ -3492,9 +3492,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                 cursor: 'pointer'
               }}
               onClick={() => {
-                const ip = agentStatus.value?.effectiveIp || window.location.hostname || '127.0.0.1';
-                const port = agentStatus.value?.webPort || window.location.port || '4780';
-                const url = `http://${ip}:${port}/?board=${boardId}`;
+                const url = `${window.location.origin}/b/${boardId}`;
                 navigator.clipboard.writeText(url);
                 showToast(t('common.copied'), 'success');
               }}
@@ -3529,31 +3527,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
               </button>
             )}
 
-            {/* Direct Connect */}
-            <button
-              class="miro-scope-action-btn"
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '5px',
-                padding: '4px 10px',
-                background: 'rgba(139, 92, 246, 0.15)',
-                border: '1px solid rgba(139, 92, 246, 0.3)',
-                borderRadius: '20px',
-                fontSize: '11px',
-                color: '#c084fc',
-                fontWeight: 600,
-                cursor: 'pointer'
-              }}
-              onClick={() => {
-                setShareModalTab('direct');
-                setIsLanShareOpen(true);
-              }}
-              title="Direct Connect to friend's IP"
-            >
-              <Icon name="network" size={12} />
-              <span>{t('share.directConnect')}</span>
-            </button>
+
           </>
         )}
 
