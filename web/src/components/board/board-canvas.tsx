@@ -107,7 +107,7 @@ export const CANVAS_COLORS: Record<string, string> = {
   default: '#d97706'
 };
 
-export type CanvasTool = 'select' | 'hand' | 'sticky' | 'text' | 'note' | 'frame' | 'arrow' | 'shape' | 'draw' | 'eraser' | 'checklist' | 'table' | 'kanban' | 'code' | 'image' | 'widgets' | 'chart';
+export type CanvasTool = 'select' | 'hand' | 'sticky' | 'text' | 'note' | 'frame' | 'arrow' | 'line' | 'shape' | 'draw' | 'eraser' | 'checklist' | 'table' | 'kanban' | 'code' | 'image' | 'widgets' | 'chart';
 type ResizeHandle = 'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w';
 
 interface BoardCanvasProps {
@@ -220,85 +220,6 @@ function renderShapeSvg(node: BoardNodeData, colorHex: string) {
       );
       break;
     }
-    case 'parallelogram': {
-      const pad = strokeWidth;
-      const skew = Math.min(28, w * 0.2);
-      const pts = `${skew + pad},${pad} ${w - pad},${pad} ${w - skew - pad},${h - pad} ${pad},${h - pad}`;
-      pathElement = (
-        <polygon
-          points={pts}
-          fill={fillColor}
-          stroke={strokeColor}
-          strokeWidth={strokeWidth}
-          strokeLinejoin="round"
-          vectorEffect="non-scaling-stroke"
-        />
-      );
-      break;
-    }
-    case 'cylinder': {
-      const pad = strokeWidth;
-      const ch = Math.min(20, h * 0.2);
-      const d = `M ${pad} ${ch + pad} A ${w / 2 - pad} ${ch} 0 0 1 ${w - pad} ${ch + pad} V ${h - ch - pad} A ${w / 2 - pad} ${ch} 0 0 1 ${pad} ${h - ch - pad} Z`;
-      pathElement = (
-        <g>
-          <path d={d} fill={fillColor} stroke={strokeColor} strokeWidth={strokeWidth} vectorEffect="non-scaling-stroke" />
-          <ellipse
-            cx={w / 2}
-            cy={ch + pad}
-            rx={Math.max(2, w / 2 - pad)}
-            ry={ch}
-            fill={fillColor}
-            stroke={strokeColor}
-            strokeWidth={strokeWidth}
-            vectorEffect="non-scaling-stroke"
-          />
-        </g>
-      );
-      break;
-    }
-    case 'hexagon': {
-      const pad = strokeWidth;
-      pathElement = (
-        <polygon
-          points={`${w * 0.25},${pad} ${w * 0.75},${pad} ${w - pad},${h * 0.5} ${w * 0.75},${h - pad} ${w * 0.25},${h - pad} ${pad},${h * 0.5}`}
-          fill={fillColor}
-          stroke={strokeColor}
-          strokeWidth={strokeWidth}
-          vectorEffect="non-scaling-stroke"
-        />
-      );
-      break;
-    }
-    case 'right-triangle': {
-      const pad = strokeWidth;
-      pathElement = (
-        <polygon
-          points={`${pad},${pad} ${w - pad},${h - pad} ${pad},${h - pad}`}
-          fill={fillColor}
-          stroke={strokeColor}
-          strokeWidth={strokeWidth}
-          strokeLinejoin="round"
-          vectorEffect="non-scaling-stroke"
-        />
-      );
-      break;
-    }
-    case 'trapezoid': {
-      const pad = strokeWidth;
-      const inset = Math.min(w * 0.2, 36);
-      pathElement = (
-        <polygon
-          points={`${inset + pad},${pad} ${w - inset - pad},${pad} ${w - pad},${h - pad} ${pad},${h - pad}`}
-          fill={fillColor}
-          stroke={strokeColor}
-          strokeWidth={strokeWidth}
-          strokeLinejoin="round"
-          vectorEffect="non-scaling-stroke"
-        />
-      );
-      break;
-    }
     case 'star': {
       const cx = w / 2;
       const cy = h / 2;
@@ -322,90 +243,6 @@ function renderShapeSvg(node: BoardNodeData, colorHex: string) {
       );
       break;
     }
-    case 'cloud': {
-      const pad = strokeWidth;
-      const d = `M ${w * 0.25} ${h * 0.75}
-        C ${w * 0.08} ${h * 0.75}, ${pad} ${h * 0.6}, ${pad} ${h * 0.45}
-        C ${pad} ${h * 0.3}, ${w * 0.12} ${h * 0.18}, ${w * 0.28} ${h * 0.18}
-        C ${w * 0.35} ${pad}, ${w * 0.65} ${pad}, ${w * 0.72} ${h * 0.2}
-        C ${w * 0.88} ${h * 0.2}, ${w - pad} ${h * 0.32}, ${w - pad} ${h * 0.48}
-        C ${w - pad} ${h * 0.65}, ${w * 0.88} ${h * 0.75}, ${w * 0.75} ${h * 0.75}
-        Z`;
-      pathElement = (
-        <path
-          d={d}
-          fill={fillColor}
-          stroke={strokeColor}
-          strokeWidth={strokeWidth}
-          strokeLinejoin="round"
-          vectorEffect="non-scaling-stroke"
-        />
-      );
-      break;
-    }
-    case 'callout': {
-      const pad = strokeWidth;
-      const tailW = Math.min(24, w * 0.18);
-      const tailH = Math.min(20, h * 0.2);
-      const mainH = h - tailH - pad;
-      const rx = 12;
-      const d = `M ${rx + pad} ${pad}
-        H ${w - rx - pad} A ${rx} ${rx} 0 0 1 ${w - pad} ${rx + pad}
-        V ${mainH - rx} A ${rx} ${rx} 0 0 1 ${w - rx - pad} ${mainH}
-        H ${w * 0.35}
-        L ${w * 0.18} ${h - pad}
-        L ${w * 0.24} ${mainH}
-        H ${rx + pad} A ${rx} ${rx} 0 0 1 ${pad} ${mainH - rx}
-        V ${rx + pad} A ${rx} ${rx} 0 0 1 ${rx + pad} ${pad} Z`;
-      pathElement = (
-        <path
-          d={d}
-          fill={fillColor}
-          stroke={strokeColor}
-          strokeWidth={strokeWidth}
-          strokeLinejoin="round"
-          vectorEffect="non-scaling-stroke"
-        />
-      );
-      break;
-    }
-    case 'document': {
-      const pad = strokeWidth;
-      const wave = Math.min(16, h * 0.12);
-      const mainH = h - wave;
-      const d = `M ${pad} ${pad}
-        H ${w - pad}
-        V ${mainH}
-        Q ${w * 0.75} ${h} ${w * 0.5} ${mainH}
-        T ${pad} ${mainH}
-        Z`;
-      pathElement = (
-        <path
-          d={d}
-          fill={fillColor}
-          stroke={strokeColor}
-          strokeWidth={strokeWidth}
-          strokeLinejoin="round"
-          vectorEffect="non-scaling-stroke"
-        />
-      );
-      break;
-    }
-    case 'step-arrow': {
-      const pad = strokeWidth;
-      const arrowPoint = Math.min(32, w * 0.25);
-      pathElement = (
-        <polygon
-          points={`${pad},${h * 0.25} ${w - arrowPoint},${h * 0.25} ${w - arrowPoint},${pad} ${w - pad},${h * 0.5} ${w - arrowPoint},${h - pad} ${w - arrowPoint},${h * 0.75} ${pad},${h * 0.75}`}
-          fill={fillColor}
-          stroke={strokeColor}
-          strokeWidth={strokeWidth}
-          strokeLinejoin="round"
-          vectorEffect="non-scaling-stroke"
-        />
-      );
-      break;
-    }
     case 'rounded':
       pathElement = (
         <rect
@@ -413,8 +250,8 @@ function renderShapeSvg(node: BoardNodeData, colorHex: string) {
           y={strokeWidth / 2}
           width={Math.max(4, w - strokeWidth)}
           height={Math.max(4, h - strokeWidth)}
-          rx="24"
-          ry="24"
+          rx="20"
+          ry="20"
           fill={fillColor}
           stroke={strokeColor}
           strokeWidth={strokeWidth}
@@ -692,7 +529,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
   const [isBoardsPopoverOpen, setIsBoardsPopoverOpen] = useState(false);
   const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
   // network popover centralized in App
-  const [selectedShapeVariant, setSelectedShapeVariant] = useState<'rectangle' | 'rounded' | 'circle' | 'diamond' | 'triangle' | 'parallelogram' | 'cylinder' | 'hexagon' | 'right-triangle' | 'trapezoid' | 'star' | 'cloud' | 'callout' | 'document' | 'step-arrow'>('rectangle');
+  const [selectedShapeVariant, setSelectedShapeVariant] = useState<'rectangle' | 'rounded' | 'circle' | 'diamond' | 'triangle' | 'star'>('rectangle');
   const [defaultLineStyle, setDefaultLineStyle] = useState<{ curveType: 'bezier' | 'orthogonal' | 'straight'; style: 'solid' | 'dashed'; color: string }>({
     curveType: 'bezier',
     style: 'solid',
@@ -1577,12 +1414,13 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
           setIsNotePickerOpen(true);
         }
         if (e.code === 'KeyF') setActiveTool('frame');
-        if (e.code === 'KeyC' || e.code === 'KeyL') setActiveTool('arrow');
+        if (e.code === 'KeyC') setActiveTool('arrow');
         if (e.code === 'KeyR') setActiveTool('shape');
         if (e.code === 'KeyK') setActiveTool('checklist');
         if (e.code === 'KeyG') setActiveTool('table');
         if (e.code === 'KeyB') setActiveTool('kanban');
         if (e.code === 'KeyD') setActiveTool('chart');
+        if (e.code === 'KeyL') setActiveTool('line');
         if (e.code === 'KeyM') setIsAutoDiagramModalOpen(true);
         if (e.code === 'KeyI' || e.code === 'KeyU') fileAttachmentInputRef.current?.click();
 
@@ -3020,9 +2858,9 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
               to: newId,
               fromSide: state.fromSide,
               toSide: targetSide,
-              direction: 'forward',
+              direction: activeTool === 'line' ? 'none' : 'forward',
               style: defaultLineStyle.style,
-              curveType: defaultLineStyle.curveType,
+              curveType: activeTool === 'line' ? 'straight' : defaultLineStyle.curveType,
               color: defaultLineStyle.color,
               deleted: false
             });
@@ -3085,9 +2923,9 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                 to: target.nodeId,
                 fromSide: state.fromSide,
                 toSide: target.side,
-                direction: 'forward',
+                direction: activeTool === 'line' ? 'none' : 'forward',
                 style: defaultLineStyle.style,
-                curveType: defaultLineStyle.curveType,
+                curveType: activeTool === 'line' ? 'straight' : defaultLineStyle.curveType,
                 color: defaultLineStyle.color,
                 deleted: false
               });
@@ -3288,7 +3126,8 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
       setActiveTool('select');
     }
 
-    if (activeTool === 'arrow') {
+    if (activeTool === 'arrow' || activeTool === 'line') {
+      const isLine = activeTool === 'line';
       const pos = screenToCanvas(e.clientX, e.clientY);
       const box: BoxNode = { id: node.id, x: node.x, y: node.y, width: node.w, height: node.h };
       const sides: PortSide[] = ['top', 'right', 'bottom', 'left'];
@@ -4082,6 +3921,21 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
             )}
           </div>
 
+          {/* 5b. Straight Line (L) */}
+          <div class="miro-dock-tool-wrapper">
+            <button
+              class={`miro-dock-btn ${activeTool === 'line' ? 'active' : ''}`}
+              data-tool="line"
+              onClick={() => {
+                setActiveTool('line');
+                setActiveFlyout('none');
+              }}
+              title="Straight Line / Divider (L)"
+            >
+              <Icon name="line" size={20} />
+            </button>
+          </div>
+
           {/* 4. Shapes (R) + Flyout */}
           <div class="miro-dock-tool-wrapper">
             <button
@@ -4138,41 +3992,27 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                   <button
                     class={`miro-shape-pick-btn ${selectedShapeVariant === 'triangle' ? 'active' : ''}`}
                     onClick={() => { setSelectedShapeVariant('triangle'); setActiveTool('shape'); setActiveFlyout('none'); }}
-                    title={t("shapes.triangle")}
+                    title="Triangle"
                   >
                     <div class="shape-preview triangle-preview" />
-                    <span>{t("shapes.triangle")}</span>
+                    <span>Triangle</span>
                   </button>
                   <button
-                    class={`miro-shape-pick-btn ${selectedShapeVariant === 'parallelogram' ? 'active' : ''}`}
-                    onClick={() => { setSelectedShapeVariant('parallelogram'); setActiveTool('shape'); setActiveFlyout('none'); }}
-                    title={t("shapes.parallelogram")}
+                    class={`miro-shape-pick-btn ${selectedShapeVariant === 'star' ? 'active' : ''}`}
+                    onClick={() => { setSelectedShapeVariant('star'); setActiveTool('shape'); setActiveFlyout('none'); }}
+                    title="Star"
                   >
-                    <div class="shape-preview para-preview" />
-                    <span>{t("shapes.parallelogram")}</span>
-                  </button>
-                  <button
-                    class={`miro-shape-pick-btn ${selectedShapeVariant === 'cylinder' ? 'active' : ''}`}
-                    onClick={() => { setSelectedShapeVariant('cylinder'); setActiveTool('shape'); setActiveFlyout('none'); }}
-                    title={t("shapes.cylinder")}
-                  >
-                    <div class="shape-preview cylinder-preview" />
-                    <span>{t("shapes.cylinder")}</span>
-                  </button>
-                  <button
-                    class={`miro-shape-pick-btn ${selectedShapeVariant === 'hexagon' ? 'active' : ''}`}
-                    onClick={() => { setSelectedShapeVariant('hexagon'); setActiveTool('shape'); setActiveFlyout('none'); }}
-                    title={t("shapes.hexagon")}
-                  >
-                    <div class="shape-preview hexagon-preview" />
-                    <span>{t("shapes.hexagon")}</span>
+                    <div class="shape-preview star-preview" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <Icon name="sparkles" size={16} />
+                    </div>
+                    <span>Star</span>
                   </button>
                 </div>
               </div>
             )}
           </div>
 
-          {/* 5. Connection / Arrow (L / C) + Flyout */}
+          {/* 5. Connection / Arrow (C) + Flyout */}
           <div class="miro-dock-tool-wrapper">
             <button
               class={`miro-dock-btn ${activeTool === 'arrow' ? 'active' : ''}`}
@@ -4181,7 +4021,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                 setActiveTool('arrow');
                 setActiveFlyout(activeFlyout === 'arrow' ? 'none' : 'arrow');
               }}
-              title={t('dock.arrow')}
+              title="Arrow Connector (C)"
             >
               <Icon name="arrow" size={20} />
             </button>
@@ -4219,6 +4059,21 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                 </div>
               </div>
             )}
+          </div>
+
+          {/* 5b. Straight Line (L) */}
+          <div class="miro-dock-tool-wrapper">
+            <button
+              class={`miro-dock-btn ${activeTool === 'line' ? 'active' : ''}`}
+              data-tool="line"
+              onClick={() => {
+                setActiveTool('line');
+                setActiveFlyout('none');
+              }}
+              title="Straight Line / Divider (L)"
+            >
+              <Icon name="line" size={20} />
+            </button>
           </div>
 
           {/* 6. Pen / Brush / Highlighter / Eraser (P / E) + Flyout */}
@@ -4341,6 +4196,18 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
 
             {activeFlyout === 'widgets' && (
               <div class="miro-flyout-panel miro-widgets-flyout liquid-glass-surface" style={{ display: 'flex', flexDirection: 'column', gap: '4px', minWidth: '160px', padding: '6px' }}>
+                <button
+                  type="button"
+                  class="miro-flyout-item-btn"
+                  style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 10px', background: 'transparent', border: 'none', color: '#f1f5f9', fontSize: '13px', cursor: 'pointer', borderRadius: '6px', textAlign: 'left' }}
+                  onClick={() => {
+                    setActiveTool('line');
+                    setActiveFlyout('none');
+                  }}
+                >
+                  <Icon name="line" size={16} />
+                  <span>Straight Line (L)</span>
+                </button>
                 <button
                   type="button"
                   class="miro-flyout-item-btn"
@@ -4729,210 +4596,68 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
             return null;
           })()}
 
-          {/* Flowchart Shape Variant Switcher */}
+          {/* 6 Essential Core Shapes (Clean & Uncluttered) */}
           {(() => {
-            const hasShape = Array.from(selectedNodeIds).some((id) => nodeLookup.get(id)?.type === 'shape');
-            if (!hasShape) return null;
+            const firstId = Array.from(selectedNodeIds)[0];
+            const node = nodeLookup.get(firstId);
+            if (node?.type !== 'shape') return null;
+            const curVariant = (node as any).shapeVariant || 'rectangle';
+
+            const setVariant = (v: string) => {
+              boardDoc.transact(() => {
+                for (const id of selectedNodeIds) {
+                  const map = yNodes.get(id);
+                  if (map) map.set('shapeVariant', v);
+                }
+              }, CANVAS_UNDO_ORIGIN);
+            };
+
             return (
-              <>
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
                 <div class="inspector-divider" />
                 <button
-                  class="inspector-btn"
-                  title={t('shapes.rectangle')}
-                  onClick={() => {
-                    boardDoc.transact(() => {
-                      for (const id of selectedNodeIds) {
-                        const map = yNodes.get(id);
-                        if (map) map.set('shapeVariant', 'rectangle');
-                      }
-                    }, CANVAS_UNDO_ORIGIN);
-                  }}
+                  class={`inspector-btn ${curVariant === 'rectangle' ? 'active' : ''}`}
+                  title="Rectangle"
+                  onClick={() => setVariant('rectangle')}
                 >
                   <Icon name="square" size={14} />
                 </button>
                 <button
-                  class="inspector-btn"
-                  title={`${t('canvas.shape')}: ${t('shapes.rounded')}`}
-                  onClick={() => {
-                    boardDoc.transact(() => {
-                      for (const id of selectedNodeIds) {
-                        const map = yNodes.get(id);
-                        if (map) map.set('shapeVariant', 'rounded');
-                      }
-                    }, CANVAS_UNDO_ORIGIN);
-                  }}
+                  class={`inspector-btn ${curVariant === 'rounded' ? 'active' : ''}`}
+                  title="Rounded"
+                  onClick={() => setVariant('rounded')}
                 >
                   <Icon name="shape" size={14} />
                 </button>
                 <button
-                  class="inspector-btn"
-                  title={t('shapes.diamond')}
-                  onClick={() => {
-                    boardDoc.transact(() => {
-                      for (const id of selectedNodeIds) {
-                        const map = yNodes.get(id);
-                        if (map) map.set('shapeVariant', 'diamond');
-                      }
-                    }, CANVAS_UNDO_ORIGIN);
-                  }}
-                >
-                  <Icon name="diamond" size={14} />
-                </button>
-                <button
-                  class="inspector-btn"
-                  title={t('shapes.circle')}
-                  onClick={() => {
-                    boardDoc.transact(() => {
-                      for (const id of selectedNodeIds) {
-                        const map = yNodes.get(id);
-                        if (map) map.set('shapeVariant', 'circle');
-                      }
-                    }, CANVAS_UNDO_ORIGIN);
-                  }}
+                  class={`inspector-btn ${curVariant === 'circle' ? 'active' : ''}`}
+                  title="Circle"
+                  onClick={() => setVariant('circle')}
                 >
                   <Icon name="circle" size={14} />
                 </button>
                 <button
-                  class="inspector-btn"
-                  title={t('shapes.triangle')}
-                  onClick={() => {
-                    boardDoc.transact(() => {
-                      for (const id of selectedNodeIds) {
-                        const map = yNodes.get(id);
-                        if (map) map.set('shapeVariant', 'triangle');
-                      }
-                    }, CANVAS_UNDO_ORIGIN);
-                  }}
+                  class={`inspector-btn ${curVariant === 'diamond' ? 'active' : ''}`}
+                  title="Diamond"
+                  onClick={() => setVariant('diamond')}
+                >
+                  <Icon name="diamond" size={14} />
+                </button>
+                <button
+                  class={`inspector-btn ${curVariant === 'triangle' ? 'active' : ''}`}
+                  title="Triangle"
+                  onClick={() => setVariant('triangle')}
                 >
                   <Icon name="triangle" size={14} />
                 </button>
                 <button
-                  class="inspector-btn"
-                  title={t('shapes.parallelogram')}
-                  onClick={() => {
-                    boardDoc.transact(() => {
-                      for (const id of selectedNodeIds) {
-                        const map = yNodes.get(id);
-                        if (map) map.set('shapeVariant', 'parallelogram');
-                      }
-                    }, CANVAS_UNDO_ORIGIN);
-                  }}
-                >
-                  <Icon name="parallelogram" size={14} />
-                </button>
-                <button
-                  class="inspector-btn"
-                  title={`${t('canvas.shape')}: ${t('shapes.cylinder')}`}
-                  onClick={() => {
-                    boardDoc.transact(() => {
-                      for (const id of selectedNodeIds) {
-                        const map = yNodes.get(id);
-                        if (map) map.set('shapeVariant', 'cylinder');
-                      }
-                    }, CANVAS_UNDO_ORIGIN);
-                  }}
-                >
-                  <Icon name="cylinder" size={14} />
-                </button>
-                <button
-                  class="inspector-btn"
-                  title={`${t('canvas.shape')}: ${t('shapes.hexagon')}`}
-                  onClick={() => {
-                    boardDoc.transact(() => {
-                      for (const id of selectedNodeIds) {
-                        const map = yNodes.get(id);
-                        if (map) map.set('shapeVariant', 'hexagon');
-                      }
-                    }, CANVAS_UNDO_ORIGIN);
-                  }}
-                >
-                  <Icon name="hexagon" size={14} />
-                </button>
-                <button
-                  class="inspector-btn"
-                  title="Right Triangle (Geoma)"
-                  onClick={() => {
-                    boardDoc.transact(() => {
-                      for (const id of selectedNodeIds) {
-                        const map = yNodes.get(id);
-                        if (map) map.set('shapeVariant', 'right-triangle');
-                      }
-                    }, CANVAS_UNDO_ORIGIN);
-                  }}
-                >
-                  <Icon name="triangle" size={14} />
-                </button>
-                <button
-                  class="inspector-btn"
-                  title="Trapezoid"
-                  onClick={() => {
-                    boardDoc.transact(() => {
-                      for (const id of selectedNodeIds) {
-                        const map = yNodes.get(id);
-                        if (map) map.set('shapeVariant', 'trapezoid');
-                      }
-                    }, CANVAS_UNDO_ORIGIN);
-                  }}
-                >
-                  <Icon name="parallelogram" size={14} />
-                </button>
-                <button
-                  class="inspector-btn"
+                  class={`inspector-btn ${curVariant === 'star' ? 'active' : ''}`}
                   title="Star"
-                  onClick={() => {
-                    boardDoc.transact(() => {
-                      for (const id of selectedNodeIds) {
-                        const map = yNodes.get(id);
-                        if (map) map.set('shapeVariant', 'star');
-                      }
-                    }, CANVAS_UNDO_ORIGIN);
-                  }}
+                  onClick={() => setVariant('star')}
                 >
                   <Icon name="sparkles" size={14} />
                 </button>
-                <button
-                  class="inspector-btn"
-                  title="Speech Bubble / Callout"
-                  onClick={() => {
-                    boardDoc.transact(() => {
-                      for (const id of selectedNodeIds) {
-                        const map = yNodes.get(id);
-                        if (map) map.set('shapeVariant', 'callout');
-                      }
-                    }, CANVAS_UNDO_ORIGIN);
-                  }}
-                >
-                  <Icon name="file-text" size={14} />
-                </button>
-                <button
-                  class="inspector-btn"
-                  title="Flowchart Document"
-                  onClick={() => {
-                    boardDoc.transact(() => {
-                      for (const id of selectedNodeIds) {
-                        const map = yNodes.get(id);
-                        if (map) map.set('shapeVariant', 'document');
-                      }
-                    }, CANVAS_UNDO_ORIGIN);
-                  }}
-                >
-                  <Icon name="layout" size={14} />
-                </button>
-                <button
-                  class="inspector-btn"
-                  title="Process Step Arrow"
-                  onClick={() => {
-                    boardDoc.transact(() => {
-                      for (const id of selectedNodeIds) {
-                        const map = yNodes.get(id);
-                        if (map) map.set('shapeVariant', 'step-arrow');
-                      }
-                    }, CANVAS_UNDO_ORIGIN);
-                  }}
-                >
-                  <Icon name="arrow-right" size={14} />
-                </button>
-              </>
+              </div>
             );
           })()}
 

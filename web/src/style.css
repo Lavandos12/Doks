@@ -7550,6 +7550,9 @@ button.quick-profile-color-btn {
   height: 22px !important;
   min-width: 22px !important;
   min-height: 22px !important;
+  max-width: 22px !important;
+  max-height: 22px !important;
+  flex-shrink: 0 !important;
   padding: 0 !important;
   margin: 0 !important;
   border-radius: 50% !important;

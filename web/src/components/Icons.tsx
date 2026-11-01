@@ -20,6 +20,7 @@ export type IconName =
   | 'frame'
   | 'shape'
   | 'arrow'
+  | 'line'
   | 'arrow-right'
   | 'arrow-down'
   | 'arrow-up'
@@ -235,6 +236,8 @@ export function Icon({
         );
       case 'hexagon':
         return <polygon points="12 2 21 7 21 17 12 22 3 17 3 7" />;
+      case 'line':
+        return <line x1="3" y1="12" x2="21" y2="12" strokeWidth="2" strokeLinecap="round" />;
       case 'arrow':
       case 'arrow-right':
         return (
