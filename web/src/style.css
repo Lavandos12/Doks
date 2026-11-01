@@ -1786,12 +1786,6 @@ input:focus, select:focus, textarea:focus {
 }
 
 .board-node-box.type-shape .shape-inline-textarea {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  width: calc(100% - 24px);
-  height: calc(100% - 24px);
   background: transparent !important;
   border: none !important;
   box-shadow: none !important;
@@ -1799,11 +1793,13 @@ input:focus, select:focus, textarea:focus {
   resize: none;
   color: var(--text-normal);
   font-family: inherit;
-  font-size: 14px;
-  line-height: 1.4;
+  line-height: 1.35;
   outline: none;
   z-index: 2;
-  overflow: auto;
+  overflow-y: auto;
+  box-sizing: border-box;
+  padding: 0;
+  margin: 0;
 }
 
 .board-node-box.type-sticky {

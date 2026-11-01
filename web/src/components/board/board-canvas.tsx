@@ -458,6 +458,33 @@ function renderShapeSvg(node: BoardNodeData, colorHex: string) {
   );
 }
 
+/**
+ * Dynamically computes an ideal font size based on bounding box dimensions and text length.
+ * Clamps safely between 13px (readable minimum) and 56px to prevent overflow or microscopic text.
+ */
+export function calculateAutoFontSize(text: string, w: number, h: number, type?: string): number {
+  if (type === 'sticky') return 15;
+  const padW = Math.max(24, w - 28);
+  const padH = Math.max(24, h - 24);
+  const clean = (text || '').trim();
+  const lines = clean ? clean.split('\n') : [''];
+  const maxLineLen = Math.max(1, ...lines.map((l) => l.trim().length));
+  const lineCount = Math.max(1, lines.length);
+
+  // Short labels / single-character symbols (e.g. '-', '1', 'Start')
+  if (clean.length <= 4 && lineCount === 1) {
+    const singleScale = Math.min(padW * 0.35, padH * 0.45);
+    return Math.min(Math.max(16, Math.round(singleScale)), 56);
+  }
+
+  // Multi-line or paragraph text
+  const sizeByW = padW / (maxLineLen * 0.58);
+  const sizeByH = padH / (lineCount * 1.35);
+  const ideal = Math.min(sizeByW, sizeByH);
+
+  return Math.min(Math.max(13, Math.round(ideal)), 48);
+}
+
 export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, scopeOverride }: BoardCanvasProps) {
   const effectiveScope: WorkspaceScope = scopeOverride || currentScope.value;
   const containerRef = useRef<HTMLDivElement>(null);
@@ -4587,89 +4614,96 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
 
           <div class="inspector-divider" />
 
-          {/* Size controls S | M | L | XL */}
-          <div class="inspector-font-sizes">
-            <button
-              class="inspector-size-btn"
-              title={`${t('canvas.size')} S (14px)`}
-              onClick={() => {
-                boardDoc.transact(() => {
-                  for (const id of selectedNodeIds) {
-                    const map = yNodes.get(id);
-                    if (map) {
-                      map.set('fontSize', 14);
-                      const n = nodeLookup.get(id);
-                      if (n?.type === 'shape') {
-                        map.set('strokeWidth', 2);
-                      }
+          {/* Typography Controls: Stepper (A-), Preset Dropdown (12-96px), Stepper (A+) */}
+          {(() => {
+            const FONT_PRESETS = [12, 14, 16, 18, 20, 24, 32, 40, 48, 64, 80, 96];
+            const firstId = Array.from(selectedNodeIds)[0];
+            const activeNode = nodeLookup.get(firstId);
+            const currentFontSize = activeNode?.fontSize;
+
+            const applyFontSize = (size?: number) => {
+              boardDoc.transact(() => {
+                for (const id of selectedNodeIds) {
+                  const map = yNodes.get(id);
+                  if (map) {
+                    if (size) {
+                      map.set('fontSize', size);
+                    } else {
+                      map.delete('fontSize');
                     }
                   }
-                }, 'user');
-              }}
-            >
-              S
-            </button>
-            <button
-              class="inspector-size-btn"
-              title={`${t('canvas.size')} M (18px)`}
-              onClick={() => {
-                boardDoc.transact(() => {
-                  for (const id of selectedNodeIds) {
-                    const map = yNodes.get(id);
-                    if (map) {
-                      map.set('fontSize', 18);
-                      const n = nodeLookup.get(id);
-                      if (n?.type === 'shape') {
-                        map.set('strokeWidth', 3);
-                      }
-                    }
-                  }
-                }, 'user');
-              }}
-            >
-              M
-            </button>
-            <button
-              class="inspector-size-btn"
-              title={`${t('canvas.size')} L (24px)`}
-              onClick={() => {
-                boardDoc.transact(() => {
-                  for (const id of selectedNodeIds) {
-                    const map = yNodes.get(id);
-                    if (map) {
-                      map.set('fontSize', 24);
-                      const n = nodeLookup.get(id);
-                      if (n?.type === 'shape') {
-                        map.set('strokeWidth', 4);
-                      }
-                    }
-                  }
-                }, 'user');
-              }}
-            >
-              L
-            </button>
-            <button
-              class="inspector-size-btn"
-              title={`${t('canvas.size')} XL (32px)`}
-              onClick={() => {
-                boardDoc.transact(() => {
-                  for (const id of selectedNodeIds) {
-                    const map = yNodes.get(id);
-                    if (map) {
-                      map.set('fontSize', 32);
-                      const n = nodeLookup.get(id);
-                      if (n?.type === 'shape') {
-                        map.set('strokeWidth', 6);
-                      }
-                    }
-                  }
-                }, 'user');
-              }}
-            >
-              XL
-            </button>
-          </div>
+                }
+              }, 'user');
+            };
+
+            const stepFontSize = (delta: -1 | 1) => {
+              const cur = currentFontSize || calculateAutoFontSize(activeNode?.text || '', activeNode?.w || 200, activeNode?.h || 130, activeNode?.type);
+              let nextIdx = FONT_PRESETS.findIndex((s) => s >= cur);
+              if (nextIdx === -1) nextIdx = FONT_PRESETS.length - 1;
+              const targetIdx = Math.max(0, Math.min(FONT_PRESETS.length - 1, nextIdx + delta));
+              applyFontSize(FONT_PRESETS[targetIdx]);
+            };
+
+            return (
+              <div class="inspector-font-sizes" style={{ display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                <button
+                  type="button"
+                  class="inspector-size-btn"
+                  title="Decrease text size (A-)"
+                  onClick={() => stepFontSize(-1)}
+                  style={{ width: '22px', height: '22px', padding: 0 }}
+                >
+                  <Icon name="minus" size={12} />
+                </button>
+
+                <select
+                  class="inspector-font-select"
+                  value={currentFontSize ? String(currentFontSize) : 'auto'}
+                  onChange={(e) => {
+                    const val = (e.target as HTMLSelectElement).value;
+                    applyFontSize(val === 'auto' ? undefined : Number(val));
+                  }}
+                  title="Text Size Range"
+                  style={{
+                    background: 'rgba(0, 0, 0, 0.45)',
+                    border: '1px solid rgba(255, 255, 255, 0.16)',
+                    color: '#f1f5f9',
+                    borderRadius: '5px',
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    padding: '2px 5px',
+                    height: '24px',
+                    outline: 'none',
+                    cursor: 'pointer'
+                  }}
+                >
+                  <option value="auto">Auto (Responsive)</option>
+                  <option value="12">12 px</option>
+                  <option value="14">14 px</option>
+                  <option value="16">16 px</option>
+                  <option value="18">18 px</option>
+                  <option value="20">20 px</option>
+                  <option value="24">24 px</option>
+                  <option value="32">32 px</option>
+                  <option value="40">40 px</option>
+                  <option value="48">48 px</option>
+                  <option value="64">64 px</option>
+                  <option value="80">80 px</option>
+                  <option value="96">96 px</option>
+                </select>
+
+                <button
+                  type="button"
+                  class="inspector-size-btn"
+                  title="Increase text size (A+)"
+                  onClick={() => stepFontSize(1)}
+                  style={{ width: '22px', height: '22px', padding: 0 }}
+                >
+                  <Icon name="plus" size={12} />
+                </button>
+              </div>
+            );
+          })()}
 
           <div class="inspector-divider" />
 
@@ -5713,50 +5747,70 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
               ) : node.type === 'shape' ? (
                 <div style={{ position: 'relative', width: '100%', height: '100%', pointerEvents: 'none' }}>
                   {renderShapeSvg(node, nodeColorHex)}
-                  <textarea
-                    id={`node-textarea-${node.id}`}
-                    class="node-inline-textarea shape-inline-textarea"
+                  <div
+                    class="shape-text-flex-container"
                     style={{
-                      fontSize: node.fontSize ? `${node.fontSize}px` : undefined,
-                      pointerEvents: editingNodeId === node.id ? 'auto' : 'none'
+                      position: 'absolute',
+                      inset: '12px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      pointerEvents: editingNodeId === node.id ? 'auto' : 'none',
+                      overflow: 'hidden'
                     }}
-                    value={node.text}
-                    placeholder={t('canvas.enter_text')}
-                    onWheel={(e) => {
-                      if (!e.ctrlKey && !e.metaKey) e.stopPropagation();
-                    }}
-                    onBlur={() => setEditingNodeId(null)}
-                    onMouseDown={(e) => {
-                      if (editingNodeId === node.id) e.stopPropagation();
-                    }}
-                    onPointerDown={(e) => {
-                      if (editingNodeId === node.id) e.stopPropagation();
-                    }}
-                    onClick={(e) => {
-                      if (editingNodeId === node.id) e.stopPropagation();
-                    }}
-                    onDblClick={(e) => {
-                      if (editingNodeId === node.id) e.stopPropagation();
-                    }}
-                    onFocus={() => setSelectedNodeIds(new Set([node.id]))}
-                    onInput={(e) => {
-                      const map = yNodes.get(node.id);
-                      if (map) {
-                        const target = e.target as HTMLTextAreaElement;
-                        setNodeProperties(map, { text: target.value });
-                      }
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Tab' && !e.shiftKey) {
-                        e.preventDefault();
-                        chainNextSticky(node, 'right');
-                      }
-                      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-                        e.preventDefault();
-                        chainNextSticky(node, 'down');
-                      }
-                    }}
-                  />
+                  >
+                    <textarea
+                      id={`node-textarea-${node.id}`}
+                      class="node-inline-textarea shape-inline-textarea"
+                      style={{
+                        fontSize: `${node.fontSize || calculateAutoFontSize(node.text, node.w, node.h, 'shape')}px`,
+                        pointerEvents: editingNodeId === node.id ? 'auto' : 'none',
+                        textAlign: 'center',
+                        width: '100%',
+                        height: 'auto',
+                        maxHeight: '100%',
+                        resize: 'none',
+                        lineHeight: 1.35
+                      }}
+                      rows={Math.min(8, Math.max(1, (node.text || '').split('\n').length))}
+                      value={node.text}
+                      placeholder={t('canvas.enter_text')}
+                      onWheel={(e) => {
+                        if (!e.ctrlKey && !e.metaKey) e.stopPropagation();
+                      }}
+                      onBlur={() => setEditingNodeId(null)}
+                      onMouseDown={(e) => {
+                        if (editingNodeId === node.id) e.stopPropagation();
+                      }}
+                      onPointerDown={(e) => {
+                        if (editingNodeId === node.id) e.stopPropagation();
+                      }}
+                      onClick={(e) => {
+                        if (editingNodeId === node.id) e.stopPropagation();
+                      }}
+                      onDblClick={(e) => {
+                        if (editingNodeId === node.id) e.stopPropagation();
+                      }}
+                      onFocus={() => setSelectedNodeIds(new Set([node.id]))}
+                      onInput={(e) => {
+                        const map = yNodes.get(node.id);
+                        if (map) {
+                          const target = e.target as HTMLTextAreaElement;
+                          setNodeProperties(map, { text: target.value });
+                        }
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Tab' && !e.shiftKey) {
+                          e.preventDefault();
+                          chainNextSticky(node, 'right');
+                        }
+                        if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                          e.preventDefault();
+                          chainNextSticky(node, 'down');
+                        }
+                      }}
+                    />
+                  </div>
                 </div>
               ) : node.type === 'checklist' ? (
                 (() => {
@@ -6430,7 +6484,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                   id={`node-textarea-${node.id}`}
                   class="node-inline-textarea"
                   style={{
-                    fontSize: node.fontSize ? `${node.fontSize}px` : undefined,
+                    fontSize: `${node.fontSize || (node.type === 'text' ? calculateAutoFontSize(node.text, node.w, node.h, 'text') : 15)}px`,
                     pointerEvents: editingNodeId === node.id ? 'auto' : 'none'
                   }}
                   value={node.text}
