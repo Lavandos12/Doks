@@ -165,7 +165,7 @@ export function TopRightBar({
               title="Customize Your Name & Color"
               style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '5px 10px' }}
             >
-              <span style={{ width: '10px', height: '10px', borderRadius: '50%', backgroundColor: profileColor }} />
+              <span style={{ width: '10px', height: '10px', minWidth: '10px', minHeight: '10px', flexShrink: 0, borderRadius: '50%', backgroundColor: profileColor, display: 'inline-block' }} />
               <span style={{ maxWidth: '85px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: '12px' }}>
                 {profileName}
               </span>
@@ -211,19 +211,30 @@ export function TopRightBar({
                     if (e.key === 'Enter') handleSaveQuickProfile(profileName, profileColor);
                   }}
                 />
-                <div style={{ display: 'flex', gap: '6px', justifyContent: 'center' }}>
+                <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', alignItems: 'center' }}>
                   {['#8b5cf6', '#ec4899', '#3b82f6', '#10b981', '#f59e0b', '#06b6d4'].map((c) => (
                     <button
                       key={c}
                       type="button"
+                      class={`quick-profile-color-btn ${profileColor === c ? 'selected' : ''}`}
                       onClick={() => setProfileColor(c)}
                       style={{
-                        width: '20px',
-                        height: '20px',
+                        width: '22px',
+                        height: '22px',
+                        minWidth: '22px',
+                        minHeight: '22px',
+                        padding: 0,
+                        margin: 0,
+                        flex: '0 0 22px',
+                        aspectRatio: '1 / 1',
+                        boxSizing: 'border-box',
                         borderRadius: '50%',
                         backgroundColor: c,
-                        border: profileColor === c ? '2px solid #fff' : 'none',
-                        cursor: 'pointer'
+                        border: profileColor === c ? '2px solid #ffffff' : '2px solid transparent',
+                        boxShadow: profileColor === c ? '0 0 0 2px rgba(139, 92, 246, 0.5)' : 'none',
+                        cursor: 'pointer',
+                        outline: 'none',
+                        display: 'inline-block'
                       }}
                     />
                   ))}

@@ -7547,3 +7547,30 @@ button.settings-color-btn.selected {
 .edge-label-input:focus {
   border-color: #8b5cf6 !important;
 }
+
+/* Quick Collaborator Profile Color Swatches - Perfect Circles */
+button.quick-profile-color-btn {
+  width: 22px !important;
+  height: 22px !important;
+  min-width: 22px !important;
+  min-height: 22px !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  border-radius: 50% !important;
+  box-sizing: border-box !important;
+  flex: 0 0 22px !important;
+  aspect-ratio: 1 / 1 !important;
+  cursor: pointer;
+  outline: none;
+  transition: transform 0.12s ease, border-color 0.12s ease;
+}
+
+button.quick-profile-color-btn:hover {
+  transform: scale(1.15);
+}
+
+button.quick-profile-color-btn.selected {
+  border-color: #ffffff !important;
+  box-shadow: 0 0 0 2px #8b5cf6 !important;
+  transform: scale(1.1);
+}
