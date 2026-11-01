@@ -30,6 +30,7 @@ export class YjsClient {
   private isConnected = false;
   private reconnectTimer?: number;
   private statusPollTimer?: number;
+  private pingInterval?: number;
   private currentScope: WorkspaceScope = 'team';
 
   constructor() {
@@ -85,8 +86,13 @@ export class YjsClient {
       this.socket.onopen = () => {
         this.isConnected = true;
         connectionState.value = 'connected';
-        console.log(`[YjsClient] Connected to local agent (${this.currentScope})`);
-        // Resync all active documents
+        if (this.pingInterval) clearInterval(this.pingInterval);
+        this.pingInterval = window.setInterval(() => {
+          if (this.socket && this.socket.readyState === WebSocket.OPEN) {
+            this.socket.send(JSON.stringify({ type: 'ping' }));
+          }
+        }, 15000);
+
         for (const docName of this.activeSubscriptions) {
           this.subscribeDoc(docName);
         }
@@ -119,6 +125,10 @@ export class YjsClient {
       this.socket.onclose = () => {
         this.isConnected = false;
         connectionState.value = 'disconnected';
+        if (this.pingInterval) {
+          clearInterval(this.pingInterval);
+          this.pingInterval = undefined;
+        }
         this.scheduleReconnect();
       };
 

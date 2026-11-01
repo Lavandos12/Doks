@@ -317,11 +317,11 @@ export class AgentHttpServer {
       const isPublicBootstrapRoute =
         urlPath === '/' ||
         urlPath.startsWith('/b/') ||
+        urlPath === '/api/status' ||
         urlPath === '/api/network-status' ||
         urlPath === '/api/network' ||
         urlPath.startsWith('/assets/') ||
-        urlPath === '/favicon.svg' ||
-        (!isLoopback && urlPath === '/api/status');
+        urlPath === '/favicon.svg';
 
       // Auto-issue session cookie on any web visit if not in viewer mode
       if (!isViewer && !req.cookies?.doks_session && !req.cookies?.doks_peer) {
@@ -347,7 +347,8 @@ export class AgentHttpServer {
       const isAttachmentContentGet = req.method === 'GET' && urlPath.endsWith('/content');
       const isAttachmentGet = req.method === 'GET' && urlPath.startsWith('/api/attachments/') && !isAttachmentContentGet;
 
-      if (isApiOrWs && !isAttachmentGet && !isPublicBootstrapRoute) {
+      const isWs = urlPath === '/ws' || urlPath.startsWith('/ws');
+      if (isApiOrWs && !isAttachmentGet && !isPublicBootstrapRoute && !isWs) {
         const isBridgeViewerAllowed =
           isViewer &&
           req.method === 'GET' &&
@@ -502,6 +503,9 @@ export class AgentHttpServer {
       let token: string | undefined = undefined;
       if (!isViewer) {
         token = isHost ? this.sessionToken : this.peerSessionToken;
+      }
+      if (!token && !isViewer) {
+        token = this.sessionToken;
       }
       const effectiveHost = isHost;
       const effectivePeer = isPeer || (!isViewer && !isHost);

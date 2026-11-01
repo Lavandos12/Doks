@@ -50,8 +50,9 @@ export const globalBoardClipboard: {
 } = { nodes: [], edges: [], copiedAt: 0 };
 
 // Two-Tier Workspace Scope
+const isCloudHost = typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
 const savedScope = typeof localStorage !== 'undefined' ? (localStorage.getItem('doks_scope') as WorkspaceScope) : null;
-export const currentScope = signal<WorkspaceScope>(savedScope || 'solo');
+export const currentScope = signal<WorkspaceScope>(savedScope || (isCloudHost ? 'team' : 'solo'));
 
 const initialViewer = typeof window !== 'undefined' && (
   window.location.search.includes('b=') ||
@@ -225,14 +226,16 @@ export function ensureInitialBoard(): void {
 
   if (!hasAnyBoard) {
     const id = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : 'b_' + Math.random().toString(36).slice(2, 10);
-    soloMaps.boards.set(id, {
+    const targetScope: WorkspaceScope = isCloudHost ? 'team' : 'solo';
+    const targetMap = targetScope === 'team' ? teamMaps.boards : soloMaps.boards;
+    targetMap.set(id, {
       id,
       title: t('sidebar.new_board') || 'Main Board',
       folder: null,
       deleted: false,
       createdAt: Date.now(),
       updatedAt: Date.now(),
-      scope: 'solo'
+      scope: targetScope
     });
   }
 }
