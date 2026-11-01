@@ -190,6 +190,21 @@ function renderShapeSvg(node: BoardNodeData, colorHex: string) {
         />
       );
       break;
+    case 'line': {
+      pathElement = (
+        <line
+          x1={0}
+          y1={h / 2}
+          x2={w}
+          y2={h / 2}
+          stroke={strokeColor}
+          strokeWidth={Math.max(2, strokeWidth || 3)}
+          strokeLinecap="round"
+          vectorEffect="non-scaling-stroke"
+        />
+      );
+      break;
+    }
     case 'rounded':
       pathElement = (
         <rect
@@ -255,10 +270,10 @@ export function calculateAutoFontSize(text: string, w: number, h: number, type?:
   const maxLineLen = Math.max(1, ...lines.map((l) => l.trim().length));
   const lineCount = Math.max(1, lines.length);
 
-  // Short labels / single-character symbols (e.g. '-', '1', 'Start')
-  if (clean.length <= 4 && lineCount === 1) {
-    const singleScale = Math.min(padW * 0.35, padH * 0.45);
-    return Math.min(Math.max(16, Math.round(singleScale)), 56);
+  // Short labels / symbols (e.g. '-', 'nn', 'Start', 'Title')
+  if (clean.length <= 6 && lineCount === 1) {
+    const singleScale = Math.min(padW * 0.4, padH * 0.45);
+    return Math.min(Math.max(16, Math.round(singleScale)), 110);
   }
 
   // Multi-line or paragraph text
@@ -266,7 +281,7 @@ export function calculateAutoFontSize(text: string, w: number, h: number, type?:
   const sizeByH = padH / (lineCount * 1.35);
   const ideal = Math.min(sizeByW, sizeByH);
 
-  return Math.min(Math.max(13, Math.round(ideal)), 48);
+  return Math.min(Math.max(13, Math.round(ideal)), 84);
 }
 
 export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, scopeOverride }: BoardCanvasProps) {
@@ -2524,7 +2539,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
 
           let guides: AlignmentGuide[] = [];
           if (!e.altKey) {
-            const snapThreshold = 6 / viewport.zoom;
+            const snapThreshold = Math.min(4, 3 / viewport.zoom);
             const candidates: BoxRect[] = visibleNodes
               .filter((n) => {
                 if (n.id === resizeState.nodeId || n.deleted || n.type === 'drawing') return false;
@@ -2958,6 +2973,19 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
       }
       if (activeTool === 'text') {
         createNodeAt('text', pos.x - 110, pos.y - 40);
+        return;
+      }
+      if (activeTool === 'line') {
+        const id = createNodeAt('shape', pos.x - 100, pos.y - 8, activeColor);
+        const map = yNodes.get(id);
+        if (map) {
+          map.set('shapeVariant', 'line');
+          map.set('w', 220);
+          map.set('h', 16);
+          map.set('strokeWidth', 3);
+          map.set('text', '');
+        }
+        setActiveTool('select');
         return;
       }
       if (activeTool === 'shape') {
@@ -3866,21 +3894,6 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                 </div>
               </div>
             )}
-          </div>
-
-          {/* 5b. Straight Line (L) */}
-          <div class="miro-dock-tool-wrapper">
-            <button
-              class={`miro-dock-btn ${activeTool === 'line' ? 'active' : ''}`}
-              data-tool="line"
-              onClick={() => {
-                setActiveTool('line');
-                setActiveFlyout('none');
-              }}
-              title="Straight Line / Divider (L)"
-            >
-              <Icon name="line" size={20} />
-            </button>
           </div>
 
           {/* 4. Shapes (R) + Flyout */}
