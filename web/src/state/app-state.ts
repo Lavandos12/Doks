@@ -327,9 +327,10 @@ function syncIndexSignals() {
 
   // Auto-open first board if no tabs open and boards exist
   if (openTabs.value.length === 0 && !activeTabId.value) {
-    const firstBoard = allBoards.value[0] || boardList.find((b) => !b.deleted);
-    if (firstBoard) {
-      selectBoardWithScope(firstBoard.id, firstBoard.scope || 'solo', firstBoard.title);
+    const defaultBoardId = isCloudHost ? TEAM_MAIN_BOARD_ID : SOLO_MAIN_BOARD_ID;
+    const defaultBoard = allBoards.value.find((b) => b.id === defaultBoardId) || allBoards.value[0];
+    if (defaultBoard) {
+      selectBoardWithScope(defaultBoard.id, defaultBoard.scope || (isCloudHost ? 'team' : 'solo'), defaultBoard.title);
     }
   }
 

@@ -742,6 +742,22 @@ export class AgentHttpServer {
       };
     });
 
+    this.fastify.post('/api/profile', async (req, reply) => {
+      const body = req.body as { memberName?: string; memberColor?: string };
+      if (body.memberName) {
+        this.config.memberName = body.memberName.trim().slice(0, 32);
+      }
+      if (body.memberColor) {
+        this.config.memberColor = body.memberColor.trim();
+      }
+      saveConfig(this.config);
+      return {
+        success: true,
+        memberName: this.config.memberName,
+        memberColor: this.config.memberColor
+      };
+    });
+
     // API: List peers & discovered LAN rooms
     this.fastify.get('/api/peers', async () => {
       return {
@@ -1631,6 +1647,8 @@ export class AgentHttpServer {
             client.subscribedDocs.has(docName) ||
             docName === DOC_INDEX ||
             docName.endsWith(`:${DOC_INDEX}`) ||
+            docName.includes('doks-board-') ||
+            docName.includes('doks-note-') ||
             docName.startsWith('board:') ||
             docName.includes(':board:') ||
             docName === `${client.queryScope}:${DOC_INDEX}` ||

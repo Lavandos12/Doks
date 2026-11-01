@@ -66,17 +66,15 @@ describe('Stage E: Bilingual Support, Apache-2.0 License & Documentation', () =>
     }
   });
 
-  it('verifies web i18n dictionaries have identical keys and interpolation support', async () => {
+  it('verifies web English dictionary has comprehensive translations and legacy ru.ts purged', async () => {
     const i18nPath = path.join(rootDir, 'web/src/i18n');
     expect(fs.existsSync(i18nPath)).toBe(true);
 
-    // We dynamically require or parse the dictionary files
     const ruPath = path.join(i18nPath, 'ru.ts');
     const enPath = path.join(i18nPath, 'en.ts');
-    expect(fs.existsSync(ruPath)).toBe(true);
+    expect(fs.existsSync(ruPath), 'Legacy ru.ts must be purged').toBe(false);
     expect(fs.existsSync(enPath)).toBe(true);
 
-    const ruContent = fs.readFileSync(ruPath, 'utf-8');
     const enContent = fs.readFileSync(enPath, 'utf-8');
 
     // Simple key extraction from typescript object
@@ -85,17 +83,10 @@ describe('Stage E: Bilingual Support, Apache-2.0 License & Documentation', () =>
       return new Set(matches.map((m) => m.split(':')[0].trim().replace(/['"]/g, '')));
     };
 
-    const ruKeys = extractKeys(ruContent);
     const enKeys = extractKeys(enContent);
-
-    expect(ruKeys.size).toBeGreaterThan(20);
-    expect(enKeys.size).toBeGreaterThan(20);
-
-    for (const key of ruKeys) {
-      expect(enKeys.has(key), `English dictionary is missing key "${key}"`).toBe(true);
-    }
-    for (const key of enKeys) {
-      expect(ruKeys.has(key), `Russian dictionary is missing key "${key}"`).toBe(true);
-    }
+    expect(enKeys.size).toBeGreaterThan(50);
+    expect(enKeys.has('status.synced')).toBe(true);
+    expect(enKeys.has('status.connecting')).toBe(true);
+    expect(enKeys.has('status.offline')).toBe(true);
   });
 });

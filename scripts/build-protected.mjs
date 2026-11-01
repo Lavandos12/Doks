@@ -12,8 +12,9 @@ if (fs.existsSync(releaseWebDist)) {
   fs.rmSync(releaseWebDist, { recursive: true, force: true });
 }
 
-console.log('Building @doks/shared and @doks/web...');
+console.log('Building @doks/shared, @doks/agent, and @doks/web...');
 execSync('npm run build --workspace=shared', { stdio: 'inherit', cwd: rootDir });
+execSync('npm run build --workspace=agent', { stdio: 'inherit', cwd: rootDir });
 execSync('npm run build --workspace=web', { stdio: 'inherit', cwd: rootDir });
 
 if (!fs.existsSync(releaseDir)) {

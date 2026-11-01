@@ -1,7 +1,7 @@
 import { h, VNode } from 'preact';
 import { useState, useRef, useEffect } from 'preact/hooks';
 import type { WorkspaceScope } from '@doks/shared';
-import { createBoard, selectBoardWithScope } from '../../state/app-state.js';
+import { createBoard, selectBoardWithScope, currentScope } from '../../state/app-state.js';
 import { Icon } from '../../ui/icons.js';
 import { showToast } from '../../ui/toast.js';
 import { t } from '../../i18n/index.js';
@@ -20,7 +20,7 @@ export function CreateBoardModal({
   if (!isOpen) return null;
 
   const [title, setTitle] = useState(t('create_board.default_title'));
-  const [selectedScope, setSelectedScope] = useState<WorkspaceScope>('solo');
+  const [selectedScope, setSelectedScope] = useState<WorkspaceScope>(currentScope.value === 'solo' ? 'solo' : 'team');
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {

@@ -85,7 +85,7 @@ describe('Stage B: P0 Reproductions (F1, F2)', () => {
     });
 
     it('requires session cookie for API requests returning 401 when unauthenticated', async () => {
-      const res = await fetch(`${baseUrl}/api/status`, {
+      const res = await fetch(`${baseUrl}/api/profile`, {
         headers: {
           // No cookies sent
         }

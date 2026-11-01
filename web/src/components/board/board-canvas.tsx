@@ -125,6 +125,30 @@ interface RemoteCursor {
   color: string;
 }
 
+const getLocalCollaborator = () => {
+  if (typeof window === 'undefined') return { name: 'User', color: '#ec4899' };
+  let name = localStorage.getItem('doks_display_name');
+  if (!name || name === 'You') {
+    let guestId = sessionStorage.getItem('doks_guest_id');
+    if (!guestId) {
+      guestId = Math.floor(100 + Math.random() * 900).toString();
+      sessionStorage.setItem('doks_guest_id', guestId);
+    }
+    name = `Collaborator #${guestId}`;
+  }
+  let color = localStorage.getItem('doks_cursor_color');
+  if (!color) {
+    const PALETTE = ['#ec4899', '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#06b6d4', '#f97316'];
+    let savedColor = sessionStorage.getItem('doks_guest_color');
+    if (!savedColor) {
+      savedColor = PALETTE[Math.floor(Math.random() * PALETTE.length)];
+      sessionStorage.setItem('doks_guest_color', savedColor);
+    }
+    color = savedColor;
+  }
+  return { name, color };
+}
+
 interface ContextMenuState {
   x: number;
   y: number;
@@ -937,7 +961,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
             clientId,
             x: state.cursor.x,
             y: state.cursor.y,
-            name: state.cursor.name || 'User',
+            name: state.cursor.name && state.cursor.name !== 'You' ? state.cursor.name : `Collaborator #${clientId % 1000}`,
             color: state.cursor.color || '#7c8cff'
           });
         }
@@ -2357,11 +2381,12 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
       }
       const pos = screenToCanvas(e.clientX, e.clientY);
       lastMouseCanvasPosRef.current = pos;
+      const collaborator = getLocalCollaborator();
       awareness.setLocalStateField('cursor', {
         x: pos.x,
         y: pos.y,
-        name: agentStatus.value?.memberName || 'User',
-        color: agentStatus.value?.memberColor || '#7c8cff'
+        name: collaborator.name,
+        color: collaborator.color
       });
 
       // Panning (immediate 1:1 direct pointer tracking)
@@ -3627,7 +3652,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
         {isBoardsPopoverOpen && (
           <div class="miro-boards-popover liquid-glass-surface">
             <div class="miro-popover-header">
-              <span class="miro-popover-title">{t('topbar.my_boards')} ({allBoards.value.length})</span>
+              <span class="miro-popover-title">{t('topbar.my_boards')} ({allBoards.value.filter((b) => (b.scope || 'solo') === currentScope.value).length})</span>
               {!isViewerMode.value && (
                 <button
                   class="btn-primary-xs"
@@ -3695,7 +3720,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
               </button>
             </div>
             <div class="miro-boards-list">
-              {allBoards.value.map((b) => (
+              {allBoards.value.filter((b) => (b.scope || 'solo') === currentScope.value).map((b) => (
                 <div
                   key={b.id}
                   class={`miro-board-item tree-board-item ${b.id === boardId ? 'active' : ''}`}
@@ -6304,7 +6329,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
               <path d="M5.5 3.21V20.8c0 .45.54.67.85.35l4.86-4.86a.5.5 0 0 1 .35-.15h6.87a.5.5 0 0 0 .35-.85L6.35 2.85a.5.5 0 0 0-.85.36z" />
             </svg>
             <span class="remote-cursor-badge" style={{ backgroundColor: c.color }}>
-              {c.name}
+              {c.name && c.name !== 'You' ? c.name : `Collaborator #${c.clientId % 1000}`}
             </span>
           </div>
         ))}
