@@ -47,7 +47,7 @@ export interface JSONCanvasNode {
     strokeWidth?: number;
     drawMode?: 'pen' | 'brush' | 'highlighter';
     opacity?: number;
-    chartType?: 'pie' | 'donut' | 'square' | 'bar';
+    chartType?: 'pie' | 'donut' | 'square' | 'bar' | 'line' | 'funnel';
     chartData?: Array<{ id: string; label: string; value: number; color: string }>;
     description?: string;
     codeLanguage?: string;

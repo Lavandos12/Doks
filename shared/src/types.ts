@@ -96,8 +96,8 @@ export interface BoardNodeData {
   locked?: boolean;
   fontSize?: number;
   hasCheckbox?: boolean;
-  shapeVariant?: 'rectangle' | 'rounded' | 'diamond' | 'pill' | 'circle' | 'triangle' | 'parallelogram' | 'cylinder' | 'hexagon';
-  chartType?: 'pie' | 'donut' | 'square' | 'bar';
+  shapeVariant?: 'rectangle' | 'rounded' | 'diamond' | 'pill' | 'circle' | 'triangle' | 'parallelogram' | 'cylinder' | 'hexagon' | 'right-triangle' | 'trapezoid' | 'star' | 'cloud' | 'callout' | 'document' | 'step-arrow';
+  chartType?: 'pie' | 'donut' | 'square' | 'bar' | 'line' | 'funnel';
   chartData?: Array<{ id: string; label: string; value: number; color: string }>;
   svgPath?: string;
   points?: Array<{ x: number; y: number }>;

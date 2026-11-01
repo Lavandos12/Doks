@@ -270,6 +270,142 @@ function renderShapeSvg(node: BoardNodeData, colorHex: string) {
       );
       break;
     }
+    case 'right-triangle': {
+      const pad = strokeWidth;
+      pathElement = (
+        <polygon
+          points={`${pad},${pad} ${w - pad},${h - pad} ${pad},${h - pad}`}
+          fill={fillColor}
+          stroke={strokeColor}
+          strokeWidth={strokeWidth}
+          strokeLinejoin="round"
+          vectorEffect="non-scaling-stroke"
+        />
+      );
+      break;
+    }
+    case 'trapezoid': {
+      const pad = strokeWidth;
+      const inset = Math.min(w * 0.2, 36);
+      pathElement = (
+        <polygon
+          points={`${inset + pad},${pad} ${w - inset - pad},${pad} ${w - pad},${h - pad} ${pad},${h - pad}`}
+          fill={fillColor}
+          stroke={strokeColor}
+          strokeWidth={strokeWidth}
+          strokeLinejoin="round"
+          vectorEffect="non-scaling-stroke"
+        />
+      );
+      break;
+    }
+    case 'star': {
+      const cx = w / 2;
+      const cy = h / 2;
+      const outerR = Math.min(w, h) / 2 - strokeWidth;
+      const innerR = outerR * 0.42;
+      const points: string[] = [];
+      for (let i = 0; i < 10; i++) {
+        const r = i % 2 === 0 ? outerR : innerR;
+        const angle = -Math.PI / 2 + (i * Math.PI) / 5;
+        points.push(`${cx + r * Math.cos(angle)},${cy + r * Math.sin(angle)}`);
+      }
+      pathElement = (
+        <polygon
+          points={points.join(' ')}
+          fill={fillColor}
+          stroke={strokeColor}
+          strokeWidth={strokeWidth}
+          strokeLinejoin="round"
+          vectorEffect="non-scaling-stroke"
+        />
+      );
+      break;
+    }
+    case 'cloud': {
+      const pad = strokeWidth;
+      const d = `M ${w * 0.25} ${h * 0.75}
+        C ${w * 0.08} ${h * 0.75}, ${pad} ${h * 0.6}, ${pad} ${h * 0.45}
+        C ${pad} ${h * 0.3}, ${w * 0.12} ${h * 0.18}, ${w * 0.28} ${h * 0.18}
+        C ${w * 0.35} ${pad}, ${w * 0.65} ${pad}, ${w * 0.72} ${h * 0.2}
+        C ${w * 0.88} ${h * 0.2}, ${w - pad} ${h * 0.32}, ${w - pad} ${h * 0.48}
+        C ${w - pad} ${h * 0.65}, ${w * 0.88} ${h * 0.75}, ${w * 0.75} ${h * 0.75}
+        Z`;
+      pathElement = (
+        <path
+          d={d}
+          fill={fillColor}
+          stroke={strokeColor}
+          strokeWidth={strokeWidth}
+          strokeLinejoin="round"
+          vectorEffect="non-scaling-stroke"
+        />
+      );
+      break;
+    }
+    case 'callout': {
+      const pad = strokeWidth;
+      const tailW = Math.min(24, w * 0.18);
+      const tailH = Math.min(20, h * 0.2);
+      const mainH = h - tailH - pad;
+      const rx = 12;
+      const d = `M ${rx + pad} ${pad}
+        H ${w - rx - pad} A ${rx} ${rx} 0 0 1 ${w - pad} ${rx + pad}
+        V ${mainH - rx} A ${rx} ${rx} 0 0 1 ${w - rx - pad} ${mainH}
+        H ${w * 0.35}
+        L ${w * 0.18} ${h - pad}
+        L ${w * 0.24} ${mainH}
+        H ${rx + pad} A ${rx} ${rx} 0 0 1 ${pad} ${mainH - rx}
+        V ${rx + pad} A ${rx} ${rx} 0 0 1 ${rx + pad} ${pad} Z`;
+      pathElement = (
+        <path
+          d={d}
+          fill={fillColor}
+          stroke={strokeColor}
+          strokeWidth={strokeWidth}
+          strokeLinejoin="round"
+          vectorEffect="non-scaling-stroke"
+        />
+      );
+      break;
+    }
+    case 'document': {
+      const pad = strokeWidth;
+      const wave = Math.min(16, h * 0.12);
+      const mainH = h - wave;
+      const d = `M ${pad} ${pad}
+        H ${w - pad}
+        V ${mainH}
+        Q ${w * 0.75} ${h} ${w * 0.5} ${mainH}
+        T ${pad} ${mainH}
+        Z`;
+      pathElement = (
+        <path
+          d={d}
+          fill={fillColor}
+          stroke={strokeColor}
+          strokeWidth={strokeWidth}
+          strokeLinejoin="round"
+          vectorEffect="non-scaling-stroke"
+        />
+      );
+      break;
+    }
+    case 'step-arrow': {
+      const pad = strokeWidth;
+      const arrowPoint = Math.min(32, w * 0.25);
+      pathElement = (
+        <polygon
+          points={`${pad},${h * 0.25} ${w - arrowPoint},${h * 0.25} ${w - arrowPoint},${pad} ${w - pad},${h * 0.5} ${w - arrowPoint},${h - pad} ${w - arrowPoint},${h * 0.75} ${pad},${h * 0.75}`}
+          fill={fillColor}
+          stroke={strokeColor}
+          strokeWidth={strokeWidth}
+          strokeLinejoin="round"
+          vectorEffect="non-scaling-stroke"
+        />
+      );
+      break;
+    }
     case 'rounded':
       pathElement = (
         <rect
@@ -529,7 +665,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
   const [isBoardsPopoverOpen, setIsBoardsPopoverOpen] = useState(false);
   const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
   // network popover centralized in App
-  const [selectedShapeVariant, setSelectedShapeVariant] = useState<'rectangle' | 'rounded' | 'circle' | 'diamond' | 'triangle' | 'parallelogram' | 'cylinder' | 'hexagon'>('rectangle');
+  const [selectedShapeVariant, setSelectedShapeVariant] = useState<'rectangle' | 'rounded' | 'circle' | 'diamond' | 'triangle' | 'parallelogram' | 'cylinder' | 'hexagon' | 'right-triangle' | 'trapezoid' | 'star' | 'cloud' | 'callout' | 'document' | 'step-arrow'>('rectangle');
   const [defaultLineStyle, setDefaultLineStyle] = useState<{ curveType: 'bezier' | 'orthogonal' | 'straight'; style: 'solid' | 'dashed'; color: string }>({
     curveType: 'bezier',
     style: 'solid',
@@ -4678,6 +4814,90 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                 >
                   <Icon name="hexagon" size={14} />
                 </button>
+                <button
+                  class="inspector-btn"
+                  title="Right Triangle (Geoma)"
+                  onClick={() => {
+                    boardDoc.transact(() => {
+                      for (const id of selectedNodeIds) {
+                        const map = yNodes.get(id);
+                        if (map) map.set('shapeVariant', 'right-triangle');
+                      }
+                    }, CANVAS_UNDO_ORIGIN);
+                  }}
+                >
+                  <Icon name="triangle" size={14} />
+                </button>
+                <button
+                  class="inspector-btn"
+                  title="Trapezoid"
+                  onClick={() => {
+                    boardDoc.transact(() => {
+                      for (const id of selectedNodeIds) {
+                        const map = yNodes.get(id);
+                        if (map) map.set('shapeVariant', 'trapezoid');
+                      }
+                    }, CANVAS_UNDO_ORIGIN);
+                  }}
+                >
+                  <Icon name="parallelogram" size={14} />
+                </button>
+                <button
+                  class="inspector-btn"
+                  title="Star"
+                  onClick={() => {
+                    boardDoc.transact(() => {
+                      for (const id of selectedNodeIds) {
+                        const map = yNodes.get(id);
+                        if (map) map.set('shapeVariant', 'star');
+                      }
+                    }, CANVAS_UNDO_ORIGIN);
+                  }}
+                >
+                  <Icon name="sparkles" size={14} />
+                </button>
+                <button
+                  class="inspector-btn"
+                  title="Speech Bubble / Callout"
+                  onClick={() => {
+                    boardDoc.transact(() => {
+                      for (const id of selectedNodeIds) {
+                        const map = yNodes.get(id);
+                        if (map) map.set('shapeVariant', 'callout');
+                      }
+                    }, CANVAS_UNDO_ORIGIN);
+                  }}
+                >
+                  <Icon name="file-text" size={14} />
+                </button>
+                <button
+                  class="inspector-btn"
+                  title="Flowchart Document"
+                  onClick={() => {
+                    boardDoc.transact(() => {
+                      for (const id of selectedNodeIds) {
+                        const map = yNodes.get(id);
+                        if (map) map.set('shapeVariant', 'document');
+                      }
+                    }, CANVAS_UNDO_ORIGIN);
+                  }}
+                >
+                  <Icon name="layout" size={14} />
+                </button>
+                <button
+                  class="inspector-btn"
+                  title="Process Step Arrow"
+                  onClick={() => {
+                    boardDoc.transact(() => {
+                      for (const id of selectedNodeIds) {
+                        const map = yNodes.get(id);
+                        if (map) map.set('shapeVariant', 'step-arrow');
+                      }
+                    }, CANVAS_UNDO_ORIGIN);
+                  }}
+                >
+                  <Icon name="arrow-right" size={14} />
+                </button>
               </>
             );
           })()}
@@ -5863,7 +6083,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                     if (map) setNodeProperties(map, { chartData: newData });
                   };
 
-                  const setChartMode = (mode: 'pie' | 'donut' | 'square' | 'bar') => {
+                  const setChartMode = (mode: 'pie' | 'donut' | 'square' | 'bar' | 'line' | 'funnel') => {
                     const map = yNodes.get(node.id);
                     if (map) setNodeProperties(map, { chartType: mode });
                   };
@@ -5931,6 +6151,22 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                               title={t('widget.chart_columns')}
                             >
                               {t('widget.chart_columns')}
+                            </button>
+                            <button
+                              type="button"
+                              class={`chart-mode-btn ${chartType === 'line' ? 'active' : ''}`}
+                              onClick={() => setChartMode('line')}
+                              title="Line Chart"
+                            >
+                              Line
+                            </button>
+                            <button
+                              type="button"
+                              class={`chart-mode-btn ${chartType === 'funnel' ? 'active' : ''}`}
+                              onClick={() => setChartMode('funnel')}
+                              title="Funnel Chart"
+                            >
+                              Funnel
                             </button>
                           </div>
                         )}
@@ -6020,6 +6256,62 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                                 );
                               })}
                             </div>
+                          </div>
+                        ) : chartType === 'line' ? (
+                          <div style={{ width: '100%', height: '100%', minHeight: '130px', flex: 1, padding: '8px 12px', display: 'flex', flexDirection: 'column' }}>
+                            {(() => {
+                              const maxVal = Math.max(1, ...data.map((d) => Number(d.value) || 0));
+                              const pts = data.map((d, i) => {
+                                const x = data.length > 1 ? 16 + (i / (data.length - 1)) * 268 : 150;
+                                const val = Number(d.value) || 0;
+                                const y = 110 - (val / maxVal) * 80;
+                                return { x, y, color: d.color, label: d.label, val };
+                              });
+                              const pathD = pts.length > 0 ? `M ${pts.map((p) => `${p.x} ${p.y}`).join(' L ')}` : '';
+                              return (
+                                <svg viewBox="0 0 300 130" style={{ width: '100%', height: '100%', overflow: 'visible' }}>
+                                  <line x1="16" y1="110" x2="284" y2="110" stroke="rgba(255,255,255,0.15)" strokeWidth="1" />
+                                  {pathD && <path d={pathD} fill="none" stroke="#8b5cf6" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />}
+                                  {pts.map((p, idx) => (
+                                    <g key={idx}>
+                                      <circle cx={p.x} cy={p.y} r="4" fill={p.color} stroke="#ffffff" strokeWidth="1.5" />
+                                      <text x={p.x} y="124" fill="#94a3b8" fontSize="9" textAnchor="middle">{p.label}</text>
+                                    </g>
+                                  ))}
+                                </svg>
+                              );
+                            })()}
+                          </div>
+                        ) : chartType === 'funnel' ? (
+                          <div style={{ width: '100%', height: '100%', minHeight: '130px', flex: 1, padding: '6px 14px', display: 'flex', flexDirection: 'column', gap: '6px', justifyContent: 'center' }}>
+                            {data.map((seg, idx) => {
+                              const val = Math.max(0, Number(seg.value) || 0);
+                              const widthPct = Math.max(28, 100 - idx * (70 / Math.max(1, data.length)));
+                              const pct = total > 0 ? Math.round((val / total) * 100) : 0;
+                              return (
+                                <div key={seg.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%' }}>
+                                  <div
+                                    style={{
+                                      width: `${widthPct}%`,
+                                      height: '24px',
+                                      background: seg.color,
+                                      borderRadius: '4px',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'space-between',
+                                      padding: '0 8px',
+                                      color: '#ffffff',
+                                      fontSize: '11px',
+                                      fontWeight: 600,
+                                      boxShadow: '0 2px 6px rgba(0,0,0,0.3)'
+                                    }}
+                                  >
+                                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '60%' }}>{seg.label}</span>
+                                    <span>{pct}%</span>
+                                  </div>
+                                </div>
+                              );
+                            })}
                           </div>
                         ) : (
                           <div style={{ width: '100%', height: '100%', minHeight: '110px', flex: 1, display: 'flex', alignItems: 'flex-end', justifyContent: 'center', gap: '14px', padding: '0 12px 6px' }}>
