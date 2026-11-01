@@ -1165,6 +1165,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
   });
 
   const handleTouchStart = (e: TouchEvent) => {
+    if (e.cancelable) e.preventDefault();
     if (e.touches.length === 1) {
       touchStateRef.current = {
         initialDist: null,
@@ -1188,6 +1189,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
   };
 
   const handleTouchMove = (e: TouchEvent) => {
+    if (e.cancelable) e.preventDefault();
     if (e.touches.length === 1 && !touchStateRef.current.isPinching) {
       const touch = e.touches[0];
       const dx = touch.clientX - touchStateRef.current.lastX;

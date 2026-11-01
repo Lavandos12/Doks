@@ -81,6 +81,11 @@ export const appState = computed(() => ({
 let userDismissedViewer = false;
 
 export function setViewerMode(enabled: boolean, allowSolo = false): void {
+  // Mobile devices are permanently locked to read-only viewer mode
+  if (isMobilePhoneDevice()) {
+    isViewerMode.value = true;
+    return;
+  }
   isViewerMode.value = enabled;
   isViewerAllowSolo.value = allowSolo;
   if (!enabled) {

@@ -7574,3 +7574,110 @@ button.quick-profile-color-btn.selected {
   box-shadow: 0 0 0 2px #8b5cf6 !important;
   transform: scale(1.1);
 }
+
+/* =========================================================================
+   Mobile Phone Touch & Viewer Optimization (max-width: 768px)
+   ========================================================================= */
+
+html, body, #app, .app-layout {
+  touch-action: manipulation;
+  overscroll-behavior: none;
+}
+
+.board-container {
+  touch-action: none !important;
+  overscroll-behavior: none !important;
+  -webkit-touch-callout: none;
+}
+
+/* Prevent accidental keyboard popups when panning over cards on mobile in viewer mode */
+.is-viewer-mode .board-node-box input,
+.is-viewer-mode .board-node-box textarea,
+.is-viewer-mode .board-node-box select {
+  pointer-events: none !important;
+  user-select: none !important;
+}
+
+.is-viewer-mode .board-node-box a,
+.is-viewer-mode .board-node-box .node-open-note-btn,
+.is-viewer-mode .board-node-box .file-download-link {
+  pointer-events: auto !important;
+}
+
+@media (max-width: 768px) {
+  /* Hide desktop-only floating action bar on mobile */
+  .is-viewer-mode .miro-actions-bar,
+  .miro-actions-bar {
+    display: none !important;
+  }
+
+  /* Compact single-row top bar for mobile */
+  .miro-board-bar {
+    top: 36px !important;
+    left: 8px !important;
+    right: 8px !important;
+    max-width: calc(100% - 16px) !important;
+    padding: 5px 10px !important;
+    gap: 8px !important;
+    border-radius: 10px !important;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4) !important;
+    display: flex !important;
+    justify-content: space-between !important;
+  }
+
+  .miro-brand-logo svg {
+    width: 20px !important;
+    height: 20px !important;
+  }
+
+  .miro-board-selector-btn {
+    padding: 3px 6px !important;
+    font-size: 12px !important;
+    max-width: 160px !important;
+  }
+
+  .miro-board-title {
+    max-width: 120px !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+    font-size: 12px !important;
+  }
+
+  /* Hide secondary desktop buttons inside top bar */
+  .miro-scope-action-btn,
+  .miro-scope-pill {
+    display: none !important;
+  }
+
+  /* Minimalist live dot indicator */
+  .miro-scope-status-pill {
+    padding: 3px 6px !important;
+    font-size: 11px !important;
+  }
+
+  /* Touch-friendly bottom zoom HUD */
+  .canvas-bottom-right-hud {
+    right: 10px !important;
+    bottom: 12px !important;
+    gap: 4px !important;
+  }
+
+  .zoom-hud-pill {
+    padding: 3px 4px !important;
+    gap: 2px !important;
+    border-radius: 8px !important;
+  }
+
+  .hud-btn {
+    min-width: 32px !important;
+    height: 32px !important;
+    padding: 0 6px !important;
+    font-size: 11px !important;
+  }
+
+  /* Hide minimap button on phone screens */
+  .canvas-bottom-right-hud .hud-btn:last-child {
+    display: none !important;
+  }
+}

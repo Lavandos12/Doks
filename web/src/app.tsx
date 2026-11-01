@@ -15,7 +15,6 @@ import {
   isImportWizardOpen,
   agentStatus,
   isViewerMode,
-  setViewerMode,
   selectBoardWithScope,
   TEAM_MAIN_BOARD_ID,
   SOLO_MAIN_BOARD_ID,
@@ -150,7 +149,7 @@ export function App() {
 
   return (
     <div class={`app-layout theme-${theme.value} view-board-canvas ${isViewer ? 'is-viewer-mode' : ''}`}>
-      {/* Read-Only Viewer Banner for Phone/Bridge sessions */}
+      {/* Compact Read-Only Indicator for Mobile/Bridge sessions */}
       {isViewer && (
         <div
           class="bridge-viewer-banner"
@@ -160,38 +159,23 @@ export function App() {
             left: 0,
             right: 0,
             zIndex: 9999,
-            background: 'rgba(99, 102, 241, 0.95)',
-            color: '#ffffff',
-            padding: '6px 14px',
-            fontSize: '12px',
+            background: 'rgba(30, 27, 75, 0.92)',
+            color: '#c7d2fe',
+            borderBottom: '1px solid rgba(139, 92, 246, 0.25)',
+            padding: '5px 12px',
+            fontSize: '11px',
             fontWeight: 600,
             textAlign: 'center',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            gap: '10px',
+            gap: '8px',
             backdropFilter: 'blur(8px)',
-            boxShadow: '0 2px 10px rgba(0, 0, 0, 0.3)'
+            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.3)'
           }}
         >
-          <Icon name="smartphone" size={14} />
-          <span>Mobile Viewer Mode (Read-Only)</span>
-          <button
-            type="button"
-            onClick={() => setViewerMode(false)}
-            style={{
-              background: 'rgba(255, 255, 255, 0.2)',
-              border: '1px solid rgba(255, 255, 255, 0.4)',
-              color: '#ffffff',
-              borderRadius: '6px',
-              padding: '2px 8px',
-              fontSize: '11px',
-              cursor: 'pointer',
-              marginLeft: '8px'
-            }}
-          >
-            Switch to Editor
-          </button>
+          <Icon name="smartphone" size={13} />
+          <span>Mobile Viewer (Live Sync Active)</span>
         </div>
       )}
 
