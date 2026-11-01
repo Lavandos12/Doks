@@ -2341,7 +2341,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
   // Global Pointer Events
   useEffect(() => {
     const handleGlobalPointerMove = (e: PointerEvent) => {
-      if (activeTool === 'draw') {
+      if (activeTool === 'draw' || activeTool === 'line') {
         setCursorScreenPos({ x: e.clientX, y: e.clientY });
       } else {
         setCursorScreenPos(null);
@@ -2368,11 +2368,30 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
         }, true);
       }
 
-      // Freehand drawing in-progress
+      // Drawing in-progress (Freehand or Straight Marker Line)
       if (currentStrokeRef.current) {
-        const next = [...currentStrokeRef.current, pos];
-        currentStrokeRef.current = next;
-        setCurrentStroke(next);
+        if (activeTool === 'line') {
+          const start = currentStrokeRef.current[0];
+          let end = pos;
+          if (e.shiftKey) {
+            const dx = end.x - start.x;
+            const dy = end.y - start.y;
+            const angle = Math.atan2(dy, dx);
+            const snappedAngle = Math.round(angle / (Math.PI / 4)) * (Math.PI / 4);
+            const dist = Math.hypot(dx, dy);
+            end = {
+              x: start.x + dist * Math.cos(snappedAngle),
+              y: start.y + dist * Math.sin(snappedAngle)
+            };
+          }
+          const next = [start, end];
+          currentStrokeRef.current = next;
+          setCurrentStroke(next);
+        } else {
+          const next = [...currentStrokeRef.current, pos];
+          currentStrokeRef.current = next;
+          setCurrentStroke(next);
+        }
       }
 
       // Eraser dragging over drawing nodes
@@ -2684,16 +2703,29 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
       setMarqueeBox(null);
       undoManagerRef.current?.stopCapturing();
 
-      // Freehand drawing commit
+      // Drawing commit (Freehand or Straight Marker Line)
       const stroke = currentStrokeRef.current;
       if (stroke) {
         currentStrokeRef.current = null;
         setCurrentStroke(null);
-        if (stroke.length >= 2) {
-          const bbox = computeBoundingBox(stroke, 8);
+        let finalStroke = stroke;
+        if (activeTool === 'line') {
+          const dist = Math.hypot(stroke[stroke.length - 1].x - stroke[0].x, stroke[stroke.length - 1].y - stroke[0].y);
+          if (dist < 8) {
+            // Quick click: spawn a 180px straight horizontal line
+            finalStroke = [
+              { x: stroke[0].x - 90, y: stroke[0].y },
+              { x: stroke[0].x + 90, y: stroke[0].y }
+            ];
+          } else {
+            finalStroke = [stroke[0], stroke[stroke.length - 1]];
+          }
+        }
+        if (finalStroke.length >= 2) {
+          const bbox = computeBoundingBox(finalStroke, 8);
           const minX = bbox.x;
           const minY = bbox.y;
-          const localPoints: Point[] = stroke.map((p) => ({
+          const localPoints: Point[] = finalStroke.map((p) => ({
             x: p.x - minX,
             y: p.y - minY
           }));
@@ -2957,6 +2989,12 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
         setCurrentStroke([p]);
         return;
       }
+      if (activeTool === 'line') {
+        const p = screenToCanvas(e.clientX, e.clientY);
+        currentStrokeRef.current = [p, p];
+        setCurrentStroke([p, p]);
+        return;
+      }
       if (activeTool === 'eraser') {
         const p = screenToCanvas(e.clientX, e.clientY);
         const ERASE_PAD = 18 / viewport.zoom;
@@ -2973,19 +3011,6 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
       }
       if (activeTool === 'text') {
         createNodeAt('text', pos.x - 110, pos.y - 40);
-        return;
-      }
-      if (activeTool === 'line') {
-        const id = createNodeAt('shape', pos.x - 100, pos.y - 8, activeColor);
-        const map = yNodes.get(id);
-        if (map) {
-          map.set('shapeVariant', 'line');
-          map.set('w', 220);
-          map.set('h', 16);
-          map.set('strokeWidth', 3);
-          map.set('text', '');
-        }
-        setActiveTool('select');
         return;
       }
       if (activeTool === 'shape') {
@@ -3049,8 +3074,11 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
       return;
     }
 
-    // If drawing with pen/brush/highlighter, do NOT intercept click - let it draw right over frames/shapes!
-    if (activeTool === 'draw') {
+    // If drawing with pen or straight line tool, do NOT intercept click - let it draw right over frames/shapes!
+    if (activeTool === 'draw' || activeTool === 'line') {
+      const p = screenToCanvas(e.clientX, e.clientY);
+      currentStrokeRef.current = activeTool === 'line' ? [p, p] : [p];
+      setCurrentStroke(currentStrokeRef.current);
       return;
     }
 
@@ -3101,8 +3129,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
       setActiveTool('select');
     }
 
-    if (activeTool === 'arrow' || activeTool === 'line') {
-      const isLine = activeTool === 'line';
+    if (activeTool === 'arrow') {
       const pos = screenToCanvas(e.clientX, e.clientY);
       const box: BoxNode = { id: node.id, x: node.x, y: node.y, width: node.w, height: node.h };
       const sides: PortSide[] = ['top', 'right', 'bottom', 'left'];
@@ -6734,7 +6761,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
       </div>
 
       {/* Freehand Brush Preview Cursor */}
-      {activeTool === 'draw' && cursorScreenPos && cursorScreenPos.x > 0 && cursorScreenPos.y > 0 && (
+      {(activeTool === 'draw' || activeTool === 'line') && cursorScreenPos && cursorScreenPos.x > 0 && cursorScreenPos.y > 0 && (
         <div
           class="draw-cursor-follower"
           style={{
