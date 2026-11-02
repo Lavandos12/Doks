@@ -3256,6 +3256,11 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
     const target = (e.target as HTMLElement).closest('.board-node-box') as HTMLElement;
     const nodeId = target ? target.getAttribute('data-node-id') || undefined : undefined;
 
+    // Automatically select the right-clicked element
+    if (nodeId && !selectedNodeIds.has(nodeId)) {
+      setSelectedNodeIds(new Set([nodeId]));
+    }
+
     setContextMenu({
       x: e.clientX,
       y: e.clientY,
@@ -6542,7 +6547,11 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
               <div
                 class="context-menu-item danger"
                 onClick={() => {
-                  deleteSelected();
+                  if (contextMenu.nodeId) {
+                    deleteSingleNode(contextMenu.nodeId);
+                  } else {
+                    deleteSelected();
+                  }
                   setContextMenu(null);
                 }}
               >

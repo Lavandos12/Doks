@@ -1,7 +1,13 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import { extractTextFromDocxBuffer } from './docx-extractor.js';
+import {
+  extractTextFromDocx,
+  extractTextFromXlsx,
+  extractTextFromPptx,
+  extractTextFromOdf,
+  extractTextFromRtf
+} from './office-extractor.js';
 import { extractTextFromPdfBuffer } from './pdf-extractor.js';
 
 export interface AttachmentInfo {
@@ -36,6 +42,17 @@ const MIME_TYPES: Record<string, string> = {
   '.md': 'text/markdown',
   '.canvas': 'application/json',
   '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  '.doc': 'application/msword',
+  '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  '.xls': 'application/vnd.ms-excel',
+  '.pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  '.ppt': 'application/vnd.ms-powerpoint',
+  '.odt': 'application/vnd.oasis.opendocument.text',
+  '.ods': 'application/vnd.oasis.opendocument.spreadsheet',
+  '.odp': 'application/vnd.oasis.opendocument.presentation',
+  '.rtf': 'application/rtf',
+  '.csv': 'text/csv',
+  '.tsv': 'text/tab-separated-values',
   '.zip': 'application/zip',
   '.txt': 'text/plain',
   '.mp4': 'video/mp4',
@@ -151,23 +168,37 @@ export class AttachmentManager {
       } catch {}
     }
 
-    // 3.5 Extract text for .docx, .pdf, .txt, .md, code files
+    // 3.5 Extract text for Office, LibreOffice, PDF, and text/code files
     let extractedText: string | undefined = undefined;
     const lowerName = candidateName.toLowerCase();
-    if (lowerName.endsWith('.docx')) {
-      extractedText = extractTextFromDocxBuffer(buffer);
+    if (lowerName.endsWith('.docx') || lowerName.endsWith('.doc')) {
+      extractedText = extractTextFromDocx(buffer);
+    } else if (lowerName.endsWith('.xlsx') || lowerName.endsWith('.xls')) {
+      extractedText = extractTextFromXlsx(buffer);
+    } else if (lowerName.endsWith('.pptx') || lowerName.endsWith('.ppt')) {
+      extractedText = extractTextFromPptx(buffer);
+    } else if (lowerName.endsWith('.odt') || lowerName.endsWith('.ods') || lowerName.endsWith('.odp')) {
+      extractedText = extractTextFromOdf(buffer);
+    } else if (lowerName.endsWith('.rtf')) {
+      extractedText = extractTextFromRtf(buffer);
     } else if (lowerName.endsWith('.pdf')) {
       extractedText = extractTextFromPdfBuffer(buffer);
     } else if (
       lowerName.endsWith('.txt') ||
       lowerName.endsWith('.md') ||
       lowerName.endsWith('.csv') ||
+      lowerName.endsWith('.tsv') ||
       lowerName.endsWith('.json') ||
+      lowerName.endsWith('.xml') ||
+      lowerName.endsWith('.yaml') ||
+      lowerName.endsWith('.yml') ||
       lowerName.endsWith('.js') ||
       lowerName.endsWith('.ts') ||
       lowerName.endsWith('.py') ||
       lowerName.endsWith('.html') ||
-      lowerName.endsWith('.css')
+      lowerName.endsWith('.css') ||
+      lowerName.endsWith('.sh') ||
+      lowerName.endsWith('.bat')
     ) {
       try {
         extractedText = buffer.toString('utf8');
