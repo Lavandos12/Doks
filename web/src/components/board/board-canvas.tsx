@@ -1418,26 +1418,47 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
 
   // Delete all currently selected nodes and edges
   const deleteSelected = () => {
+    const idsToDelete = new Set(selectedNodeIds);
+    const edgeToDelete = selectedEdgeId;
+    if (idsToDelete.size === 0 && !edgeToDelete) return;
+
+    // 1. Optimistic Instant UI Deletion (0ms latency, zero flicker)
+    setNodesList((prev) => prev.filter((n) => !idsToDelete.has(n.id)));
+    if (edgeToDelete) {
+      setEdgesList((prev) => prev.filter((e) => e.id !== edgeToDelete));
+    }
+    setSelectedNodeIds(new Set());
+    setSelectedEdgeId(null);
+
+    // 2. Commit transaction to Yjs shared doc
     boardDoc.transact(() => {
-      for (const id of selectedNodeIds) {
+      for (const id of idsToDelete) {
         const nodeMap = yNodes.get(id);
         if (nodeMap && !nodeMap.get('locked')) {
           nodeMap.set('deleted', true);
           nodeMap.set('deletedAt', Date.now());
         }
       }
-      if (selectedEdgeId) {
-        const edge = yEdges.get(selectedEdgeId);
-        if (edge) yEdges.set(selectedEdgeId, { ...edge, deleted: true });
+      if (edgeToDelete) {
+        const edge = yEdges.get(edgeToDelete);
+        if (edge) yEdges.set(edgeToDelete, { ...edge, deleted: true, deletedAt: Date.now() });
       }
     }, 'user');
-
-    setSelectedNodeIds(new Set());
-    setSelectedEdgeId(null);
   };
 
   // Delete a single node by id along with its incident edges
   const deleteSingleNode = (id: string) => {
+    // 1. Optimistic Instant UI Deletion (0ms latency, zero flicker)
+    setNodesList((prev) => prev.filter((n) => n.id !== id));
+    setEdgesList((prev) => prev.filter((e) => e.from !== id && e.to !== id && (e as any).fromNode !== id && (e as any).toNode !== id));
+    setSelectedNodeIds((prev) => {
+      if (!prev.has(id)) return prev;
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
+
+    // 2. Commit transaction to Yjs shared doc
     boardDoc.transact(() => {
       const nodeMap = yNodes.get(id);
       if (nodeMap && !nodeMap.get('locked')) {
@@ -1450,13 +1471,6 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
         }
       });
     }, CANVAS_UNDO_ORIGIN);
-
-    setSelectedNodeIds((prev) => {
-      if (!prev.has(id)) return prev;
-      const next = new Set(prev);
-      next.delete(id);
-      return next;
-    });
   };
 
   // Toggle lock state on selected nodes
