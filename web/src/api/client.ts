@@ -32,6 +32,8 @@ export interface AgentStatusResponse {
   keyFingerprint?: string;
   inviteLink?: string;
   token?: string;
+  isHost?: boolean;
+  isPeer?: boolean;
   viewerMode?: boolean;
   allowSolo?: boolean;
   bridge?: any;

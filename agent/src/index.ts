@@ -119,11 +119,12 @@ Options:
   process.on('SIGHUP', () => shutdown('SIGHUP'));
 
   process.on('uncaughtException', (err) => {
-    console.error('[Doks Agent] Handled exception:', err);
+    console.error('[Doks Agent] Uncaught exception:', err);
     // Do not kill process for closed websocket sockets or transient network drops
     if (err && (err.message?.includes('WebSocket') || (err as any).code === 'ECONNRESET' || (err as any).code === 'EPIPE')) {
       return;
     }
+    process.exit(1);
   });
 
   process.on('unhandledRejection', (reason) => {

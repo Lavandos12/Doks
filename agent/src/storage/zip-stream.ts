@@ -9,22 +9,37 @@ interface ZipEntry {
   offset: number;
 }
 
-export async function streamDirectoryAsZip(dirPath: string, out: NodeJS.WritableStream): Promise<void> {
+export interface ZipStreamOptions {
+  excludeDirs?: string[];
+}
+
+export async function streamDirectoryAsZip(
+  dirPath: string,
+  out: NodeJS.WritableStream,
+  options?: ZipStreamOptions
+): Promise<void> {
   const files: { fullPath: string; relativePath: string }[] = [];
+  const excluded = new Set(options?.excludeDirs || []);
+
   function walk(current: string, base: string) {
     if (!fs.existsSync(current)) return;
     const entries = fs.readdirSync(current, { withFileTypes: true });
     for (const ent of entries) {
-      const full = path.join(current, ent.name);
-      const rel = path.join(base, ent.name);
       if (ent.isDirectory()) {
-        walk(full, rel);
+        if (excluded.has(ent.name)) continue;
+        walk(path.join(current, ent.name), path.join(base, ent.name));
       } else if (ent.isFile()) {
-        files.push({ fullPath: full, relativePath: rel });
+        files.push({ fullPath: path.join(current, ent.name), relativePath: path.join(base, ent.name) });
       }
     }
   }
   walk(dirPath, '');
+
+  const writeSafe = async (data: Buffer): Promise<void> => {
+    if (!out.write(data)) {
+      await new Promise<void>((resolve) => out.once('drain', resolve));
+    }
+  };
 
   let currentOffset = 0;
   const centralEntries: ZipEntry[] = [];
@@ -47,25 +62,22 @@ export async function streamDirectoryAsZip(dirPath: string, out: NodeJS.Writable
     localHeader.writeUInt16LE(nameBuf.length, 26);
     localHeader.writeUInt16LE(0, 28);         // Extra field length
 
-    out.write(localHeader);
-    out.write(nameBuf);
+    await writeSafe(localHeader);
+    await writeSafe(nameBuf);
     currentOffset += localHeader.length + nameBuf.length;
 
     let crc = 0;
     let size = 0;
 
-    // Stream file in 64KB chunks directly to output
-    const fd = fs.openSync(file.fullPath, 'r');
-    const chunkBuf = Buffer.alloc(64 * 1024);
-    let bytesRead = 0;
-    while ((bytesRead = fs.readSync(fd, chunkBuf, 0, chunkBuf.length, null)) > 0) {
-      const slice = chunkBuf.subarray(0, bytesRead);
+    // Stream file in 64KB chunks directly to output with backpressure
+    const stream = fs.createReadStream(file.fullPath, { highWaterMark: 64 * 1024 });
+    for await (const chunk of stream) {
+      const slice = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
       crc = zlib.crc32(slice, crc);
-      size += bytesRead;
-      currentOffset += bytesRead;
-      out.write(slice);
+      size += slice.length;
+      currentOffset += slice.length;
+      await writeSafe(slice);
     }
-    fs.closeSync(fd);
 
     // Data Descriptor (16 bytes)
     const descriptor = Buffer.alloc(16);
@@ -74,7 +86,7 @@ export async function streamDirectoryAsZip(dirPath: string, out: NodeJS.Writable
     descriptor.writeUInt32LE(size >>> 0, 8);
     descriptor.writeUInt32LE(size >>> 0, 12);
 
-    out.write(descriptor);
+    await writeSafe(descriptor);
     currentOffset += descriptor.length;
 
     centralEntries.push({
@@ -109,8 +121,8 @@ export async function streamDirectoryAsZip(dirPath: string, out: NodeJS.Writable
     cdHeader.writeUInt32LE(0, 38);         // External file attributes
     cdHeader.writeUInt32LE(entry.offset, 42);
 
-    out.write(cdHeader);
-    out.write(entry.nameBuf);
+    await writeSafe(cdHeader);
+    await writeSafe(entry.nameBuf);
     const entryLen = cdHeader.length + entry.nameBuf.length;
     cdSize += entryLen;
     currentOffset += entryLen;
@@ -127,5 +139,5 @@ export async function streamDirectoryAsZip(dirPath: string, out: NodeJS.Writable
   eocd.writeUInt32LE(cdOffset, 16);        // Offset of CD with respect to starting disk
   eocd.writeUInt16LE(0, 20);               // Comment length
 
-  out.write(eocd);
+  await writeSafe(eocd);
 }

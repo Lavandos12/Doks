@@ -284,6 +284,19 @@ export function calculateAutoFontSize(text: string, w: number, h: number, type?:
   return Math.min(Math.max(13, Math.round(ideal)), 84);
 }
 
+const getSafeAttachmentUrl = (url?: string, hash?: string): string | undefined => {
+  if (url) {
+    if (url.startsWith('blob:') || url.startsWith('/api/attachments/')) return url;
+    if (url.startsWith('data:image/') || url.startsWith('data:application/pdf')) return url;
+    return undefined;
+  }
+  if (hash) {
+    const HASH_REGEX = /^[a-f0-9]{64}$/;
+    if (HASH_REGEX.test(hash)) return `/api/attachments/${hash}`;
+  }
+  return undefined;
+};
+
 export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, scopeOverride }: BoardCanvasProps) {
   const effectiveScope: WorkspaceScope = scopeOverride || currentScope.value;
   const containerRef = useRef<HTMLDivElement>(null);
@@ -1921,13 +1934,29 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
     return [[t('widget.col_header') + ' 1', t('widget.col_header') + ' 2', t('widget.col_header') + ' 3'], ['', '', ''], ['', '', '']];
   };
 
+  const tableDebounceTimers = useRef<Map<string, any>>(new Map());
+  const kanbanDebounceTimers = useRef<Map<string, any>>(new Map());
+
+  // Audit 2.5: Debounced table cell update to avoid Last-Write-Wins overwrites
   const handleUpdateTableCell = (node: BoardNodeData, rIdx: number, cIdx: number, val: string) => {
-    const table = parseTableData(node.text);
-    if (table[rIdx] && table[rIdx][cIdx] !== undefined) {
-      table[rIdx][cIdx] = val;
-      const map = yNodes.get(node.id);
-      if (map) setNodeProperties(map, { text: JSON.stringify(table) });
-    }
+    const timerKey = `${node.id}:${rIdx}:${cIdx}`;
+    const existing = tableDebounceTimers.current.get(timerKey);
+    if (existing) clearTimeout(existing);
+
+    tableDebounceTimers.current.set(
+      timerKey,
+      setTimeout(() => {
+        tableDebounceTimers.current.delete(timerKey);
+        const map = yNodes.get(node.id);
+        if (!map) return;
+        const currentText = (map.get('text') as string) || '';
+        const table = parseTableData(currentText);
+        if (table[rIdx] && table[rIdx][cIdx] !== undefined) {
+          table[rIdx][cIdx] = val;
+          setNodeProperties(map, { text: JSON.stringify(table) });
+        }
+      }, 200)
+    );
   };
 
   const handleAddTableRow = (node: BoardNodeData) => {
@@ -1987,13 +2016,26 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
     }
   };
 
+  // Audit 2.5: Debounced kanban card update to prevent concurrent editing overwrites
   const handleUpdateKanbanCard = (node: BoardNodeData, idx: number, val: string) => {
-    const cards = parseKanbanCards(node.description);
-    if (cards[idx] !== undefined) {
-      cards[idx] = val;
-      const map = yNodes.get(node.id);
-      if (map) setNodeProperties(map, { description: cards.join('\n') });
-    }
+    const timerKey = `${node.id}:${idx}`;
+    const existing = kanbanDebounceTimers.current.get(timerKey);
+    if (existing) clearTimeout(existing);
+
+    kanbanDebounceTimers.current.set(
+      timerKey,
+      setTimeout(() => {
+        kanbanDebounceTimers.current.delete(timerKey);
+        const map = yNodes.get(node.id);
+        if (!map) return;
+        const currentDesc = (map.get('description') as string) || '';
+        const cards = parseKanbanCards(currentDesc);
+        if (cards[idx] !== undefined) {
+          cards[idx] = val;
+          setNodeProperties(map, { description: cards.join('\n') });
+        }
+      }, 200)
+    );
   };
 
   const handleDeleteKanbanCard = (node: BoardNodeData, idx: number) => {
@@ -5124,7 +5166,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
 
           const stickyBg = isSticky && nodeColorHex !== CANVAS_COLORS.default ? `${nodeColorHex}26` : undefined;
           const borderColor = isFrame
-            ? 'rgba(255, 255, 255, 0.15)'
+            ? (isDarkTheme ? 'rgba(255, 255, 255, 0.18)' : 'rgba(0, 0, 0, 0.18)')
             : node.type === 'text' || isImage
             ? 'transparent'
             : isSticky && nodeColorHex !== CANVAS_COLORS.default
@@ -5365,11 +5407,12 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                       </div>
 
                       {isPdf ? (
-                        node.fileDataUrl || node.fileHash ? (
+                        getSafeAttachmentUrl(node.fileDataUrl, node.fileHash) ? (
                           <iframe
-                            src={node.fileDataUrl || `/api/attachments/${node.fileHash}`}
+                            src={getSafeAttachmentUrl(node.fileDataUrl, node.fileHash)}
                             class="node-file-pdf-iframe"
                             title={node.fileName || 'PDF'}
+                            sandbox="allow-scripts allow-same-origin"
                           />
                         ) : (
                           <div
@@ -5700,7 +5743,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                       </div>
                       <div class="kanban-cards-area scrollable-card-content" onWheel={(e) => { if (!e.ctrlKey && !e.metaKey) e.stopPropagation(); }}>
                         {cards.map((card, idx) => (
-                          <div key={idx} class="checklist-item-row" style={{ background: 'rgba(255,255,255,0.06)', borderRadius: '6px' }}>
+                          <div key={`${node.id}_kcard_${idx}`} class="checklist-item-row" style={{ background: 'rgba(255,255,255,0.06)', borderRadius: '6px' }}>
                             <input
                               type="text"
                               class="checklist-item-input"

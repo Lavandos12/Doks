@@ -251,7 +251,51 @@ export class FileWatcher {
   }
 
   private handleFileDelete(filePath: string): void {
-    // Unlink handled if needed
+    try {
+      const rel = path.relative(this.vaultPath, filePath);
+      const isSolo = rel === 'solo' || rel.startsWith('solo' + path.sep) || rel.startsWith('solo/');
+      const scope: WorkspaceScope = isSolo ? 'solo' : 'team';
+
+      // 1. Check registry from FileMirror
+      const entity = this.fileMirror?.getEntityByRelativePath(rel);
+      const indexDoc = this.docManager.getOrCreateDoc(getScopedIndexDocName(scope));
+      const { notes, boards } = getIndexMaps(indexDoc);
+
+      if (entity) {
+        if (entity.type === 'note') {
+          const meta = notes.get(entity.id);
+          if (meta && !meta.deleted) {
+            notes.set(entity.id, { ...meta, deleted: true, updatedAt: Date.now() });
+          }
+        } else if (entity.type === 'board') {
+          const meta = boards.get(entity.id);
+          if (meta && !meta.deleted) {
+            boards.set(entity.id, { ...meta, deleted: true, updatedAt: Date.now() });
+          }
+        }
+        return;
+      }
+
+      // 2. Fallback: match by title / filename if not found in registry
+      const baseName = path.basename(filePath);
+      if (filePath.endsWith('.md')) {
+        const noteTitle = baseName.replace(/\.md$/, '');
+        notes.forEach((meta, id) => {
+          if (!meta.deleted && meta.title === noteTitle) {
+            notes.set(id, { ...meta, deleted: true, updatedAt: Date.now() });
+          }
+        });
+      } else if (filePath.endsWith('.canvas')) {
+        const boardTitle = baseName.replace(/\.canvas$/, '');
+        boards.forEach((meta, id) => {
+          if (!meta.deleted && meta.title === boardTitle) {
+            boards.set(id, { ...meta, deleted: true, updatedAt: Date.now() });
+          }
+        });
+      }
+    } catch (err) {
+      console.error(`[FileWatcher] Error handling delete for ${filePath}:`, err);
+    }
   }
 
   public async stop(): Promise<void> {

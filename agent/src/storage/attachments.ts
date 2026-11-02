@@ -242,6 +242,15 @@ export class AttachmentManager {
    * Resolves attachment by SHA-256 hash or filename.
    */
   public getAttachment(hashOrName: string): AttachmentInfo | null {
+    if (!hashOrName || typeof hashOrName !== 'string') return null;
+
+    // 1.4 Path Traversal Containment Check
+    const resolvedBlobsDir = path.resolve(this.blobsDir);
+    const resolvedCandidate = path.resolve(this.blobsDir, hashOrName);
+    if (!resolvedCandidate.startsWith(resolvedBlobsDir + path.sep) && resolvedCandidate !== resolvedBlobsDir) {
+      return null;
+    }
+
     // 0. Check metadata map first
     const record = this.metadata.get(hashOrName);
     if (record) {
@@ -264,16 +273,10 @@ export class AttachmentManager {
     if (fs.existsSync(directBlob) && !fs.statSync(directBlob).isDirectory()) {
       const stat = fs.statSync(directBlob);
       let foundName = hashOrName;
-      if (fs.existsSync(this.attachmentsDir)) {
-        const mirrorFiles = fs.readdirSync(this.attachmentsDir);
-        for (const f of mirrorFiles) {
-          try {
-            const buf = fs.readFileSync(path.join(this.attachmentsDir, f));
-            if (crypto.createHash('sha256').update(buf).digest('hex') === hashOrName) {
-              foundName = f;
-              break;
-            }
-          } catch {}
+      for (const rec of this.metadata.values()) {
+        if (rec.id === hashOrName || rec.fileName === hashOrName || rec.humanReadableName === hashOrName) {
+          foundName = rec.fileName;
+          break;
         }
       }
       return {
@@ -287,23 +290,23 @@ export class AttachmentManager {
 
     // 2. Check mirror directory (vault/attachments/)
     if (fs.existsSync(this.attachmentsDir)) {
-      const files = fs.readdirSync(this.attachmentsDir);
-      const found = files.find((f) => f === hashOrName || f.startsWith(hashOrName));
-      if (found) {
-        const filePath = path.join(this.attachmentsDir, found);
-        const stat = fs.statSync(filePath);
-        let hash = hashOrName;
-        try {
-          const buf = fs.readFileSync(filePath);
-          hash = crypto.createHash('sha256').update(buf).digest('hex');
-        } catch {}
-
+      const resolvedAttDir = path.resolve(this.attachmentsDir);
+      const safeMirrorPath = path.resolve(this.attachmentsDir, hashOrName);
+      if (safeMirrorPath.startsWith(resolvedAttDir + path.sep) && fs.existsSync(safeMirrorPath) && !fs.statSync(safeMirrorPath).isDirectory()) {
+        const stat = fs.statSync(safeMirrorPath);
+        let foundHash = hashOrName;
+        for (const rec of this.metadata.values()) {
+          if (rec.fileName === hashOrName || rec.humanReadableName === hashOrName) {
+            foundHash = rec.id;
+            break;
+          }
+        }
         return {
-          hash,
-          fileName: found,
+          hash: foundHash,
+          fileName: path.basename(safeMirrorPath),
           size: stat.size,
-          filePath,
-          mimeType: this.getMimeType(filePath)
+          filePath: safeMirrorPath,
+          mimeType: this.getMimeType(safeMirrorPath)
         };
       }
     }

@@ -525,12 +525,12 @@ export class AgentHttpServer {
         peerId: this.config.agentId
       });
 
+      const isAuthRequired = Boolean(process.env.DOKS_PASSWORD || process.env.TEAM_PASSWORD);
+      const isAuthenticated = !isAuthRequired || this.isValidSession(req);
+
       let token: string | undefined = undefined;
-      if (!isViewer) {
+      if (!isViewer && isAuthenticated) {
         token = isHost ? this.sessionToken : this.peerSessionToken;
-      }
-      if (!token && !isViewer) {
-        token = this.sessionToken;
       }
       const effectiveHost = isHost;
       const effectivePeer = isPeer || (!isViewer && !isHost);
@@ -567,13 +567,13 @@ export class AgentHttpServer {
                 .slice(0, 8)
                 .replace(/^(.{4})(.{4})$/, '$1-$2')
             : undefined,
-        inviteLink: networkOverview.inviteUri,
-        inviteUri: networkOverview.inviteUri,
+        inviteLink: isHost ? networkOverview.inviteUri : undefined,
+        inviteUri: isHost ? networkOverview.inviteUri : undefined,
         viewerMode: isViewer,
         allowSolo: isViewer ? this.bridgeService.isSoloAllowed() : isHost,
         bridge: this.bridgeService.getStatus(),
-        passwordRequired: Boolean(process.env.DOKS_PASSWORD || process.env.TEAM_PASSWORD),
-        authenticated: !(process.env.DOKS_PASSWORD || process.env.TEAM_PASSWORD) || this.isValidSession(req)
+        passwordRequired: isAuthRequired,
+        authenticated: isAuthenticated
       };
     });
 
@@ -710,7 +710,11 @@ export class AgentHttpServer {
 
     // API: Update member profile (B10)
     this.fastify.patch('/api/profile', async (req, reply) => {
-      const body = req.body as { memberName?: string; memberColor?: string };
+      if (!this.isHostSession(req) && !this.isLoopbackRequest(req)) {
+        return reply.code(403).send({ error: 'Forbidden: Only host can modify server profile' });
+      }
+      const raw = req.body;
+      const body = (Buffer.isBuffer(raw) ? JSON.parse(raw.toString('utf8')) : (raw || {})) as { memberName?: string; memberColor?: string };
       if (body.memberName) {
         this.config.memberName = body.memberName.trim().slice(0, 32);
       }
@@ -726,7 +730,11 @@ export class AgentHttpServer {
     });
 
     this.fastify.post('/api/profile', async (req, reply) => {
-      const body = req.body as { memberName?: string; memberColor?: string };
+      if (!this.isHostSession(req) && !this.isLoopbackRequest(req)) {
+        return reply.code(403).send({ error: 'Forbidden: Only host can modify server profile' });
+      }
+      const raw = req.body;
+      const body = (Buffer.isBuffer(raw) ? JSON.parse(raw.toString('utf8')) : (raw || {})) as { memberName?: string; memberColor?: string };
       if (body.memberName) {
         this.config.memberName = body.memberName.trim().slice(0, 32);
       }
@@ -1110,6 +1118,10 @@ export class AgentHttpServer {
         return reply.code(500).send({ error: 'Attachment manager not available' });
       }
       const { hash } = req.params as { hash: string };
+      const HASH_REGEX = /^[a-f0-9]{64}$/;
+      if (!HASH_REGEX.test(hash)) {
+        return reply.code(400).send({ error: 'Invalid attachment hash format' });
+      }
       const att = this.attachmentManager.getAttachment(hash);
       if (!att) {
         return reply.code(404).send({ error: 'Attachment not found' });
@@ -1492,7 +1504,7 @@ export class AgentHttpServer {
       try {
         reply.raw.setHeader('Content-Type', 'application/zip');
         reply.raw.setHeader('Content-Disposition', 'attachment; filename="doks-vault.zip"');
-        await streamDirectoryAsZip(vaultDir, reply.raw);
+        await streamDirectoryAsZip(vaultDir, reply.raw, { excludeDirs: scope === 'solo' ? [] : ['solo'] });
         reply.raw.end();
       } catch (err: any) {
         if (!reply.raw.headersSent) {
@@ -1574,20 +1586,30 @@ export class AgentHttpServer {
       if (!query.boardId) {
         return reply.code(400).send({ error: 'boardId is required' });
       }
+      const workspaceScope = query.workspaceScope || 'team';
+      if (workspaceScope === 'solo' && !this.isHostSession(req)) {
+        return reply.code(403).send({ error: 'Forbidden: Solo workspace is private to host' });
+      }
       const options: any = {
         boardId: query.boardId,
         scope: query.scope || 'all',
         includeNotes: query.includeNotes || 'cards',
         includeAttachments: query.includeAttachments || 'list',
-        workspaceScope: query.workspaceScope || 'team'
+        workspaceScope
       };
       return generateAiContext(this.docManager, options);
     });
 
     this.fastify.post('/api/export/ai', async (req, reply) => {
-      const body = req.body as AiExportOptions;
+      const rawBody = req.body;
+      const body: AiExportOptions = Buffer.isBuffer(rawBody)
+        ? JSON.parse(rawBody.toString('utf8'))
+        : ((rawBody || {}) as AiExportOptions);
       if (!body?.boardId) {
         return reply.code(400).send({ error: 'boardId is required' });
+      }
+      if (body.workspaceScope === 'solo' && !this.isHostSession(req)) {
+        return reply.code(403).send({ error: 'Forbidden: Solo workspace is private to host' });
       }
 
       const result = generateAiContext(this.docManager, body);
@@ -1625,6 +1647,10 @@ export class AgentHttpServer {
         activeClients.add(currentClient);
 
         const isDocSubscribed = (client: ConnectedSocketClient, docName: string) => {
+          const isSoloDoc = docName.startsWith('solo:') || docName.includes(':solo:');
+          if (isSoloDoc && !client.isHost) {
+            return false;
+          }
           return (
             client.subscribedDocs.size === 0 ||
             client.subscribedDocs.has(docName) ||
@@ -1635,7 +1661,7 @@ export class AgentHttpServer {
             docName.startsWith('board:') ||
             docName.includes(':board:') ||
             docName === `${client.queryScope}:${DOC_INDEX}` ||
-            docName === `solo:${DOC_INDEX}` ||
+            (client.isHost && docName === `solo:${DOC_INDEX}`) ||
             docName === `team:${DOC_INDEX}`
           );
         };
@@ -1645,6 +1671,11 @@ export class AgentHttpServer {
           if (socket.readyState !== socket.OPEN) return;
           // Do not echo back to the same client that originated the change
           if (origin === clientId) return;
+
+          const isSoloDoc = docName.startsWith('solo:') || docName.includes(':solo:');
+          if (isSoloDoc && !currentClient.isHost) {
+            return;
+          }
 
           if (isDocSubscribed(currentClient, docName)) {
             const syncMsg = this.docManager.createUpdateSyncMessage(update);
@@ -1682,6 +1713,12 @@ export class AgentHttpServer {
           try {
             const text = typeof raw === 'string' ? raw : raw.toString('utf8');
             const msg = decodeMessage(text);
+
+            const docName = 'docName' in msg ? (msg as any).docName : undefined;
+            const isSoloDoc = typeof docName === 'string' && (docName.startsWith('solo:') || docName.includes(':solo:'));
+            if (isSoloDoc && !currentClient.isHost) {
+              return;
+            }
 
             if (msg.type === 'sync') {
               const data = base64ToUint8Array(msg.data);

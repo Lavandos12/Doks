@@ -1,6 +1,5 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import zlib from 'node:zlib';
 import { execSync } from 'node:child_process';
 import * as esbuild from 'esbuild';
 
@@ -41,23 +40,10 @@ const result = await esbuild.build({
   external: ['fsevents']
 });
 
-const rawCode = Buffer.from(result.outputFiles[0].text, 'utf8');
-const compressed = zlib.brotliCompressSync(rawCode, {
-  params: { [zlib.constants.BROTLI_PARAM_QUALITY]: 11 }
-});
-const b64 = compressed.toString('base64');
-
-const loaderCode = [
-  '#!/usr/bin/env node',
-  '"use strict";',
-  'const _z=require("node:zlib"),_m=require("node:module"),_p=require("node:path");',
-  `const _d="${b64}";`,
-  'const _c=_z.brotliDecompressSync(Buffer.from(_d,"base64")).toString("utf8");',
-  'module._compile(_c,__filename);'
-].join('\n');
-
+const shebang = '#!/usr/bin/env node\n"use strict";\n';
+const outCode = shebang + result.outputFiles[0].text;
 const outPath = path.join(releaseDir, 'doks-server.cjs');
-fs.writeFileSync(outPath, loaderCode, 'utf8');
+fs.writeFileSync(outPath, outCode, 'utf8');
 
 console.log('Copying web/dist to release/web/dist...');
 const sourceWebDist = path.join(rootDir, 'web', 'dist');
@@ -66,4 +52,4 @@ if (fs.existsSync(sourceWebDist)) {
 }
 
 const serverStats = fs.statSync(outPath);
-console.log(`Protected encoded release bundle created: ${(serverStats.size / 1024).toFixed(1)} KB`);
+console.log(`Release bundle created: ${(serverStats.size / 1024).toFixed(1)} KB`);

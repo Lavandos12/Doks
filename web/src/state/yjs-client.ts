@@ -148,6 +148,12 @@ export class YjsClient {
     }, 1500);
   }
 
+  public registerDoc(docName: string, doc: Y.Doc): void {
+    if (!this.docs.has(docName)) {
+      this.docs.set(docName, doc);
+    }
+  }
+
   public getOrCreateDoc(docName: string): Y.Doc {
     let doc = this.docs.get(docName);
     if (!doc) {

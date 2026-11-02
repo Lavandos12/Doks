@@ -50,6 +50,19 @@ export class NotesSearchIndex {
     this.docTexts.delete(id);
   }
 
+  public removeAll(): void {
+    if (typeof (this.miniSearch as any).removeAll === 'function') {
+      (this.miniSearch as any).removeAll();
+    } else {
+      for (const id of Array.from(this.docTexts.keys())) {
+        if (this.miniSearch.has(id)) {
+          this.miniSearch.discard(id);
+        }
+      }
+    }
+    this.docTexts.clear();
+  }
+
   public search(query: string): SearchResult[] {
     const trimmed = query.trim();
     if (!trimmed) return [];

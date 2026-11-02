@@ -341,6 +341,21 @@ export class FileMirror {
     }
   }
 
+  public getEntityByRelativePath(relPath: string): { type: 'note' | 'board'; id: string } | null {
+    const normalized = relPath.replace(/\\/g, '/');
+    for (const [noteId, p] of Object.entries(this.registry.notes)) {
+      if (p.replace(/\\/g, '/') === normalized) {
+        return { type: 'note', id: noteId };
+      }
+    }
+    for (const [boardId, p] of Object.entries(this.registry.boards)) {
+      if (p.replace(/\\/g, '/') === normalized) {
+        return { type: 'board', id: boardId };
+      }
+    }
+    return null;
+  }
+
   public destroy(): void {
     this.flushAll();
   }

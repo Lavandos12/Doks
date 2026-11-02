@@ -1,4 +1,5 @@
 import { signal, computed } from '@preact/signals';
+import * as Y from 'yjs';
 import type {
   NoteMeta,
   BoardMeta,
@@ -57,10 +58,8 @@ export const currentScope = signal<WorkspaceScope>(savedScope || (isCloudHost ? 
 export function isMobilePhoneDevice(): boolean {
   if (typeof window === 'undefined') return false;
   const ua = navigator.userAgent || navigator.vendor || (window as any).opera || '';
-  const isMobileUA = /Android|webOS|iPhone|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua);
-  const isTouch = 'ontouchstart' in window || (navigator.maxTouchPoints && navigator.maxTouchPoints > 0);
-  const isSmallScreen = window.innerWidth <= 768 || (typeof window.matchMedia === 'function' && window.matchMedia('(max-width: 768px)').matches);
-  return isMobileUA || (Boolean(isTouch) && isSmallScreen);
+  // Restrict mobile detection strictly to mobile phone user agents (Audit 3.2: do not lock touchscreen laptops)
+  return /Android.*Mobile|webOS|iPhone|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua);
 }
 
 const hasViewerParam = typeof window !== 'undefined' && (
@@ -101,10 +100,15 @@ export function setViewerMode(enabled: boolean, allowSolo = false): void {
 }
 
 export function initAppState(): void {
+  const isHost = agentStatus.value?.isHost ?? (
+    typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+  );
+  if (currentScope.value === 'solo' && !isHost && !agentStatus.value?.allowSolo) {
+    currentScope.value = 'team';
+  }
   yjsClient.subscribeDoc(getScopedIndexDocName(currentScope.value));
-  if (appState.value.viewerMode && appState.value.viewerAllowSolo) {
-    yjsClient.subscribeDoc(getScopedIndexDocName('solo'));
-    yjsClient.subscribeDoc(getScopedIndexDocName('team'));
+  if (isHost || (appState.value.viewerMode && appState.value.viewerAllowSolo)) {
+    subscribeSoloIfHost();
   }
 }
 
@@ -130,6 +134,7 @@ export function setScope(newScope: WorkspaceScope): void {
   if (typeof localStorage !== 'undefined') {
     localStorage.setItem('doks_scope', newScope);
   }
+  searchIndex.removeAll();
   yjsClient.switchScope(newScope);
   syncIndexSignals();
   // Find first active board in new scope
@@ -235,11 +240,24 @@ export const isQuickSwitcherOpen = signal<boolean>(false);
 export const isImportWizardOpen = signal<boolean>(false);
 
 // Initialize dual-scope index observers
-const soloIndexDoc = yjsClient.getOrCreateDoc(getScopedIndexDocName('solo'));
+const soloIndexDoc = new Y.Doc();
 const teamIndexDoc = yjsClient.getOrCreateDoc(getScopedIndexDocName('team'));
 
 export const soloMaps = getIndexMaps(soloIndexDoc);
 export const teamMaps = getIndexMaps(teamIndexDoc);
+
+let soloSubscribed = false;
+export function subscribeSoloIfHost(): void {
+  if (soloSubscribed) return;
+  const isHost = agentStatus.value?.isHost ?? (
+    typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+  );
+  if (isHost || agentStatus.value?.allowSolo) {
+    soloSubscribed = true;
+    yjsClient.registerDoc(getScopedIndexDocName('solo'), soloIndexDoc);
+    yjsClient.subscribeDoc(getScopedIndexDocName('solo'));
+  }
+}
 
 export function ensureInitialBoard(): void {
   // 1. Ensure private personal board in solo scope (saved locally)
@@ -387,24 +405,18 @@ function syncIndexSignals() {
   });
   openTabs.value = updatedTabs;
 
-  // Incremental Search Indexing (F6)
+  // Incremental Search Indexing directly from index map metadata (Audit 2.6 - no memory leak)
   activeMaps.notes.forEach((val, id) => {
     if (val.deleted) {
       searchIndex.removeDoc(id);
     } else {
-      let text = '';
-      try {
-        const noteDoc = yjsClient.getOrCreateDoc(getScopedNoteDocName(currentScope.value, id));
-        text = noteDoc.getText('text').toString();
-      } catch {}
-      const tags = text.match(/#[a-zA-Zа-яА-Я0-9_-]+/g) || [];
       searchIndex.updateDoc({
         id,
         type: 'note',
         title: val.title,
         folder: val.folder || undefined,
-        text,
-        tags
+        text: val.title,
+        tags: []
       });
     }
   });
@@ -413,23 +425,12 @@ function syncIndexSignals() {
     if (val.deleted) {
       searchIndex.removeDoc(id);
     } else {
-      let boardText = '';
-      try {
-        const bDoc = yjsClient.getOrCreateDoc(getScopedBoardDocName(currentScope.value, id));
-        const { nodes } = getBoardMaps(bDoc);
-        const parts: string[] = [];
-        nodes.forEach((nodeMap) => {
-          const t = nodeMap.get('text');
-          if (t) parts.push(typeof t === 'string' ? t : t.toString());
-        });
-        boardText = parts.join('\n');
-      } catch {}
       searchIndex.updateDoc({
         id,
         type: 'board',
         title: val.title,
         folder: val.folder || undefined,
-        text: boardText
+        text: val.title
       });
     }
   });

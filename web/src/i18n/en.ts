@@ -363,6 +363,9 @@ export const en = {
   'widget.checklist_title': 'Checklist title...',
   'widget.code_placeholder': 'Write code here...',
   'widget.sector': 'Sector',
+  'canvas.added_to_board': 'Added to canvas',
+  'lan.connect_failed': 'Failed to connect to LAN room',
+  'toolbar.sticky': 'Sticky Note',
   'toast.imported_canvas': 'Imported canvas',
   'toast.created': 'Created',
 

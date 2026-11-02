@@ -1,7 +1,7 @@
 import { h, VNode } from 'preact';
 import { useState, useEffect } from 'preact/hooks';
 import { useTranslation } from '../../i18n/index.js';
-import { selectedBoardId, allBoards } from '../../state/app-state.js';
+import { selectedBoardId, allBoards, agentStatus } from '../../state/app-state.js';
 import { Icon } from '../../ui/icons.js';
 import { showToast } from '../../ui/toast.js';
 import { generateQrMatrix, renderQrSvgPath } from '../../utils/qr-svg.js';
@@ -39,7 +39,14 @@ export function ShareModal({ isOpen, onClose, initialTab = 'share' }: ShareModal
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const phoneShareLink = `${shareLink}${shareLink.includes('?') ? '&' : '?'}bridge=1`;
+  // Audit 3.1: Supply valid bridge URL or cryptographic bridge token instead of static ?bridge=1
+  const bridgeUrl = agentStatus.value?.bridge?.primaryUrl;
+  const bridgeToken = (agentStatus.value?.bridge as any)?.bridgeToken;
+  const phoneShareLink = bridgeUrl || (
+    bridgeToken
+      ? `${shareLink}${shareLink.includes('?') ? '&' : '?'}b=${bridgeToken}`
+      : `${shareLink}${shareLink.includes('?') ? '&' : '?'}bridge=1`
+  );
 
   // Generate vector SVG QR code path for instant rendering
   let qrSvg: { size: number; path: string } | null = null;

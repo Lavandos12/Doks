@@ -87,7 +87,7 @@ export function NoteEditor({ noteId }: NoteEditorProps) {
     return () => {
       yText.unobserve(update);
     };
-  }, [noteId]);
+  }, [noteId, currentScope.value, yText]);
 
   // CodeMirror initialization when in 'source' mode
   useEffect(() => {
@@ -199,18 +199,24 @@ export function NoteEditor({ noteId }: NoteEditorProps) {
     return extractHeadings(contentString);
   }, [contentString]);
 
-  // Toggle checkbox in preview
+  // Toggle checkbox in preview non-destructively (Audit 2.4)
   const handleToggleCheckbox = (lineIndex: number, newChecked: boolean) => {
-    const lines = contentString.split('\n');
-    if (lineIndex < lines.length) {
-      const targetLine = lines[lineIndex];
-      const updatedLine = targetLine.replace(/^([-*]\s+\[)([ xX])(\])/, `$1${newChecked ? 'x' : ' '}$3`);
-      lines[lineIndex] = updatedLine;
-      const newDocText = lines.join('\n');
+    const fullText = yText.toString();
+    const lines = fullText.split('\n');
+    if (lineIndex >= lines.length) return;
 
+    let lineStart = 0;
+    for (let i = 0; i < lineIndex; i++) {
+      lineStart += lines[i].length + 1; // +1 for newline '\n'
+    }
+
+    const targetLine = lines[lineIndex];
+    const match = targetLine.match(/^([-*]\s*\[)([ xX])(\])/);
+    if (match) {
+      const checkCharPos = lineStart + match[1].length;
       yDoc.transact(() => {
-        yText.delete(0, yText.length);
-        yText.insert(0, newDocText);
+        yText.delete(checkCharPos, 1);
+        yText.insert(checkCharPos, newChecked ? 'x' : ' ');
       });
     }
   };

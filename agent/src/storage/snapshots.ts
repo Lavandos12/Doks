@@ -74,7 +74,7 @@ export class SnapshotManager {
     const meta: SnapshotMeta & { docs?: Record<string, string> } = {
       id: snapId,
       timestamp,
-      dateStr: new Date(timestamp).toLocaleString('ru-RU'),
+      dateStr: new Date(timestamp).toISOString(),
       docsCount: docs.size,
       sizeBytes: totalBytes,
       docs: docMap
@@ -321,6 +321,9 @@ export class SnapshotManager {
 
       const payload: Record<string, string> = {};
       for (const [docName, doc] of docs.entries()) {
+        if (docName.startsWith('solo:') || docName.includes(':solo:')) {
+          continue;
+        }
         const update = Y.encodeStateAsUpdate(doc);
         payload[docName] = Buffer.from(update).toString('base64');
       }

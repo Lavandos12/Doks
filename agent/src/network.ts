@@ -1,6 +1,6 @@
 import os from 'node:os';
 import net from 'node:net';
-import { execSync } from 'node:child_process';
+import { exec } from 'node:child_process';
 
 export interface NetworkInterfaceInfo {
   name: string;
@@ -12,10 +12,25 @@ export interface NetworkInterfaceInfo {
 
 let lastRadminCheckTime = 0;
 let lastRadminCheckResult = false;
+let isCheckingRadmin = false;
+
+function pollRadminProcessAsync(): void {
+  if (isCheckingRadmin) return;
+  isCheckingRadmin = true;
+  exec('tasklist /NH /FI "IMAGENAME eq RadminVPN.exe"', { timeout: 2000 }, (err, stdout) => {
+    isCheckingRadmin = false;
+    lastRadminCheckTime = Date.now();
+    if (!err && stdout && stdout.toLowerCase().includes('radminvpn.exe')) {
+      lastRadminCheckResult = true;
+    } else {
+      lastRadminCheckResult = false;
+    }
+  });
+}
 
 /**
  * On Windows, Famatech Radmin adapter keeps dormant static 26.x.x.x even when turned off.
- * This verifies if the actual Radmin VPN process or service is running.
+ * This verifies if the actual Radmin VPN process or service is running without blocking the event loop.
  */
 export function isRadminTunnelOperational(): boolean {
   // On non-Windows platforms (Linux, macOS, Docker) or in CI/test environments,
@@ -30,25 +45,10 @@ export function isRadminTunnelOperational(): boolean {
     return true;
   }
   const now = Date.now();
-  if (now - lastRadminCheckTime < 10000) {
-    return lastRadminCheckResult;
+  if (now - lastRadminCheckTime > 10000) {
+    pollRadminProcessAsync();
   }
-  lastRadminCheckTime = now;
-
-  try {
-    const stdout = execSync('tasklist /NH /FI "IMAGENAME eq RadminVPN.exe"', {
-      encoding: 'utf8',
-      stdio: ['pipe', 'pipe', 'ignore'],
-      timeout: 1000,
-    });
-    if (stdout.toLowerCase().includes('radminvpn.exe')) {
-      lastRadminCheckResult = true;
-      return true;
-    }
-  } catch {}
-
-  lastRadminCheckResult = false;
-  return false;
+  return lastRadminCheckResult;
 }
 
 /**

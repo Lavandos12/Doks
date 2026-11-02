@@ -2,6 +2,17 @@
   --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   --font-mono: Consolas, "JetBrains Mono", "Fira Code", monospace;
 
+  /* Standard Z-Index Layer Tokens (Audit 3.6) */
+  --z-canvas: 0;
+  --z-ui: 100;
+  --z-dock: 200;
+  --z-drawer: 500;
+  --z-backdrop: 1000;
+  --z-modal: 1010;
+  --z-toast: 2000;
+
+  --text-normal: var(--text-primary);
+
   /* Stage C Dark Theme Tokens (Default) */
   --bg-primary: #09080f;
   --bg-secondary: #110f1c;
@@ -22,6 +33,7 @@
   --bg-main: var(--bg-primary);
   --bg-sidebar: var(--bg-secondary);
   --text-main: var(--text-primary);
+  --text-normal: var(--text-primary);
 
   /* Obsidian JSON Canvas 1-6 sticky colors (Dark) */
   --canvas-color-1: #e06c75; /* red */
@@ -3310,7 +3322,7 @@ input:focus, select:focus, textarea:focus {
   border-radius: 12px !important;
   padding: 6px !important;
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55) !important;
-  z-index: 500 !important;
+  z-index: var(--z-drawer, 500);
   display: flex !important;
   flex-direction: column !important;
   gap: 4px !important;
@@ -4319,7 +4331,7 @@ input:focus, select:focus, textarea:focus {
   border-radius: 10px;
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.06);
   backdrop-filter: blur(10px);
-  z-index: 250 !important;
+  z-index: var(--z-dock, 200);
   pointer-events: auto;
 }
 
@@ -4500,7 +4512,7 @@ textarea:focus {
 .ai-export-modal-overlay {
   position: fixed !important;
   inset: 0 !important;
-  z-index: 9999 !important;
+  z-index: var(--z-backdrop, 1000);
   background: rgba(6, 7, 10, 0.76) !important;
   backdrop-filter: blur(16px) saturate(140%) !important;
   display: flex !important;
@@ -4805,7 +4817,7 @@ button.doks-color-dot.active {
   bottom: 68px !important;
   width: 460px;
   max-width: calc(100vw - 32px);
-  z-index: 400 !important;
+  z-index: var(--z-drawer, 500);
   display: flex;
   flex-direction: column;
   background: rgba(18, 20, 28, 0.94);
@@ -5560,7 +5572,7 @@ button.doks-color-dot.active {
   position: absolute;
   top: 14px;
   left: 16px;
-  z-index: 500 !important;
+  z-index: var(--z-ui, 100);
   max-width: calc(100% - 360px);
   display: flex;
   align-items: center;
@@ -5766,7 +5778,7 @@ button.doks-color-dot.active {
   border: 1px solid rgba(255, 255, 255, 0.18) !important;
   border-radius: 12px;
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.85) !important;
-  z-index: 600 !important;
+  z-index: var(--z-modal, 1010);
 }
 
 .miro-popover-header {
@@ -5863,7 +5875,7 @@ button.doks-color-dot.active {
   border: 1px solid rgba(255, 255, 255, 0.18) !important;
   border-radius: 12px;
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.85) !important;
-  z-index: 600 !important;
+  z-index: var(--z-modal, 1010);
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -6129,7 +6141,7 @@ button.doks-color-dot.active {
   position: absolute;
   top: 14px;
   right: 16px;
-  z-index: 500 !important;
+  z-index: var(--z-ui, 100);
   display: flex;
   align-items: center;
   gap: 8px;
@@ -7090,7 +7102,7 @@ button.doks-color-dot.active {
   border-radius: 12px !important;
   padding: 8px !important;
   box-shadow: 0 20px 48px rgba(0, 0, 0, 0.75) !important;
-  z-index: 260 !important;
+  z-index: var(--z-dock, 200);
   min-width: 195px !important;
 }
 
@@ -7409,14 +7421,14 @@ button.settings-color-btn.selected {
   border: 1px solid rgba(139, 92, 246, 0.25) !important;
   background: rgba(14, 12, 24, 0.96) !important;
   box-shadow: 0 24px 64px rgba(0, 0, 0, 0.85) !important;
-  z-index: 450 !important;
+  z-index: var(--z-drawer, 500);
 }
 
 /* 3. Fix Network Popover Stuck in Bottom-Left */
 .network-popover-backdrop {
   position: fixed !important;
   inset: 0 !important;
-  z-index: 2100 !important;
+  z-index: var(--z-toast, 2000);
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
@@ -7710,4 +7722,73 @@ html, body, #app, .app-layout {
   .canvas-bottom-right-hud .hud-btn:last-child {
     display: none !important;
   }
+}
+
+
+/* ==========================================================================
+   Complete Light Theme Overhaul ("Белая тема") - Section 4
+   ========================================================================== */
+.theme-light .liquid-glass-surface {
+  background: rgba(255, 255, 255, 0.88) !important;
+  border: 1px solid rgba(0, 0, 0, 0.08) !important;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.08) !important;
+  color: #1e293b !important;
+}
+
+.theme-light .miro-dock-btn {
+  color: #475569 !important;
+}
+
+.theme-light .miro-dock-btn:hover {
+  background: rgba(0, 0, 0, 0.05) !important;
+  color: #0f172a !important;
+}
+
+.theme-light .miro-dock-btn.active {
+  background: #ede9fe !important;
+  color: #6d28d9 !important;
+}
+
+.theme-light .miro-menu-item {
+  color: #334155 !important;
+}
+
+.theme-light .miro-menu-item:hover {
+  background: rgba(0, 0, 0, 0.05) !important;
+  color: #0f172a !important;
+}
+
+.theme-light .miro-action-pill {
+  background: rgba(0, 0, 0, 0.04) !important;
+  border-color: rgba(0, 0, 0, 0.08) !important;
+  color: #334155 !important;
+}
+
+.theme-light .miro-action-pill:hover {
+  background: rgba(0, 0, 0, 0.08) !important;
+  color: #0f172a !important;
+}
+
+.theme-light .node-inline-textarea,
+.theme-light .shape-inline-textarea,
+.theme-light .type-text .node-inline-textarea {
+  color: #1e293b !important;
+}
+
+.theme-light .node-table-wrapper {
+  background: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+  color: #0f172a !important;
+}
+
+.theme-light .node-table-grid input {
+  background: #f8fafc !important;
+  color: #0f172a !important;
+  border: 1px solid #cbd5e1 !important;
+}
+
+.theme-light .node-chart-card {
+  background: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+  color: #0f172a !important;
 }

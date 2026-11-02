@@ -101,6 +101,9 @@ export class PeerConnection extends EventEmitter {
           const decrypted = decryptAeadFrame(this.trafficKey, nonce, frame);
           text = decrypted.toString('utf8');
         } else {
+          if (this.isAuthenticated && this.trafficKey) {
+            throw new Error('Unencrypted or invalid frame received on authenticated AEAD channel');
+          }
           text = typeof raw === 'string' ? raw : raw.toString('utf8');
         }
 

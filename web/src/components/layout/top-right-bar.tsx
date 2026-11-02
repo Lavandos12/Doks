@@ -70,6 +70,13 @@ export function TopRightBar({
     setProfileColor(newColor);
     setShowQuickProfile(false);
     window.dispatchEvent(new Event('doks_profile_updated'));
+
+    // Audit 3.4: Send PATCH /api/profile so server and mesh peers sync updated profile
+    fetch('/api/profile', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ memberName: trimmed, memberColor: newColor })
+    }).catch(() => {});
   };
 
   return (

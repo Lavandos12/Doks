@@ -35,48 +35,48 @@ export interface AiExportResult {
 }
 
 const COLOR_HEX_MAP: Record<string, string> = {
-  '#fef08a': 'жёлтый',
-  '#fef9c3': 'жёлтый',
-  '#fde047': 'жёлтый',
-  '#bbf7d0': 'зелёный',
-  '#dcfce7': 'зелёный',
-  '#86efac': 'зелёный',
-  '#bae6fd': 'синий',
-  '#e0f2fe': 'синий',
-  '#7dd3fc': 'синий',
-  '#fecaca': 'красный',
-  '#fee2e2': 'красный',
-  '#fca5a5': 'красный',
-  '#e9d5ff': 'фиолетовый',
-  '#f3e8ff': 'фиолетовый',
-  '#d8b4fe': 'фиолетовый',
-  '#fed7aa': 'оранжевый',
-  '#ffedd5': 'оранжевый',
-  '#fdba74': 'оранжевый',
-  '#99f6e4': 'бирюзовый',
-  '#ccfbf1': 'бирюзовый',
-  '#5eead4': 'бирюзовый',
-  '#e2e8f0': 'серый',
-  '#f1f5f9': 'серый',
-  '#cbd5e1': 'серый',
-  '#f5f5f5': 'серый',
-  '#ffffff': 'без цвета',
-  'none': 'без цвета',
-  'default': 'без цвета'
+  '#fef08a': 'yellow',
+  '#fef9c3': 'yellow',
+  '#fde047': 'yellow',
+  '#bbf7d0': 'green',
+  '#dcfce7': 'green',
+  '#86efac': 'green',
+  '#bae6fd': 'blue',
+  '#e0f2fe': 'blue',
+  '#7dd3fc': 'blue',
+  '#fecaca': 'red',
+  '#fee2e2': 'red',
+  '#fca5a5': 'red',
+  '#e9d5ff': 'purple',
+  '#f3e8ff': 'purple',
+  '#d8b4fe': 'purple',
+  '#fed7aa': 'orange',
+  '#ffedd5': 'orange',
+  '#fdba74': 'orange',
+  '#99f6e4': 'teal',
+  '#ccfbf1': 'teal',
+  '#5eead4': 'teal',
+  '#e2e8f0': 'gray',
+  '#f1f5f9': 'gray',
+  '#cbd5e1': 'gray',
+  '#f5f5f5': 'gray',
+  '#ffffff': 'colorless',
+  'none': 'colorless',
+  'default': 'colorless'
 };
 
 const COLOR_NAMES: Record<string, string> = {
-  '1': 'жёлтый',
-  '2': 'зелёный',
-  '3': 'синий',
-  '4': 'красный',
-  '5': 'фиолетовый',
-  '6': 'серый',
+  '1': 'yellow',
+  '2': 'green',
+  '3': 'blue',
+  '4': 'red',
+  '5': 'purple',
+  '6': 'gray',
   ...COLOR_HEX_MAP
 };
 
 export function resolveColorName(color: string | undefined): string {
-  if (!color || color === 'none' || color === 'default') return 'без цвета';
+  if (!color || color === 'none' || color === 'default') return 'colorless';
   const c = color.trim().toLowerCase();
   if (COLOR_NAMES[c]) return COLOR_NAMES[c];
   if (c.startsWith('#') && (c.length === 7 || c.length === 4)) {
@@ -91,14 +91,14 @@ export function resolveColorName(color: string | undefined): string {
       b = parseInt(c[3] + c[3], 16);
     }
     const standardColors = [
-      { name: 'жёлтый', r: 254, g: 240, b: 138 },
-      { name: 'зелёный', r: 187, g: 247, b: 208 },
-      { name: 'синий', r: 186, g: 230, b: 253 },
-      { name: 'красный', r: 254, g: 202, b: 202 },
-      { name: 'фиолетовый', r: 233, g: 213, b: 255 },
-      { name: 'оранжевый', r: 254, g: 215, b: 170 },
-      { name: 'бирюзовый', r: 153, g: 246, b: 228 },
-      { name: 'серый', r: 226, g: 232, b: 240 }
+      { name: 'yellow', r: 254, g: 240, b: 138 },
+      { name: 'green', r: 187, g: 247, b: 208 },
+      { name: 'blue', r: 186, g: 230, b: 253 },
+      { name: 'red', r: 254, g: 202, b: 202 },
+      { name: 'purple', r: 233, g: 213, b: 255 },
+      { name: 'orange', r: 254, g: 215, b: 170 },
+      { name: 'teal', r: 153, g: 246, b: 228 },
+      { name: 'gray', r: 226, g: 232, b: 240 }
     ];
     let closest = standardColors[0];
     let minDist = Infinity;
@@ -127,7 +127,7 @@ export function generateAiContext(
     const fallbackIndex = docManager.getOrCreateDoc(DOC_INDEX);
     boardMeta = getIndexMaps(fallbackIndex).boards.get(options.boardId);
   }
-  const boardTitle = boardMeta?.title || 'Без названия';
+  const boardTitle = boardMeta?.title || 'Untitled';
 
   const boardDoc = docManager.getOrCreateDoc(getScopedBoardDocName(wsScope, options.boardId));
   const { nodes: yNodes, edges: yEdges } = getBoardMaps(boardDoc);
@@ -209,10 +209,10 @@ export function generateAiContext(
   const authorMap = new Map<string, string>();
   let authorCounter = 1;
   const getAuthor = (name: string) => {
-    if (!name) return 'Неизвестный';
+    if (!name) return 'Unknown';
     if (!options.anonymizeMembers) return name;
     if (!authorMap.has(name)) {
-      authorMap.set(name, `Участник ${authorCounter++}`);
+      authorMap.set(name, `Member ${authorCounter++}`);
     }
     return authorMap.get(name)!;
   };
@@ -229,7 +229,8 @@ export function generateAiContext(
     filteredNodes.forEach((n) => {
       if (n.noteId) noteIdsToInclude.add(n.noteId);
       if (options.includeNotes === 'linked' || options.includeNotes === undefined) {
-        const wikiMatches = n.text.matchAll(/\[\[(.*?)\]\]/g);
+        const nodeText = typeof n.text === 'string' ? n.text : '';
+        const wikiMatches = nodeText.matchAll(/\[\[(.*?)\]\]/g);
         for (const m of wikiMatches) {
           const title = m[1].split('|')[0].trim();
           notes.forEach((meta, id) => {
@@ -322,11 +323,11 @@ export function generateAiContext(
 
   // Check for Color Legend
   let legendText = '';
-  const legendFrame = frames.find((f) => f.text.toLowerCase().includes('легенда'));
+  const legendFrame = frames.find((f) => (f.text || '').toLowerCase().includes('legend'));
   if (legendFrame) {
     const items = frameContents.get(legendFrame.id) || [];
     if (items.length > 0) {
-      legendText = `Легенда цветов: ${items.map((it) => `${resolveColorName(it.color)} = ${it.text}`).join('; ')}.`;
+      legendText = `Color Legend: ${items.map((it) => `${resolveColorName(it.color)} = ${it.text}`).join('; ')}.`;
     }
   }
 
@@ -335,46 +336,46 @@ export function generateAiContext(
 
   // Markdown output builder
   const lines: string[] = [];
-  lines.push(`# Контекст доски: ${boardTitle}`);
-  lines.push(`Формат: doks-ai/1. Экспорт: ${nowStr}.`);
-  lines.push(`Это выгрузка рабочей доски команды. Объекты имеют короткие id (n_xxxxxx или n1, n2...).`);
+  lines.push(`# Board Context: ${boardTitle}`);
+  lines.push(`Format: doks-ai/1. Export: ${nowStr}.`);
+  lines.push(`Export of team collaborative whiteboard. Elements have short ids (n_xxxxxx or n1, n2...).`);
   if (legendText) {
     lines.push(legendText);
   } else {
-    lines.push(`Цвет сам по себе смысла не несёт, если ниже не задана легенда.`);
+    lines.push(`Color carries no inherent meaning unless specified in legend below.`);
   }
   lines.push('');
 
-  // 2. Сводка
-  lines.push(`## Сводка`);
+  // 2. Summary
+  lines.push(`## Summary`);
   const typeParts: string[] = [];
-  if (stickiesCount > 0) typeParts.push(`стикеров ${stickiesCount}`);
-  if (textsCount > 0) typeParts.push(`текстов ${textsCount}`);
-  if (notesCount > 0) typeParts.push(`карточек заметок ${notesCount}`);
-  if (frames.length > 0) typeParts.push(`рамок ${frames.length}`);
-  lines.push(`Объектов: ${totalObjects} (${typeParts.join(', ')}).`);
+  if (stickiesCount > 0) typeParts.push(`stickies: ${stickiesCount}`);
+  if (textsCount > 0) typeParts.push(`texts: ${textsCount}`);
+  if (notesCount > 0) typeParts.push(`note cards: ${notesCount}`);
+  if (frames.length > 0) typeParts.push(`frames: ${frames.length}`);
+  lines.push(`Objects: ${totalObjects} (${typeParts.join(', ')}).`);
   if (stickiesCount > 0) {
-    lines.push(`Выполнено: ${doneCount} из ${stickiesCount} стикеров.`);
+    lines.push(`Completed: ${doneCount} of ${stickiesCount} stickies.`);
   }
   lines.push('');
 
-  // 3. Структура и содержимое по рамкам
+  // 3. Structure and frame contents
   const formatNode = (n: BoardNodeData) => {
     const sid = idToShort.get(n.id)!;
     const typeLabel =
-      n.type === 'sticky' ? 'стикер' :
-      n.type === 'note' ? 'заметка' :
-      n.type === 'frame' ? 'рамка' :
-      n.type === 'checklist' ? 'чеклист' :
-      n.type === 'table' ? 'таблица' :
-      n.type === 'kanban' ? 'канбан' :
-      n.type === 'chart' ? 'диаграмма' :
-      n.type === 'code' ? 'код' :
-      n.type === 'file' ? 'файл' :
-      n.type === 'drawing' ? 'рисунок' :
-      n.type === 'shape' ? 'фигура' : n.type;
+      n.type === 'sticky' ? 'sticky' :
+      n.type === 'note' ? 'note' :
+      n.type === 'frame' ? 'frame' :
+      n.type === 'checklist' ? 'checklist' :
+      n.type === 'table' ? 'table' :
+      n.type === 'kanban' ? 'kanban' :
+      n.type === 'chart' ? 'chart' :
+      n.type === 'code' ? 'code' :
+      n.type === 'file' ? 'file' :
+      n.type === 'drawing' ? 'drawing' :
+      n.type === 'shape' ? 'shape' : n.type;
     const colorLabel = resolveColorName(n.color);
-    const authorLabel = `автор: ${getAuthor(n.author)}`;
+    const authorLabel = `author: ${getAuthor(n.author)}`;
     const statusLabel = n.done ? '[x]' : '[ ]';
     let textLabel = (n.text || '').replace(/\r?\n/g, ' ');
 
@@ -382,7 +383,7 @@ export function generateAiContext(
       try {
         const parsed = typeof n.chartData === 'string' ? JSON.parse(n.chartData) : n.chartData;
         if (Array.isArray(parsed)) {
-          const items = parsed.map((item: any) => `${item.label || 'Без назв.'}: ${item.value || 0}%`).join(', ');
+          const items = parsed.map((item: any) => `${item.label || 'Untitled'}: ${item.value || 0}%`).join(', ');
           textLabel = `${n.chartType || 'pie'}: [${items}] ${textLabel}`.trim();
         }
       } catch {}
@@ -397,10 +398,10 @@ export function generateAiContext(
 
   for (const f of frames) {
     const fid = idToShort.get(f.id)!;
-    lines.push(`## Рамка «${f.text || 'Рамка'}» (${fid})`);
+    lines.push(`## Frame "${f.text || 'Frame'}" (${fid})`);
     const children = frameContents.get(f.id) || [];
     if (children.length === 0) {
-      lines.push(`*(пусто)*`);
+      lines.push(`*(empty)*`);
     } else {
       children.forEach((c) => lines.push(formatNode(c)));
     }
@@ -408,54 +409,54 @@ export function generateAiContext(
   }
 
   if (unassigned.length > 0) {
-    lines.push(`## Объекты вне рамок`);
+    lines.push(`## Elements outside frames`);
     unassigned.forEach((u) => lines.push(formatNode(u)));
     lines.push('');
   }
 
-  // 4. Связи (Edges)
+  // 4. Connections (Edges)
   const edgesOutput: string[] = [];
   yEdges.forEach((edge) => {
     if (edge.deleted) return;
     const fromSid = idToShort.get(edge.from);
     const toSid = idToShort.get(edge.to);
     if (fromSid && toSid) {
-      const label = edge.label ? ` («${edge.label}»)` : '';
+      const label = edge.label ? ` ("${edge.label}")` : '';
       edgesOutput.push(`${fromSid} → ${toSid}${label}`);
     }
   });
 
   if (edgesOutput.length > 0) {
-    lines.push(`## Связи`);
+    lines.push(`## Connections`);
     edgesOutput.forEach((e) => lines.push(e));
     lines.push('');
   }
 
-  // 5. Пространственная карта (Spatial Map)
-  lines.push(`## Пространственная карта`);
+  // 5. Spatial Map
+  lines.push(`## Spatial Map`);
   filteredNodes.forEach((n) => {
     const sid = idToShort.get(n.id)!;
     lines.push(`${sid}: x=${Math.round(n.x)}, y=${Math.round(n.y)}, w=${Math.round(n.w)}, h=${Math.round(n.h)}`);
   });
   lines.push('');
 
-  // 6. Подключённые заметки
+  // 6. Connected Notes
   if (connectedNotes.length > 0) {
-    lines.push(`## Подключённые заметки`);
+    lines.push(`## Connected Notes`);
     for (const cn of connectedNotes) {
       let content = cn.content;
       if (options.compactNotes && content.length > (options.maxNoteLength || 500)) {
-        content = content.slice(0, options.maxNoteLength || 500) + `\n... [обрезано: ${content.length} симв.]`;
+        content = content.slice(0, options.maxNoteLength || 500) + `\n... [truncated: ${content.length} chars]`;
       }
-      lines.push(`### Заметка: ${cn.title}`);
+      lines.push(`### Note: ${cn.title}`);
       lines.push(content);
       lines.push('');
     }
   }
 
-  // 7. Открытые задачи
+  // 7. Open Tasks
   if (openTasks.length > 0) {
-    lines.push(`## Открытые задачи`);
+    lines.push(`## Open Tasks`);
     openTasks.forEach((t) => {
       if (t.shortId) {
         lines.push(`- [ ] ${t.shortId} (${t.author}): ${t.text}`);
@@ -466,9 +467,9 @@ export function generateAiContext(
     lines.push('');
   }
 
-  // 8. Подсказка в конце
-  lines.push(`## Подсказка для ИИ`);
-  lines.push(`Если предлагаешь изменения, ссылайся на id объектов (\`n_xxxxxx\` или \`n1\`...) и названия заметок.`);
+  // 8. Guidance at the end
+  lines.push(`## Guidance for AI`);
+  lines.push(`When proposing changes, reference object IDs (\`n_xxxxxx\` or \`n1\`...) and note titles.`);
 
   const markdown = lines.join('\n');
   const charCount = markdown.length;
