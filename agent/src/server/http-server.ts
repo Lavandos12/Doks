@@ -157,25 +157,8 @@ export class AgentHttpServer {
     this.fastify.register(fastifyCookie);
     this.fastify.register(fastifyWebsocket);
 
-    // B22 & Attachments: Allow raw buffer uploads for files & attachments
-    this.fastify.addContentTypeParser(
-      [
-        'application/octet-stream',
-        'application/pdf',
-        'application/zip',
-        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-        'text/csv',
-        'text/html',
-        'text/markdown'
-      ],
-      { parseAs: 'buffer' },
-      (_req, body, done) => {
-        done(null, body);
-      }
-    );
-    this.fastify.addContentTypeParser(/^image\/.*/, { parseAs: 'buffer' }, (_req, body, done) => done(null, body));
-    this.fastify.addContentTypeParser(/^video\/.*/, { parseAs: 'buffer' }, (_req, body, done) => done(null, body));
-    this.fastify.addContentTypeParser(/^audio\/.*/, { parseAs: 'buffer' }, (_req, body, done) => done(null, body));
+    // Universal buffer parsers for all attachments (Office, Word, PDF, media, binary)
+    this.fastify.addContentTypeParser('*', { parseAs: 'buffer' }, (_req, body, done) => done(null, body));
 
     // Serve static files if webDistPath exists
     if (fs.existsSync(this.webDistPath)) {

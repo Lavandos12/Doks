@@ -2007,17 +2007,20 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
   const handleUploadFileToBoard = async (file: File, x: number, y: number) => {
     try {
       const buffer = await file.arrayBuffer();
-      const fileName = file.name || 'screenshot.png';
-      const fileType = file.type || 'image/png';
+      const fileName = file.name || 'document.bin';
+      const fileType = file.type || '';
       const res = await api.fetch(`/api/attachments?scope=${encodeURIComponent(effectiveScope)}`, {
         method: 'POST',
         headers: {
-          'Content-Type': fileType,
+          'Content-Type': 'application/octet-stream',
           'x-file-name': encodeURIComponent(fileName)
         },
         body: buffer
       });
-      if (!res.ok) return;
+      if (!res.ok) {
+        showToast(`Failed to upload "${fileName}" (${res.status})`, 'error');
+        return;
+      }
       const data = await res.json();
       const id = crypto.randomUUID();
       const nodeMap = new Y.Map();
@@ -5845,9 +5848,10 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                     if (map) setNodeProperties(map, { chartType: mode });
                   };
 
+                  const isWide = node.w >= 480;
                   return (
                     <div
-                      class="node-chart-card"
+                      class={`node-chart-card ${isWide ? 'is-wide-layout' : ''}`}
                       onClick={() => setSelectedNodeIds(new Set([node.id]))}
                       onWheel={(e) => {
                         if (!e.ctrlKey && !e.metaKey) e.stopPropagation();
@@ -5957,9 +5961,12 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                                 );
                               }
 
-                              return data.map((seg) => {
+                              const slicePaths: any[] = [];
+                              const sliceLabels: any[] = [];
+
+                              data.forEach((seg) => {
                                 const val = Math.max(0, Number(seg.value) || 0);
-                                if (val <= 0) return null;
+                                if (val <= 0) return;
                                 const fraction = val / total;
                                 const angle = fraction * 2 * Math.PI;
                                 const endAngle = startAngle + angle;
@@ -5981,9 +5988,51 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                                   dPath = `M ${x0.toFixed(2)} ${y0.toFixed(2)} A ${r} ${r} 0 ${largeArc} 1 ${x1.toFixed(2)} ${y1.toFixed(2)} L ${x1In.toFixed(2)} ${y1In.toFixed(2)} A ${rIn} ${rIn} 0 ${largeArc} 0 ${x0In.toFixed(2)} ${y0In.toFixed(2)} Z`;
                                 }
 
+                                slicePaths.push(<path key={`p-${seg.id}`} d={dPath} fill={seg.color} />);
+
+                                // Calculate label midpoint coordinates
+                                const pct = Math.round(fraction * 100);
+                                if (pct >= 6) {
+                                  const midAngle = (startAngle + endAngle) / 2;
+                                  const labelR = chartType === 'donut' ? (r + rIn) / 2 : r * 0.65;
+                                  const lx = cx + labelR * Math.cos(midAngle);
+                                  const ly = cy + labelR * Math.sin(midAngle);
+                                  sliceLabels.push(
+                                    <text
+                                      key={`l-${seg.id}`}
+                                      x={lx.toFixed(1)}
+                                      y={ly.toFixed(1)}
+                                      fill="#ffffff"
+                                      fontSize="11"
+                                      fontWeight="700"
+                                      textAnchor="middle"
+                                      dominantBaseline="central"
+                                      style={{ filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.85))', pointerEvents: 'none' }}
+                                    >
+                                      {pct}%
+                                    </text>
+                                  );
+                                }
+
                                 startAngle = endAngle;
-                                return <path key={seg.id} d={dPath} fill={seg.color} />;
                               });
+
+                              return (
+                                <>
+                                  {slicePaths}
+                                  {sliceLabels}
+                                  {chartType === 'donut' && (
+                                    <g style={{ pointerEvents: 'none' }}>
+                                      <text x={cx} y={cy - 4} fill="#ffffff" fontSize="14" fontWeight="700" textAnchor="middle">
+                                        {total}
+                                      </text>
+                                      <text x={cx} y={cy + 12} fill="#94a3b8" fontSize="9" fontWeight="600" textAnchor="middle">
+                                        TOTAL
+                                      </text>
+                                    </g>
+                                  )}
+                                </>
+                              );
                             })()}
                           </svg>
                         ) : chartType === 'square' ? (
