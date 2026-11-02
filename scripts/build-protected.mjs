@@ -40,10 +40,14 @@ const result = await esbuild.build({
   external: ['fsevents']
 });
 
-const shebang = '#!/usr/bin/env node\n"use strict";\n';
-const outCode = shebang + result.outputFiles[0].text;
+// Удаляем все существующие shebang из собранного кода, чтобы не было дублей на 2-3 строках
+let bundledCode = result.outputFiles[0].text.replace(/^#!.*\r?\n/gm, '').trimStart();
+
+// Ставим ровно один shebang строго на первой строке
+const finalCode = `#!/usr/bin/env node\n"use strict";\n${bundledCode}\n`;
+
 const outPath = path.join(releaseDir, 'doks-server.cjs');
-fs.writeFileSync(outPath, outCode, 'utf8');
+fs.writeFileSync(outPath, finalCode, 'utf8');
 
 console.log('Copying web/dist to release/web/dist...');
 const sourceWebDist = path.join(rootDir, 'web', 'dist');
