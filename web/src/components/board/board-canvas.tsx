@@ -804,6 +804,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
   viewportRef.current = viewport;
   const targetViewportRef = useRef(viewport);
   const rafIdRef = useRef<number | null>(null);
+  const rmbDragDistRef = useRef<number>(0);
 
   const animateToViewport = useCallback(
     (target: Partial<ViewportCoord>, immediate = false) => {
@@ -1124,12 +1125,12 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
       animateToViewport({
         x: targetViewportRef.current.x - (e.deltaY || e.deltaX),
         y: targetViewportRef.current.y
-      }, true);
+      }, false);
     } else {
       animateToViewport({
         x: targetViewportRef.current.x - e.deltaX,
         y: targetViewportRef.current.y - e.deltaY
-      }, true);
+      }, false);
     }
   };
 
@@ -2474,9 +2475,14 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
 
       // Panning (immediate 1:1 direct pointer tracking)
       if (panState) {
+        const dx = e.clientX - panState.startX;
+        const dy = e.clientY - panState.startY;
+        if ((panState as any).isRmb) {
+          rmbDragDistRef.current = Math.hypot(dx, dy);
+        }
         animateToViewport({
-          x: panState.originX + (e.clientX - panState.startX),
-          y: panState.originY + (e.clientY - panState.startY)
+          x: panState.originX + dx,
+          y: panState.originY + dy
         }, true);
       }
 
@@ -3075,15 +3081,24 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
 
     // Pan via Space + Left click, Middle click, Right click, Hand tool, or Read-Only Viewer mode
     if (isBoardLockedReadOnly || isSpacePressed || e.button === 1 || e.button === 2 || activeTool === 'hand') {
-      if (e.button !== 2) {
+      if (e.button === 2) {
+        rmbDragDistRef.current = 0;
         setPanState({
           startX: e.clientX,
           startY: e.clientY,
           originX: viewport.x,
-          originY: viewport.y
-        });
+          originY: viewport.y,
+          isRmb: true
+        } as any);
         return;
       }
+      setPanState({
+        startX: e.clientX,
+        startY: e.clientY,
+        originX: viewport.x,
+        originY: viewport.y
+      });
+      return;
     }
 
     if (e.button === 0) {
@@ -3336,6 +3351,11 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
   // Custom Context Menu handler
   const handleContextMenu = (e: MouseEvent) => {
     e.preventDefault();
+    if (rmbDragDistRef.current > 5) {
+      rmbDragDistRef.current = 0;
+      return;
+    }
+    rmbDragDistRef.current = 0;
     const pos = screenToCanvas(e.clientX, e.clientY);
     const target = (e.target as HTMLElement).closest('.board-node-box') as HTMLElement;
     const nodeId = target ? target.getAttribute('data-node-id') || undefined : undefined;
@@ -4659,57 +4679,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
             <Icon name="lock" size={15} />
           </button>
 
-          {/* Bring to Front / Send to Back */}
-          <button
-            class="inspector-btn"
-            title={t('context.bring_front')}
-            onClick={() => {
-              const maxZ = Math.max(...nodesList.map((n) => n.z || 1), 1) + 1;
-              boardDoc.transact(() => {
-                for (const id of selectedNodeIds) {
-                  const map = yNodes.get(id);
-                  if (map) map.set('z', maxZ);
-                }
-              }, 'user');
-            }}
-          >
-            <Icon name="layers" size={15} />
-          </button>
-          <button
-            class="inspector-btn"
-            title={t('context.send_back')}
-            onClick={() => {
-              const minZ = Math.min(...nodesList.map((n) => n.z || 1), 1) - 1;
-              boardDoc.transact(() => {
-                for (const id of selectedNodeIds) {
-                  const map = yNodes.get(id);
-                  if (map) map.set('z', Math.max(0, minZ));
-                }
-              }, 'user');
-            }}
-          >
-            <Icon name="arrow-down" size={15} />
-          </button>
 
-          {/* Reaction */}
-          <button
-            class="inspector-btn"
-            title={t('canvas.add_reaction')}
-            onClick={() => {
-              boardDoc.transact(() => {
-                for (const id of selectedNodeIds) {
-                  const map = yNodes.get(id);
-                  if (map) {
-                    const n = nodeLookup.get(id);
-                    const currentCount = n?.reactions?.thumbsUp || 0;
-                    map.set('reactions', { thumbsUp: currentCount + 1 });
-                  }
-                }
-              }, 'user');
-            }}
-          >
-            <Icon name="sparkles" size={15} />
-          </button>
 
           {/* Duplicate */}
           <button
@@ -5135,6 +5105,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
           const isNote = node.type === 'note';
           const isSticky = node.type === 'sticky';
           const isImage = node.type === 'image' || ((node.fileName || '').match(/\.(png|jpe?g|gif|webp)$/i) && !node.extractedText);
+          const isWidget = node.type === 'table' || node.type === 'kanban' || node.type === 'chart' || node.type === 'checklist';
           const shapeClass = node.type === 'shape' && node.shapeVariant ? `shape-variant-${node.shapeVariant}` : '';
 
           const stickyBg = isSticky && nodeColorHex !== CANVAS_COLORS.default ? `${nodeColorHex}26` : undefined;
@@ -5142,9 +5113,20 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
             ? 'rgba(255, 255, 255, 0.18)'
             : node.type === 'text' || isImage
             ? 'transparent'
+            : isWidget && nodeColorHex !== CANVAS_COLORS.default
+            ? `${nodeColorHex}66`
             : isSticky && nodeColorHex !== CANVAS_COLORS.default
             ? `${nodeColorHex}80`
             : nodeColorHex;
+
+          const widgetGlow = isWidget && nodeColorHex !== CANVAS_COLORS.default
+            ? `0 8px 24px rgba(0, 0, 0, 0.4), 0 0 16px ${nodeColorHex}18`
+            : undefined;
+
+          const widgetHeaderStyle = isWidget && nodeColorHex !== CANVAS_COLORS.default ? {
+            background: `linear-gradient(90deg, ${nodeColorHex}33 0%, rgba(255, 255, 255, 0.03) 100%)`,
+            borderBottom: `1px solid ${nodeColorHex}44`
+          } : undefined;
 
           return (
             <div
@@ -5157,6 +5139,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                 width: `${node.w}px`,
                 height: `${node.h}px`,
                 backgroundColor: stickyBg || undefined,
+                boxShadow: widgetGlow,
                 borderColor,
                 zIndex: node.z ?? (isFrame ? 1 : 10)
               }}
@@ -5542,6 +5525,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                     >
                       <div
                         class="card-top-drag-header checklist-title-row"
+                        style={widgetHeaderStyle}
                         onMouseDown={(e) => handleNodePointerDown(node, e as any)}
                       >
                         <div class="card-drag-grip" title={t('widget.checklist')}>
@@ -5634,6 +5618,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                     >
                       <div
                         class="card-top-drag-header node-table-toolbar"
+                        style={widgetHeaderStyle}
                         onMouseDown={(e) => handleNodePointerDown(node, e as any)}
                       >
                         <div class="card-drag-grip" title={t('widget.table')}>
@@ -5652,7 +5637,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                       <div
                         class="node-table-grid scrollable-card-content"
                         style={{
-                          gridTemplateColumns: `repeat(${table[0]?.length || 3}, minmax(120px, 1fr))`,
+                          gridTemplateColumns: `repeat(${table[0]?.length || 3}, minmax(130px, 1fr))`,
                           gridAutoRows: 'minmax(38px, 1fr)',
                           flex: 1,
                           minHeight: '80px'
@@ -5660,8 +5645,13 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                         onWheel={(e) => { if (!e.ctrlKey && !e.metaKey) e.stopPropagation(); }}
                       >
                         {table.map((row, rIdx) =>
-                          row.map((cell, cIdx) => (
-                            <div key={`${rIdx}-${cIdx}`} class="node-table-cell">
+                          row.map((cell, cIdx) => {
+                            const isHeaderRow = rIdx === 0;
+                            const cellStyle = isHeaderRow && nodeColorHex !== CANVAS_COLORS.default ? {
+                              background: `linear-gradient(180deg, ${nodeColorHex}22 0%, #181b26 100%)`
+                            } : undefined;
+                            return (
+                              <div key={`${rIdx}-${cIdx}`} class="node-table-cell" style={cellStyle}>
                               <input
                                 type="text"
                                 value={cell}
@@ -5673,7 +5663,8 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                                 }}
                               />
                             </div>
-                          ))
+                            );
+                          })
                         )}
                       </div>
                     </div>
@@ -5692,6 +5683,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                     >
                       <div
                         class="card-top-drag-header kanban-header-bar"
+                        style={widgetHeaderStyle}
                         onMouseDown={(e) => handleNodePointerDown(node, e as any)}
                       >
                         <div class="card-drag-grip" title={t('widget.kanban')}>
@@ -5853,7 +5845,14 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                         { id: '1', label: `${t('widget.category')} A`, value: 75, color: '#6366f1' },
                         { id: '2', label: `${t('widget.category')} B`, value: 25, color: '#10b981' }
                       ];
-                  const total = data.reduce((sum, d) => sum + (Math.max(0, Number(d.value)) || 0), 0) || 1;
+                  const chartPrimaryColor = (nodeColorHex && nodeColorHex !== CANVAS_COLORS.default) ? nodeColorHex : '#6366f1';
+                  const themedData = data.map((seg, idx) => {
+                    if (idx === 0 && nodeColorHex && nodeColorHex !== CANVAS_COLORS.default) {
+                      return { ...seg, color: nodeColorHex };
+                    }
+                    return seg;
+                  });
+                  const total = themedData.reduce((sum, d) => sum + (Math.max(0, Number(d.value)) || 0), 0) || 1;
                   const palette = ['#6366f1', '#10b981', '#f59e0b', '#ec4899', '#3b82f6', '#8b5cf6', '#06b6d4', '#f97316'];
 
                   const updateData = (newData: typeof data) => {
@@ -5877,6 +5876,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                     >
                       <div
                         class="card-top-drag-header chart-header"
+                        style={widgetHeaderStyle}
                         onMouseDown={(e) => handleNodePointerDown(node, e as any)}
                       >
                         <div class="card-drag-grip" title={t('widget.chart')}>
@@ -5961,9 +5961,9 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                               const rIn = chartType === 'donut' ? 42 : 0;
                               let startAngle = -Math.PI / 2;
 
-                              const validSegments = data.filter((d) => (Number(d.value) || 0) > 0);
+                              const validSegments = themedData.filter((d) => (Number(d.value) || 0) > 0);
                               if (validSegments.length <= 1) {
-                                const onlyItem = validSegments[0] || data[0];
+                                const onlyItem = validSegments[0] || themedData[0];
                                 if (chartType === 'pie') {
                                   return <circle cx={cx} cy={cy} r={r} fill={onlyItem.color} />;
                                 }
@@ -5982,7 +5982,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                               const slicePaths: any[] = [];
                               const sliceLabels: any[] = [];
 
-                              data.forEach((seg) => {
+                              themedData.forEach((seg) => {
                                 const val = Math.max(0, Number(seg.value) || 0);
                                 if (val <= 0) return;
                                 const fraction = val / total;
@@ -6084,8 +6084,8 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                         ) : chartType === 'line' ? (
                           <div style={{ width: '100%', height: '100%', minHeight: '130px', flex: 1, padding: '8px 12px', display: 'flex', flexDirection: 'column' }}>
                             {(() => {
-                              const maxVal = Math.max(1, ...data.map((d) => Number(d.value) || 0));
-                              const pts = data.map((d, i) => {
+                              const maxVal = Math.max(1, ...themedData.map((d) => Number(d.value) || 0));
+                              const pts = themedData.map((d, i) => {
                                 const x = data.length > 1 ? 16 + (i / (data.length - 1)) * 268 : 150;
                                 const val = Number(d.value) || 0;
                                 const y = 110 - (val / maxVal) * 80;
@@ -6095,7 +6095,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                               return (
                                 <svg viewBox="0 0 300 130" style={{ width: '100%', height: '100%', overflow: 'visible' }}>
                                   <line x1="16" y1="110" x2="284" y2="110" stroke="rgba(255,255,255,0.15)" strokeWidth="1" />
-                                  {pathD && <path d={pathD} fill="none" stroke="#8b5cf6" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />}
+                                  {pathD && <path d={pathD} fill="none" stroke={chartPrimaryColor} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />}
                                   {pts.map((p, idx) => (
                                     <g key={idx}>
                                       <circle cx={p.x} cy={p.y} r="4" fill={p.color} stroke="#ffffff" strokeWidth="1.5" />
@@ -6108,7 +6108,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                           </div>
                         ) : chartType === 'funnel' ? (
                           <div style={{ width: '100%', height: '100%', minHeight: '130px', flex: 1, padding: '6px 14px', display: 'flex', flexDirection: 'column', gap: '6px', justifyContent: 'center' }}>
-                            {data.map((seg, idx) => {
+                            {themedData.map((seg, idx) => {
                               const val = Math.max(0, Number(seg.value) || 0);
                               const widthPct = Math.max(28, 100 - idx * (70 / Math.max(1, data.length)));
                               const pct = total > 0 ? Math.round((val / total) * 100) : 0;
@@ -6139,7 +6139,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                           </div>
                         ) : (
                           <div style={{ width: '100%', height: '100%', minHeight: '110px', flex: 1, display: 'flex', alignItems: 'flex-end', justifyContent: 'center', gap: '14px', padding: '0 12px 6px' }}>
-                            {data.map((seg) => {
+                            {themedData.map((seg) => {
                               const val = Math.max(0, Number(seg.value) || 0);
                               const pct = total > 0 ? Math.round((val / total) * 100) : 0;
                               return (

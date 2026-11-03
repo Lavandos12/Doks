@@ -110,9 +110,13 @@ export function computeContinuousWheelTarget(
   const zoomFactor = Math.min(Math.max(Math.exp(-rawDelta * 0.0018), 0.65), 1.6);
   const newZoom = Math.min(Math.max(current.zoom * zoomFactor, minZoom), maxZoom);
 
-  // Anchor transformation
+  // Anchor transformation with finite guards
   const newX = screenAnchorX - (screenAnchorX - current.x) * (newZoom / current.zoom);
   const newY = screenAnchorY - (screenAnchorY - current.y) * (newZoom / current.zoom);
+
+  if (!Number.isFinite(newX) || !Number.isFinite(newY) || !Number.isFinite(newZoom)) {
+    return current;
+  }
 
   return {
     x: newX,
@@ -130,6 +134,9 @@ export function stepDampedKinematics(
   lambda = 0.24,
   threshold = { pos: 0.25, zoom: 0.0008 }
 ): { next: ViewportCoord; arrived: boolean } {
+  if (!Number.isFinite(target.x) || !Number.isFinite(target.y) || !Number.isFinite(target.zoom)) {
+    return { next: current, arrived: true };
+  }
   const dx = target.x - current.x;
   const dy = target.y - current.y;
   const dz = target.zoom - current.zoom;
