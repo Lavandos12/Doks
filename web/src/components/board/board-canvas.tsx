@@ -808,10 +808,16 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
   const animateToViewport = useCallback(
     (target: Partial<ViewportCoord>, immediate = false) => {
       const curTarget = targetViewportRef.current;
+      const validX = target.x !== undefined && Number.isFinite(target.x) ? target.x : curTarget.x;
+      const validY = target.y !== undefined && Number.isFinite(target.y) ? target.y : curTarget.y;
+      const validZoom = target.zoom !== undefined && Number.isFinite(target.zoom)
+        ? Math.min(Math.max(target.zoom, 0.1), 4.0)
+        : curTarget.zoom;
+
       const nextTarget: ViewportCoord = {
-        x: target.x !== undefined ? target.x : curTarget.x,
-        y: target.y !== undefined ? target.y : curTarget.y,
-        zoom: target.zoom !== undefined ? Math.min(Math.max(target.zoom, 0.1), 4.0) : curTarget.zoom
+        x: validX,
+        y: validY,
+        zoom: validZoom
       };
       targetViewportRef.current = nextTarget;
 
@@ -1100,7 +1106,11 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
     if (!containerRef.current) return;
     const rect = containerRef.current.getBoundingClientRect();
 
-    if (e.ctrlKey || e.metaKey || (e.deltaX === 0 && !e.shiftKey)) {
+    // Standard Miro / Figma Navigation:
+    // 1. Pinch gesture or Ctrl/Cmd + Wheel = Zoom anchored at cursor
+    // 2. Shift + Wheel = Horizontal Pan
+    // 3. Regular Wheel or 2-finger touchpad swipe = Natural 2D Pan without random zoom jumps
+    if (e.ctrlKey || e.metaKey) {
       const mouseX = e.clientX - rect.left;
       const mouseY = e.clientY - rect.top;
       const wheelTarget = computeContinuousWheelTarget(
@@ -1110,16 +1120,16 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
         mouseY
       );
       animateToViewport(wheelTarget, false);
-    } else if (e.shiftKey && e.deltaX === 0) {
+    } else if (e.shiftKey) {
       animateToViewport({
-        x: targetViewportRef.current.x - e.deltaY,
+        x: targetViewportRef.current.x - (e.deltaY || e.deltaX),
         y: targetViewportRef.current.y
-      }, false);
+      }, true);
     } else {
       animateToViewport({
         x: targetViewportRef.current.x - e.deltaX,
         y: targetViewportRef.current.y - e.deltaY
-      }, false);
+      }, true);
     }
   };
 
@@ -1969,8 +1979,9 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
   };
 
   // Table helpers
-  const parseTableData = (text: string): string[][] => {
+  const parseTableData = (rawText: any): string[][] => {
     try {
+      const text = typeof rawText === 'string' ? rawText : (rawText && typeof rawText.toString === 'function' ? rawText.toString() : '');
       const parsed = JSON.parse(text);
       if (Array.isArray(parsed) && parsed.length > 0 && Array.isArray(parsed[0])) {
         return parsed;
@@ -1982,61 +1993,56 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
   const tableDebounceTimers = useRef<Map<string, any>>(new Map());
   const kanbanDebounceTimers = useRef<Map<string, any>>(new Map());
 
-  // Audit 2.5: Debounced table cell update to avoid Last-Write-Wins overwrites
+  // Synchronously update table cell and persist to CRDT
   const handleUpdateTableCell = (node: BoardNodeData, rIdx: number, cIdx: number, val: string) => {
-    const timerKey = `${node.id}:${rIdx}:${cIdx}`;
-    const existing = tableDebounceTimers.current.get(timerKey);
-    if (existing) clearTimeout(existing);
-
-    tableDebounceTimers.current.set(
-      timerKey,
-      setTimeout(() => {
-        tableDebounceTimers.current.delete(timerKey);
-        const map = yNodes.get(node.id);
-        if (!map) return;
-        const currentText = (map.get('text') as string) || '';
-        const table = parseTableData(currentText);
-        if (table[rIdx] && table[rIdx][cIdx] !== undefined) {
-          table[rIdx][cIdx] = val;
-          setNodeProperties(map, { text: JSON.stringify(table) });
-        }
-      }, 200)
-    );
+    const map = yNodes.get(node.id);
+    if (!map) return;
+    const textVal = map.get('text');
+    const currentText = typeof textVal === 'string' ? textVal : (textVal?.toString ? textVal.toString() : (node.text || ''));
+    const table = parseTableData(currentText);
+    if (table[rIdx] && table[rIdx][cIdx] !== undefined) {
+      table[rIdx][cIdx] = val;
+      setNodeProperties(map, { text: JSON.stringify(table) });
+    }
   };
 
   const handleAddTableRow = (node: BoardNodeData) => {
-    const table = parseTableData(node.text);
+    const map = yNodes.get(node.id);
+    const currentText = map ? (map.get('text')?.toString ? map.get('text').toString() : map.get('text')) : node.text;
+    const table = parseTableData(currentText);
     const cols = table[0]?.length || 3;
     table.push(Array(cols).fill(''));
-    const map = yNodes.get(node.id);
-    const calculatedHeight = Math.max(140, 50 + table.length * 38);
+    const calculatedHeight = Math.max(node.h, 50 + table.length * 40);
     if (map) setNodeProperties(map, { text: JSON.stringify(table), h: calculatedHeight });
   };
 
   const handleAddTableCol = (node: BoardNodeData) => {
-    const table = parseTableData(node.text);
-    for (const row of table) row.push('');
     const map = yNodes.get(node.id);
-    const calculatedWidth = Math.max(340, (table[0]?.length || 3) * 110);
+    const currentText = map ? (map.get('text')?.toString ? map.get('text').toString() : map.get('text')) : node.text;
+    const table = parseTableData(currentText);
+    for (const row of table) row.push('');
+    const calculatedWidth = Math.max(node.w, (table[0]?.length || 3) * 140);
     if (map) setNodeProperties(map, { text: JSON.stringify(table), w: calculatedWidth });
   };
 
   const handleDelTableRow = (node: BoardNodeData) => {
-    const table = parseTableData(node.text);
+    const map = yNodes.get(node.id);
+    const currentText = map ? (map.get('text')?.toString ? map.get('text').toString() : map.get('text')) : node.text;
+    const table = parseTableData(currentText);
     if (table.length > 1) {
       table.pop();
-      const map = yNodes.get(node.id);
-      const calculatedHeight = Math.max(140, 50 + table.length * 38);
+      const calculatedHeight = Math.max(140, 50 + table.length * 40);
       if (map) setNodeProperties(map, { text: JSON.stringify(table), h: calculatedHeight });
     }
   };
 
   const handleDelTableCol = (node: BoardNodeData) => {
-    const table = parseTableData(node.text);
+    const map = yNodes.get(node.id);
+    const currentText = map ? (map.get('text')?.toString ? map.get('text').toString() : map.get('text')) : node.text;
+    const table = parseTableData(currentText);
     if (table[0]?.length > 1) {
       for (const row of table) row.pop();
-      const map = yNodes.get(node.id);
-      const calculatedWidth = Math.max(340, (table[0]?.length || 3) * 110);
+      const calculatedWidth = Math.max(340, (table[0]?.length || 3) * 140);
       if (map) setNodeProperties(map, { text: JSON.stringify(table), w: calculatedWidth });
     }
   };
@@ -2654,18 +2660,12 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
               newW = Math.max(80, startW - dx);
               newX = startXPos + (startW - newW);
             }
-            if (nodeType === 'table') {
-              // Tables hug their rows: vertical resizing is driven by + Row / - Row
-              const table = parseTableData((nodeMap.get('text') as string) || '');
-              newH = Math.max(120, 44 + table.length * 38);
-            } else {
-              if (handle.includes('s')) {
-                newH = Math.max(48, startH + dy);
-              }
-              if (handle.includes('n')) {
-                newH = Math.max(48, startH - dy);
-                newY = startYPos + (startH - newH);
-              }
+            if (handle.includes('s')) {
+              newH = Math.max(nodeType === 'table' ? 140 : 48, startH + dy);
+            }
+            if (handle.includes('n')) {
+              newH = Math.max(nodeType === 'table' ? 140 : 48, startH - dy);
+              newY = startYPos + (startH - newH);
             }
           }
 
@@ -2794,13 +2794,6 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
             finalX !== resizeState.startXPos ||
             finalY !== resizeState.startYPos
           ) {
-            boardDoc.transact(() => {
-              nodeMap.set('x', resizeState.startXPos);
-              nodeMap.set('y', resizeState.startYPos);
-              nodeMap.set('w', resizeState.startW);
-              nodeMap.set('h', resizeState.startH);
-            }, 'resize-cleanup');
-
             boardDoc.transact(() => {
               nodeMap.set('x', finalX);
               nodeMap.set('y', finalY);
@@ -5659,8 +5652,10 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                       <div
                         class="node-table-grid scrollable-card-content"
                         style={{
-                          gridTemplateColumns: `repeat(${table[0]?.length || 3}, minmax(100px, 1fr))`,
-                          gridAutoRows: '38px'
+                          gridTemplateColumns: `repeat(${table[0]?.length || 3}, minmax(120px, 1fr))`,
+                          gridAutoRows: 'minmax(38px, 1fr)',
+                          flex: 1,
+                          minHeight: '80px'
                         }}
                         onWheel={(e) => { if (!e.ctrlKey && !e.metaKey) e.stopPropagation(); }}
                       >
