@@ -107,6 +107,17 @@ export const CANVAS_COLORS: Record<string, string> = {
 };
 
 export type CanvasTool = 'select' | 'hand' | 'sticky' | 'text' | 'note' | 'frame' | 'arrow' | 'line' | 'shape' | 'draw' | 'eraser' | 'checklist' | 'table' | 'kanban' | 'code' | 'image' | 'widgets' | 'chart';
+
+const HANDLE_ANCHORS: Record<ResizeHandle, string> = {
+  nw: 'top left',
+  ne: 'top right',
+  se: 'bottom right',
+  sw: 'bottom left',
+  n: 'center top',
+  s: 'center bottom',
+  e: 'right center',
+  w: 'left center'
+};
 type ResizeHandle = 'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w';
 
 interface BoardCanvasProps {
@@ -258,39 +269,41 @@ function renderShapeSvg(node: BoardNodeData, colorHex: string) {
 
 /**
  * Dynamically computes an ideal font size based on bounding box dimensions and text length.
- * Clamps safely between 13px (readable minimum) and 56px to prevent overflow or microscopic text.
+ * Clamps safely between 12px and 120px using word-wrap aware iterative binary search.
  */
 export function calculateAutoFontSize(text: string, w: number, h: number, type?: string): number {
-  const padW = Math.max(24, w - 28);
-  const padH = Math.max(24, h - 24);
+  const padW = Math.max(20, w - 24);
+  const padH = Math.max(20, h - 24);
   const clean = (text || '').trim();
-  const lines = clean ? clean.split('\n') : [''];
-  const maxLineLen = Math.max(1, ...lines.map((l) => l.trim().length));
-  const lineCount = Math.max(1, lines.length);
+  if (!clean) return Math.min(Math.max(14, Math.round(h * 0.12)), 40);
 
-  // Sticky notes: scale smoothly with card dimensions while preserving readability
-  if (type === 'sticky') {
-    if (!clean) {
-      return Math.min(Math.max(15, Math.round(h * 0.1)), 36);
+  // Approximate wrapped line count based on character density per line
+  // An average character takes approx 0.55 * fontSize in width
+  let low = 12;
+  let high = Math.min(Math.round(h * 0.4), 120);
+  let best = low;
+
+  while (low <= high) {
+    const mid = Math.floor((low + high) / 2);
+    const charWidth = mid * 0.56;
+    const charsPerLine = Math.max(1, Math.floor(padW / charWidth));
+
+    // Calculate wrapped lines considering both explicit newlines and line wrapping
+    const rawLines = clean.split('\n');
+    let totalLines = 0;
+    for (const line of rawLines) {
+      totalLines += Math.max(1, Math.ceil(line.length / charsPerLine));
     }
-    const sizeByW = padW / (maxLineLen * 0.62);
-    const sizeByH = padH / (lineCount * 1.4);
-    const ideal = Math.min(sizeByW, sizeByH);
-    return Math.min(Math.max(14, Math.round(ideal)), 48);
+
+    const requiredHeight = totalLines * (mid * 1.35);
+    if (requiredHeight <= padH) {
+      best = mid;
+      low = mid + 1; // Try larger
+    } else {
+      high = mid - 1; // Try smaller
+    }
   }
-
-  // Short labels / symbols (e.g. '-', 'nn', 'Start', 'Title')
-  if (clean.length <= 6 && lineCount === 1) {
-    const singleScale = Math.min(padW * 0.4, padH * 0.45);
-    return Math.min(Math.max(16, Math.round(singleScale)), 110);
-  }
-
-  // Multi-line or paragraph text
-  const sizeByW = padW / (maxLineLen * 0.58);
-  const sizeByH = padH / (lineCount * 1.35);
-  const ideal = Math.min(sizeByW, sizeByH);
-
-  return Math.min(Math.max(13, Math.round(ideal)), 84);
+  return best;
 }
 
 const getSafeAttachmentUrl = (url?: string, hash?: string): string | undefined => {
@@ -822,7 +835,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
       const validX = target.x !== undefined && Number.isFinite(target.x) ? target.x : curTarget.x;
       const validY = target.y !== undefined && Number.isFinite(target.y) ? target.y : curTarget.y;
       const validZoom = target.zoom !== undefined && Number.isFinite(target.zoom)
-        ? Math.min(Math.max(target.zoom, 0.1), 4.0)
+        ? Math.min(Math.max(target.zoom, 0.01), 4.0)
         : curTarget.zoom;
 
       const nextTarget: ViewportCoord = {
@@ -882,7 +895,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
     const centerX = availW / 2;
     const centerY = availH / 2;
     const curZoom = targetViewportRef.current.zoom;
-    const newZoom = Math.min(Math.max(curZoom * factor, 0.1), 4.0);
+    const newZoom = Math.min(Math.max(curZoom * factor, 0.01), 4.0);
     const newX = centerX - (centerX - targetViewportRef.current.x) * (newZoom / curZoom);
     const newY = centerY - (centerY - targetViewportRef.current.y) * (newZoom / curZoom);
     animateToViewport({ x: newX, y: newY, zoom: newZoom }, false);
@@ -1203,7 +1216,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
       const dist = Math.hypot(p1.clientX - p2.clientX, p1.clientY - p2.clientY);
       if (dist > 10) {
         const scale = dist / touchStateRef.current.initialDist;
-        const newZoom = Math.min(Math.max(touchStateRef.current.initialZoom * scale, 0.1), 4.0);
+        const newZoom = Math.min(Math.max(touchStateRef.current.initialZoom * scale, 0.01), 4.0);
 
         const midX = (p1.clientX + p2.clientX) / 2;
         const midY = (p1.clientY + p2.clientY) / 2;
@@ -1251,6 +1264,15 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
   // Keyboard shortcuts (Physical keycode layout-independent)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Shift + 1: True "Fit to Screen" (Miro / FigJam standard)
+      if (e.shiftKey && (e.code === 'Digit1' || e.key === '1' || e.key === '!')) {
+        if (!isEditableElementFocused()) {
+          e.preventDefault();
+          fitToContent();
+          return;
+        }
+      }
+
       // Browser Zoom Key interception: Ctrl/Cmd + Plus, Minus, Zero
       if (e.ctrlKey || e.metaKey) {
         if (e.code === 'Equal' || e.code === 'NumpadAdd' || e.key === '+' || e.key === '=') {
@@ -2723,7 +2745,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
 
         const newSelected = new Set<string>();
         for (const n of nodesList) {
-          if (!n.deleted && n.x + n.w >= minX && n.x <= maxX && n.y + n.h >= minY && n.y <= maxY) {
+          if (!n.deleted && n.type !== 'drawing' && n.x + n.w >= minX && n.x <= maxX && n.y + n.h >= minY && n.y <= maxY) {
             newSelected.add(n.id);
           }
         }
@@ -3438,8 +3460,8 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
   }, [selectedNodeIds, nodeLookup, viewport]);
 
   const fitToContent = () => {
-    const targetNodes = visibleNodes.filter((n) => !n.deleted && n.type !== 'drawing');
-    const nodesForFit = targetNodes.length > 0 ? targetNodes : visibleNodes.filter((n) => !n.deleted);
+    const targetNodes = nodesList.filter((n) => !n.deleted && n.type !== 'drawing');
+    const nodesForFit = targetNodes.length > 0 ? targetNodes : nodesList.filter((n) => !n.deleted);
     if (nodesForFit.length === 0) {
       animateToViewport({ x: 80, y: 80, zoom: 1 }, false);
       return;
@@ -3456,20 +3478,20 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
     }
     const contentW = maxX - minX;
     const contentH = maxY - minY;
-    const padding = 80;
+    const padding = 64;
     const availW = containerSize.width || window.innerWidth;
     const availH = containerSize.height || window.innerHeight;
 
     const scaleX = (availW - padding * 2) / Math.max(contentW, 100);
     const scaleY = (availH - padding * 2) / Math.max(contentH, 100);
-    const zoom = Math.min(Math.max(Math.min(scaleX, scaleY), 0.2), 2.0);
+    const targetZoom = Math.min(Math.max(Math.min(scaleX, scaleY), 0.01), 1.0);
 
     const centerX = (minX + maxX) / 2;
     const centerY = (minY + maxY) / 2;
-    const x = availW / 2 - centerX * zoom;
-    const y = availH / 2 - centerY * zoom;
+    const x = availW / 2 - centerX * targetZoom;
+    const y = availH / 2 - centerY * targetZoom;
 
-    animateToViewport({ x, y, zoom }, false);
+    animateToViewport({ x, y, zoom: targetZoom }, false);
   };
 
   return (
@@ -4479,6 +4501,10 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
 
       {/* 2. Floating Context Inspector Bar */}
       {!isViewerMode.value && selectionBounds && selectedNodeIds.size > 0 && (() => {
+        const selectedNodes = Array.from(selectedNodeIds).map((id) => nodeLookup.get(id)).filter(Boolean);
+        const hasOnlyDrawings = selectedNodes.length > 0 && selectedNodes.every((n) => n?.type === 'drawing');
+        if (hasOnlyDrawings) return null;
+
         const minTopClearance = selectedNodeIds.size > 1 ? 132 : 88;
         const isToolbarFlipped = selectionBounds.y - 54 < minTopClearance;
         return (
@@ -5154,26 +5180,34 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
               }}
             >
               {/* 4 Magnetic Connector Ports */}
-              {!isViewerMode.value && (
-                <>
-                  <div
-                    class="magnetic-port port-top"
-                    onMouseDown={(e) => handlePortPointerDown(node.id, 'top', e as any)}
-                  />
-                  <div
-                    class="magnetic-port port-right"
-                    onMouseDown={(e) => handlePortPointerDown(node.id, 'right', e as any)}
-                  />
-                  <div
-                    class="magnetic-port port-bottom"
-                    onMouseDown={(e) => handlePortPointerDown(node.id, 'bottom', e as any)}
-                  />
-                  <div
-                    class="magnetic-port port-left"
-                    onMouseDown={(e) => handlePortPointerDown(node.id, 'left', e as any)}
-                  />
-                </>
-              )}
+              {!isViewerMode.value && (() => {
+                const invZoom = 1 / Math.max(0.005, viewport.zoom);
+                const portTransform = (side: PortSide) => `${side === 'top' || side === 'bottom' ? 'translateX(-50%)' : 'translateY(-50%)'} scale(${invZoom})`;
+                return (
+                  <>
+                    <div
+                      class="magnetic-port port-top"
+                      style={{ transform: portTransform('top'), transformOrigin: 'center' }}
+                      onMouseDown={(e) => handlePortPointerDown(node.id, 'top', e as any)}
+                    />
+                    <div
+                      class="magnetic-port port-right"
+                      style={{ transform: portTransform('right'), transformOrigin: 'center' }}
+                      onMouseDown={(e) => handlePortPointerDown(node.id, 'right', e as any)}
+                    />
+                    <div
+                      class="magnetic-port port-bottom"
+                      style={{ transform: portTransform('bottom'), transformOrigin: 'center' }}
+                      onMouseDown={(e) => handlePortPointerDown(node.id, 'bottom', e as any)}
+                    />
+                    <div
+                      class="magnetic-port port-left"
+                      style={{ transform: portTransform('left'), transformOrigin: 'center' }}
+                      onMouseDown={(e) => handlePortPointerDown(node.id, 'left', e as any)}
+                    />
+                  </>
+                );
+              })()}
 
               {/* Top drag bar for sticky notes */}
               {node.type === 'sticky' && (
@@ -6442,6 +6476,10 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                     <div
                       key={handle}
                       class={`resize-handle handle-${handle}`}
+                      style={{
+                        transform: `scale(${1 / Math.max(0.005, viewport.zoom)})`,
+                        transformOrigin: HANDLE_ANCHORS[handle] || 'center'
+                      }}
                       onMouseDown={(e) => {
                         e.stopPropagation();
                         setResizeState({
@@ -6709,7 +6747,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
           <div
             class="context-menu-item"
             onClick={() => {
-              const allIds = new Set(nodesList.filter((n) => !n.deleted).map((n) => n.id));
+              const allIds = new Set(nodesList.filter((n) => !n.deleted && n.type !== 'drawing').map((n) => n.id));
               setSelectedNodeIds(allIds);
               setContextMenu(null);
             }}
@@ -6986,7 +7024,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
           <button
             class="hud-btn"
             onClick={fitToContent}
-            title={t("board.hand")}
+            title={`${t("board.fit_to_screen")} (Shift+1)`}
           >
             <Icon name="layout-canvas" size={14} />
             <span class="hud-btn-text">Fit</span>

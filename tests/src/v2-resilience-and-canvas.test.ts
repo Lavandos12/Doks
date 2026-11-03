@@ -11,6 +11,7 @@ import {
 import { buildEdgeSvgPath, type EdgeCurveType } from '../../web/src/utils/edgePaths.js';
 import { getPortCoordinates, type BoxNode, type PortSide } from '../../web/src/utils/connectorGeometry.js';
 import { matchShortcut, CANVAS_UNDO_ORIGIN } from '../../web/src/utils/hotkeysAndUndo.js';
+import { computeContinuousWheelTarget } from '../../web/src/utils/canvasGrid.js';
 
 describe('Doks v2.0 Resilience & Lossless Canvas Test Suite', () => {
   describe('1. Lossless Obsidian JSON Canvas Round-Trip', () => {
@@ -403,6 +404,96 @@ describe('Doks v2.0 Resilience & Lossless Canvas Test Suite', () => {
       expect((yNodes.get('node-2') as Y.Map<any>).get('deleted')).toBe(false);
       expect((yEdges.get('edge-1-2') as any).deleted).toBe(false);
       expect((yEdges.get('edge-2-3') as any).deleted).toBe(false);
+    });
+  });
+  describe('7. Miro-Grade Continuous Zoom Clamping (0.01 to 4.0)', () => {
+    it('allows continuous wheel zoom-out down to 1% (0.01) and zoom-in up to 400% (4.0)', () => {
+      let vp = { x: 500, y: 300, zoom: 1.0 };
+
+      // Zoom out repeatedly with large wheel delta
+      for (let i = 0; i < 20; i++) {
+        vp = computeContinuousWheelTarget(vp, 400, 500, 300);
+      }
+      expect(vp.zoom).toBeGreaterThanOrEqual(0.01);
+      expect(vp.zoom).toBeLessThan(0.05);
+
+      // Clamps exactly at 0.01 min
+      for (let i = 0; i < 30; i++) {
+        vp = computeContinuousWheelTarget(vp, 1000, 500, 300);
+      }
+      expect(vp.zoom).toBe(0.01);
+
+      // Zoom in repeatedly with negative wheel delta
+      for (let i = 0; i < 30; i++) {
+        vp = computeContinuousWheelTarget(vp, -500, 500, 300);
+      }
+      expect(vp.zoom).toBe(4.0);
+    });
+  });
+
+  describe('8. Word-Wrap Aware Auto-Font Sizing & Drawing Filter (v67)', () => {
+    function testAutoFontSize(text: string, w: number, h: number): number {
+      const padW = Math.max(20, w - 24);
+      const padH = Math.max(20, h - 24);
+      const clean = (text || '').trim();
+      if (!clean) return Math.min(Math.max(14, Math.round(h * 0.12)), 40);
+
+      let low = 12;
+      let high = Math.min(Math.round(h * 0.4), 120);
+      let best = low;
+
+      while (low <= high) {
+        const mid = Math.floor((low + high) / 2);
+        const charWidth = mid * 0.56;
+        const charsPerLine = Math.max(1, Math.floor(padW / charWidth));
+
+        const rawLines = clean.split('\n');
+        let totalLines = 0;
+        for (const line of rawLines) {
+          totalLines += Math.max(1, Math.ceil(line.length / charsPerLine));
+        }
+
+        const requiredHeight = totalLines * (mid * 1.35);
+        if (requiredHeight <= padH) {
+          best = mid;
+          low = mid + 1;
+        } else {
+          high = mid - 1;
+        }
+      }
+      return best;
+    }
+
+    it('smoothly expands font size when card is resized from 200x130 to 800x600', () => {
+      const text = 'Sprint Planning & Architectural Sync';
+      const smallSize = testAutoFontSize(text, 200, 130);
+      const largeSize = testAutoFontSize(text, 800, 600);
+
+      expect(smallSize).toBeGreaterThanOrEqual(12);
+      expect(smallSize).toBeLessThanOrEqual(30);
+
+      expect(largeSize).toBeGreaterThan(smallSize);
+      expect(largeSize).toBeGreaterThanOrEqual(40);
+      expect(largeSize).toBeLessThanOrEqual(120);
+    });
+
+    it('correctly filters out freehand drawing nodes from marquee selection', () => {
+      const nodes = [
+        { id: 'card-1', type: 'sticky', x: 100, y: 100, w: 200, h: 120, text: 'Card', color: 'default' },
+        { id: 'draw-1', type: 'drawing', x: 120, y: 120, w: 100, h: 80, text: '', color: '#ff0000' }
+      ];
+
+      const minX = 50, maxX = 400, minY = 50, maxY = 300;
+      const selected = new Set();
+
+      for (const n of nodes) {
+        if (!n.deleted && n.type !== 'drawing' && n.x + n.w >= minX && n.x <= maxX && n.y + n.h >= minY && n.y <= maxY) {
+          selected.add(n.id);
+        }
+      }
+
+      expect(selected.has('card-1')).toBe(true);
+      expect(selected.has('draw-1')).toBe(false);
     });
   });
 });

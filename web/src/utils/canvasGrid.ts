@@ -102,7 +102,7 @@ export function computeContinuousWheelTarget(
   deltaY: number,
   screenAnchorX: number,
   screenAnchorY: number,
-  minZoom = 0.1,
+  minZoom = 0.01,
   maxZoom = 4.0
 ): ViewportCoord {
   // Continuous exponential scaling factor

@@ -54,6 +54,7 @@ export const en = {
   'board.zoom_in': 'Zoom In',
   'board.zoom_out': 'Zoom Out',
   'board.reset_zoom': 'Reset Zoom (100%)',
+  'board.fit_to_screen': 'Fit to Screen',
 
   'search.title': 'Global Search (Ctrl+Shift+F)',
   'search.placeholder': 'Search titles, content, tags...',
