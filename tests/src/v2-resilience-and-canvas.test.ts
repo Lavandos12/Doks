@@ -305,4 +305,104 @@ describe('Doks v2.0 Resilience & Lossless Canvas Test Suite', () => {
       expect(nodeMap.get('y')).toBe(200);
     });
   });
+
+  describe('6. Multi-Object Deletion & Incident Edge Cascading (v62)', () => {
+    it('deletes multiple nodes, cascades to incident edges, and respects locked nodes', () => {
+      const doc = new Y.Doc();
+      const yNodes = doc.getMap('nodes');
+      const yEdges = doc.getMap('edges');
+
+      // Create Node 1
+      const n1 = new Y.Map();
+      n1.set('id', 'node-1');
+      n1.set('type', 'shape');
+      n1.set('deleted', false);
+      yNodes.set('node-1', n1);
+
+      // Create Node 2
+      const n2 = new Y.Map();
+      n2.set('id', 'node-2');
+      n2.set('type', 'shape');
+      n2.set('deleted', false);
+      yNodes.set('node-2', n2);
+
+      // Create Locked Node 3
+      const n3 = new Y.Map();
+      n3.set('id', 'node-3');
+      n3.set('type', 'sticky');
+      n3.set('locked', true);
+      n3.set('deleted', false);
+      yNodes.set('node-3', n3);
+
+      // Create Edge between Node 1 and Node 2
+      yEdges.set('edge-1-2', {
+        id: 'edge-1-2',
+        from: 'node-1',
+        to: 'node-2',
+        deleted: false
+      });
+
+      // Create Edge between Node 2 and Node 3
+      yEdges.set('edge-2-3', {
+        id: 'edge-2-3',
+        from: 'node-2',
+        to: 'node-3',
+        deleted: false
+      });
+
+      // UndoManager configured with CANVAS_UNDO_ORIGIN
+      const undoManager = new Y.UndoManager([yNodes, yEdges], {
+        trackedOrigins: new Set([CANVAS_UNDO_ORIGIN])
+      });
+
+      // Simulate multi-selection deletion of node-1, node-2, node-3
+      const selectedIds = new Set(['node-1', 'node-2', 'node-3']);
+      const nonLockedIds = new Set<string>();
+      for (const id of selectedIds) {
+        const nodeMap = yNodes.get(id) as Y.Map<any> | undefined;
+        if (nodeMap && !nodeMap.get('locked')) {
+          nonLockedIds.add(id);
+        }
+      }
+
+      // Execute transaction
+      doc.transact(() => {
+        for (const id of nonLockedIds) {
+          const nm = yNodes.get(id) as Y.Map<any>;
+          nm.set('deleted', true);
+          nm.set('deletedAt', Date.now());
+        }
+        yEdges.forEach((edge: any, edgeId: string) => {
+          if (
+            edge &&
+            !edge.deleted &&
+            (nonLockedIds.has(edge.from) ||
+              nonLockedIds.has(edge.to) ||
+              nonLockedIds.has(edge.fromNode) ||
+              nonLockedIds.has(edge.toNode))
+          ) {
+            yEdges.set(edgeId, { ...edge, deleted: true, deletedAt: Date.now() });
+          }
+        });
+      }, CANVAS_UNDO_ORIGIN);
+
+      // Verification: node-1 and node-2 marked deleted
+      expect((yNodes.get('node-1') as Y.Map<any>).get('deleted')).toBe(true);
+      expect((yNodes.get('node-2') as Y.Map<any>).get('deleted')).toBe(true);
+
+      // Locked node-3 is preserved
+      expect((yNodes.get('node-3') as Y.Map<any>).get('deleted')).toBe(false);
+
+      // Both edges are marked deleted because node-1 and node-2 were deleted
+      expect((yEdges.get('edge-1-2') as any).deleted).toBe(true);
+      expect((yEdges.get('edge-2-3') as any).deleted).toBe(true);
+
+      // Undo restores node-1, node-2, and both edges
+      undoManager.undo();
+      expect((yNodes.get('node-1') as Y.Map<any>).get('deleted')).toBe(false);
+      expect((yNodes.get('node-2') as Y.Map<any>).get('deleted')).toBe(false);
+      expect((yEdges.get('edge-1-2') as any).deleted).toBe(false);
+      expect((yEdges.get('edge-2-3') as any).deleted).toBe(false);
+    });
+  });
 });

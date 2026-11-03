@@ -1432,17 +1432,42 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
     const edgeToDelete = selectedEdgeId;
     if (idsToDelete.size === 0 && !edgeToDelete) return;
 
-    // 1. Optimistic Instant UI Deletion (0ms latency, zero flicker)
-    setNodesList((prev) => prev.filter((n) => !idsToDelete.has(n.id)));
-    if (edgeToDelete) {
-      setEdgesList((prev) => prev.filter((e) => e.id !== edgeToDelete));
+    // Filter out locked nodes from deletion
+    const nonLockedIds = new Set<string>();
+    for (const id of idsToDelete) {
+      const node = nodeLookup.get(id);
+      if (!node?.locked) {
+        nonLockedIds.add(id);
+      }
     }
-    setSelectedNodeIds(new Set());
-    setSelectedEdgeId(null);
+
+    if (nonLockedIds.size === 0 && !edgeToDelete) return;
+
+    // 1. Optimistic Instant UI Deletion (0ms latency, zero flicker)
+    setNodesList((prev) => prev.filter((n) => !nonLockedIds.has(n.id)));
+    setEdgesList((prev) =>
+      prev.filter(
+        (e) =>
+          e.id !== edgeToDelete &&
+          !nonLockedIds.has(e.from) &&
+          !nonLockedIds.has(e.to) &&
+          !nonLockedIds.has((e as any).fromNode) &&
+          !nonLockedIds.has((e as any).toNode)
+      )
+    );
+
+    setSelectedNodeIds((prev) => {
+      const next = new Set<string>();
+      for (const id of prev) {
+        if (!nonLockedIds.has(id)) next.add(id);
+      }
+      return next;
+    });
+    if (edgeToDelete) setSelectedEdgeId(null);
 
     // 2. Commit transaction to Yjs shared doc
     boardDoc.transact(() => {
-      for (const id of idsToDelete) {
+      for (const id of nonLockedIds) {
         const nodeMap = yNodes.get(id);
         if (nodeMap && !nodeMap.get('locked')) {
           nodeMap.set('deleted', true);
@@ -1453,7 +1478,20 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
         const edge = yEdges.get(edgeToDelete);
         if (edge) yEdges.set(edgeToDelete, { ...edge, deleted: true, deletedAt: Date.now() });
       }
-    }, 'user');
+      // Also mark incident edges as deleted
+      yEdges.forEach((edge, edgeId) => {
+        if (
+          edge &&
+          !edge.deleted &&
+          (nonLockedIds.has(edge.from) ||
+            nonLockedIds.has(edge.to) ||
+            nonLockedIds.has((edge as any).fromNode) ||
+            nonLockedIds.has((edge as any).toNode))
+        ) {
+          yEdges.set(edgeId, { ...edge, deleted: true, deletedAt: Date.now() });
+        }
+      });
+    }, CANVAS_UNDO_ORIGIN);
   };
 
   // Delete a single node by id along with its incident edges
@@ -6562,13 +6600,15 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
             <Icon name={effectiveScope === 'solo' ? 'promote' : 'fork'} size={14} />
             <span>{effectiveScope === 'solo' ? t('canvas.move_to_team') : t('canvas.move_to_solo')}</span>
           </div>
-          {contextMenu.nodeId && (
+          {(contextMenu.nodeId || selectedNodeIds.size > 0) && (
             <>
               <div class="context-menu-divider" />
               <div
                 class="context-menu-item danger"
                 onClick={() => {
-                  if (contextMenu.nodeId) {
+                  if (selectedNodeIds.size > 0 && (!contextMenu.nodeId || selectedNodeIds.has(contextMenu.nodeId))) {
+                    deleteSelected();
+                  } else if (contextMenu.nodeId) {
                     deleteSingleNode(contextMenu.nodeId);
                   } else {
                     deleteSelected();
