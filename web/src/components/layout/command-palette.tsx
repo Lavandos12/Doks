@@ -238,7 +238,7 @@ export function CommandPalette() {
             subtitle: 'Download markdown file',
             icon: 'file-text',
             action: () => {
-              window.open(`/api/export/note/${activeTab.id}`, '_blank');
+              window.open(`/api/export/note/${activeTab.id}?scope=${encodeURIComponent(currentScope.value)}`, '_blank');
               close();
             }
           });
@@ -250,7 +250,7 @@ export function CommandPalette() {
             subtitle: 'Download JSON Canvas',
             icon: 'layout',
             action: () => {
-              window.open(`/api/export/board/${activeTab.id}`, '_blank');
+              window.open(`/api/export/board/${activeTab.id}?scope=${encodeURIComponent(currentScope.value)}`, '_blank');
               close();
             }
           });

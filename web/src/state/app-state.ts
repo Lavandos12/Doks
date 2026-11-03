@@ -80,11 +80,7 @@ export const appState = computed(() => ({
 let userDismissedViewer = false;
 
 export function setViewerMode(enabled: boolean, allowSolo = false): void {
-  // Mobile devices are permanently locked to read-only viewer mode
-  if (isMobilePhoneDevice()) {
-    isViewerMode.value = true;
-    return;
-  }
+  // 3.2: Allow users on mobile devices to manually toggle viewer mode off
   isViewerMode.value = enabled;
   isViewerAllowSolo.value = allowSolo;
   if (!enabled) {
@@ -404,17 +400,20 @@ function syncIndexSignals() {
   });
   openTabs.value = updatedTabs;
 
-  // Incremental Search Indexing directly from index map metadata (Audit 2.6 - no memory leak)
+  // Incremental Search Indexing with body text / preview (2.3: full-text search indexing)
   activeMaps.notes.forEach((val, id) => {
     if (val.deleted) {
       searchIndex.removeDoc(id);
     } else {
+      const docName = getScopedNoteDocName(currentScope.value, id);
+      const loadedDoc = yjsClient.getDoc(docName);
+      const bodyText = loadedDoc ? loadedDoc.getText('text').toString() : ((val as any).preview || (val as any).snippet || '');
       searchIndex.updateDoc({
         id,
         type: 'note',
         title: val.title,
         folder: val.folder || undefined,
-        text: val.title,
+        text: bodyText ? `${val.title}\n${bodyText}` : val.title,
         tags: []
       });
     }
@@ -612,7 +611,7 @@ export function renameNote(id: string, newTitle: string): void {
     });
   });
 
-  // B19: Refactor wikilinks across active notes
+  // B19 & 2.2: Refactor wikilinks across active notes non-destructively
   const escaped = oldTitle.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&');
   const regex = new RegExp(`\\[\\[\\s*${escaped}(\\s*\\|[^\\]]*)?\\]\\]`, 'gi');
 
@@ -623,13 +622,22 @@ export function renameNote(id: string, newTitle: string): void {
       const text = otherDoc.getText('text');
       const content = text.toString();
 
-      if (regex.test(content)) {
-        const updated = content.replace(regex, (_, aliasPart) => {
-          return aliasPart ? `[[${newTitle}${aliasPart}]]` : `[[${newTitle}]]`;
-        });
+      const matches: Array<{ index: number; length: number; replacement: string }> = [];
+      let match: RegExpExecArray | null;
+      regex.lastIndex = 0;
+      while ((match = regex.exec(content)) !== null) {
+        const aliasPart = match[1];
+        const replacement = aliasPart ? `[[${newTitle}${aliasPart}]]` : `[[${newTitle}]]`;
+        matches.push({ index: match.index, length: match[0].length, replacement });
+      }
+
+      if (matches.length > 0) {
         otherDoc.transact(() => {
-          text.delete(0, text.length);
-          text.insert(0, updated);
+          // Replace from right to left so earlier indices remain valid
+          for (let i = matches.length - 1; i >= 0; i--) {
+            text.delete(matches[i].index, matches[i].length);
+            text.insert(matches[i].index, matches[i].replacement);
+          }
         });
       }
     } catch (err) {

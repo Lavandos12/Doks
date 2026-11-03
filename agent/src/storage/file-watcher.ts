@@ -145,20 +145,58 @@ export class FileWatcher {
   }
 
   private handleMarkdownChange(filePath: string, rawContent: string): void {
+    const rel = path.relative(this.vaultPath, filePath).replace(/\\/g, '/');
+    const isSolo = rel === 'solo' || rel.startsWith('solo/');
+    const scope: WorkspaceScope = isSolo ? 'solo' : 'team';
+
     // Parse YAML frontmatter: exactly one newline after closing ---
     const frontmatterMatch = rawContent.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n([\s\S]*)$/);
-    if (!frontmatterMatch) return;
+    let noteId: string | undefined;
+    let markdownBody = rawContent;
 
-    const yamlBlock = frontmatterMatch[1];
-    const markdownBody = frontmatterMatch[2];
+    if (frontmatterMatch) {
+      const yamlBlock = frontmatterMatch[1];
+      markdownBody = frontmatterMatch[2];
+      const idMatch = yamlBlock.match(/id:\s*([a-zA-Z0-9_-]+)/);
+      if (idMatch) {
+        noteId = idMatch[1];
+      }
+    }
 
-    const idMatch = yamlBlock.match(/id:\s*([a-zA-Z0-9_-]+)/);
-    if (!idMatch) return;
+    if (!noteId) {
+      // 2.4: Obsidian Vault Markdown Compatibility - generate deterministic stable ID
+      noteId = 'note_' + crypto.createHash('sha256').update(rel).digest('hex').slice(0, 16);
+      const title = path.basename(filePath, path.extname(filePath));
+      const dir = path.dirname(rel);
+      const folder = (dir === '.' || dir === 'solo') ? null : dir.replace(/^solo\//, '');
+      const frontmatter = `---\nid: ${noteId}\ntitle: ${JSON.stringify(title)}\ncreated: ${Date.now()}\nupdated: ${Date.now()}\n---\n`;
+      const bodyOnly = frontmatterMatch ? frontmatterMatch[2] : rawContent;
+      const newFileContent = frontmatter + bodyOnly;
 
-    const rel = path.relative(this.vaultPath, filePath);
-    const isSolo = rel === 'solo' || rel.startsWith('solo' + path.sep) || rel.startsWith('solo/');
-    const scope: WorkspaceScope = isSolo ? 'solo' : 'team';
-    const noteId = idMatch[1];
+      try {
+        fs.writeFileSync(filePath, newFileContent, 'utf8');
+      } catch (err) {
+        console.error(`[FileWatcher] Failed to prepend frontmatter for ${filePath}:`, err);
+      }
+
+      // Sync metadata into indexDoc
+      const indexDoc = this.docManager.getOrCreateDoc(getScopedIndexDocName(scope));
+      const maps = getIndexMaps(indexDoc);
+      if (!maps.notes.has(noteId)) {
+        indexDoc.transact(() => {
+          maps.notes.set(noteId!, {
+            id: noteId!,
+            title,
+            folder,
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+            deleted: false,
+            scope
+          });
+        }, 'fs-watcher');
+      }
+    }
+
     const docName = getScopedNoteDocName(scope, noteId);
     const noteDoc = this.docManager.getOrCreateDoc(docName);
     const yText = noteDoc.getText('text');

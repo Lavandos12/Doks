@@ -1342,6 +1342,57 @@ input:focus, select:focus, textarea:focus {
   font-size: 0.9rem;
 }
 
+/* 3.6 Markdown Tables & Blockquotes */
+.preview-table-container {
+  width: 100%;
+  overflow-x: auto;
+  margin: 14px 0;
+}
+
+.preview-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+  line-height: 1.5;
+  text-align: left;
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.1));
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.preview-table th {
+  background-color: var(--bg-secondary, rgba(255, 255, 255, 0.05));
+  color: var(--text-primary, #f1f5f9);
+  font-weight: 600;
+  padding: 8px 12px;
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.1));
+}
+
+.preview-table td {
+  padding: 8px 12px;
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.1));
+  color: var(--text-secondary, #cbd5e1);
+}
+
+.preview-table tr:nth-child(even) {
+  background-color: rgba(255, 255, 255, 0.02);
+}
+
+.preview-blockquote {
+  margin: 12px 0;
+  padding: 8px 16px;
+  border-left: 3px solid rgba(139, 92, 246, 0.5);
+  background: rgba(139, 92, 246, 0.04);
+  border-radius: 0 6px 6px 0;
+  color: #94a3b8;
+  font-style: italic;
+}
+
+.preview-blockquote p {
+  margin: 4px 0;
+  line-height: 1.5;
+}
+
 /* Right Tabbed Panel (Outline & Backlinks) */
 .note-right-panel {
   width: 260px;

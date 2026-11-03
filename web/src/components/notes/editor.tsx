@@ -174,22 +174,16 @@ export function NoteEditor({ noteId }: NoteEditorProps) {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  // Update Backlinks list
+  // 2.7: Update Backlinks list reactively without polling leak
   useEffect(() => {
-    const updateBacklinks = () => {
-      const allNotesWithText = notes.value
-        .filter((n) => !n.deleted)
-        .map((n) => {
-          const doc = yjsClient.getOrCreateDoc(getScopedNoteDocName(currentScope.value, n.id));
-          return { id: n.id, title: n.title, text: doc.getText('text').toString() };
-        });
-      setBacklinks(findBacklinks(title, allNotesWithText));
-    };
-
-    updateBacklinks();
-    const interval = setInterval(updateBacklinks, 2500);
-    return () => clearInterval(interval);
-  }, [noteId, title]);
+    const allNotesWithText = notes.value
+      .filter((n) => !n.deleted)
+      .map((n) => {
+        const doc = yjsClient.getOrCreateDoc(getScopedNoteDocName(currentScope.value, n.id));
+        return { id: n.id, title: n.title, text: doc.getText('text').toString() };
+      });
+    setBacklinks(findBacklinks(title, allNotesWithText));
+  }, [noteId, title, contentString, notes.value.length]);
 
   // Extract headings for Outline
   const headings: HeadingItem[] = useMemo(() => {

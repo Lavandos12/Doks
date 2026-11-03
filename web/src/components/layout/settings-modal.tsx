@@ -50,7 +50,7 @@ export function SettingsModal({
     return localStorage.getItem('doks_member_color') || agentStatus.value?.memberColor || '#8b5cf6';
   });
 
-  const handleSaveProfile = () => {
+  const handleSaveProfile = async () => {
     const trimmed = name.trim() || t('settings.user_default');
     localStorage.setItem('doks_member_name', trimmed);
     localStorage.setItem('doks_display_name', trimmed);
@@ -63,6 +63,13 @@ export function SettingsModal({
         memberColor: color
       };
     }
+    try {
+      await api.fetch('/api/profile', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ memberName: trimmed, memberColor: color })
+      });
+    } catch {}
     window.dispatchEvent(new Event('doks_profile_updated'));
     showToast(t('settings.save_profile'));
   };

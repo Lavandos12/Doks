@@ -30,9 +30,26 @@ export class StateStore {
     } catch {}
   }
 
+  private encodeDocName(docName: string): string {
+    return docName.replace(/[^a-zA-Z0-9_-]/g, (c) => '+' + Buffer.from(c, 'utf8').toString('hex'));
+  }
+
+  private decodeDocName(safeName: string): string {
+    return safeName.replace(/\+([0-9a-fA-F]{2})/g, (_, hex) => Buffer.from(hex, 'hex').toString('utf8'));
+  }
+
   private getDocPath(docName: string): string {
-    const safeName = docName.replace(/[^a-zA-Z0-9_-]/g, '_');
-    return path.join(this.stateDir, `${safeName}.bin`);
+    const safeName = this.encodeDocName(docName);
+    const primaryPath = path.join(this.stateDir, `${safeName}.bin`);
+    if (!fs.existsSync(primaryPath)) {
+      // Backward compatibility check for legacy underscored file names
+      const legacyName = docName.replace(/[^a-zA-Z0-9_-]/g, '_');
+      const legacyPath = path.join(this.stateDir, `${legacyName}.bin`);
+      if (fs.existsSync(legacyPath)) {
+        return legacyPath;
+      }
+    }
+    return primaryPath;
   }
 
   /**
@@ -145,7 +162,7 @@ export class StateStore {
       const files = fs.readdirSync(this.stateDir);
       return files
         .filter(f => f.endsWith('.bin'))
-        .map(f => f.slice(0, -4));
+        .map(f => this.decodeDocName(f.slice(0, -4)));
     } catch {
       return [];
     }

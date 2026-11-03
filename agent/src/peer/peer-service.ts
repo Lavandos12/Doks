@@ -280,18 +280,29 @@ export class PeerService extends EventEmitter {
       // Anti-entropy: initiate sync step 1 for all known active documents
       this.syncAllDocsWithPeer(conn);
 
-      // Exchange attachments list
+      // Exchange attachments list (2.1: scan .doks/blobs/ where sha256 blob files actually live)
       if (this.attachmentManager) {
         try {
+          const blobsDir = this.attachmentManager.getBlobsDir();
           const attDir = this.attachmentManager.getAttachmentsDir();
-          if (fs.existsSync(attDir)) {
-            const files = fs.readdirSync(attDir);
-            const hashes = files
-              .map((f) => path.basename(f, path.extname(f)))
-              .filter((h) => h.length === 64);
-            if (hashes.length > 0) {
-              conn.send({ type: 'attachment-list', hashes });
+          const hashSet = new Set<string>();
+
+          if (fs.existsSync(blobsDir)) {
+            for (const f of fs.readdirSync(blobsDir)) {
+              const h = path.basename(f, path.extname(f));
+              if (h.length === 64 && /^[a-f0-9]{64}$/i.test(h)) hashSet.add(h);
             }
+          }
+          if (fs.existsSync(attDir)) {
+            for (const f of fs.readdirSync(attDir)) {
+              const h = path.basename(f, path.extname(f));
+              if (h.length === 64 && /^[a-f0-9]{64}$/i.test(h)) hashSet.add(h);
+            }
+          }
+
+          const hashes = Array.from(hashSet);
+          if (hashes.length > 0) {
+            conn.send({ type: 'attachment-list', hashes });
           }
         } catch (e) {
           console.error('[PeerService] Error sending attachment list:', e);
@@ -489,7 +500,7 @@ export class PeerService extends EventEmitter {
     return this.discoveryService ? this.discoveryService.getDiscoveredRooms() : [];
   }
 
-  public addPeer(rawAddress: string): void {
+  public addPeer(rawAddress: string, allowKeyAdoption = false): void {
     let clean = rawAddress.trim();
     if (clean.startsWith('doks://')) {
       clean = clean.slice(7);
@@ -510,7 +521,7 @@ export class PeerService extends EventEmitter {
       teamKeyFromInvite = parts[1]?.trim();
     }
 
-    if (teamKeyFromInvite && teamKeyFromInvite.length === 64) {
+    if (allowKeyAdoption && teamKeyFromInvite && teamKeyFromInvite.length === 64) {
       this.config.teamKey = teamKeyFromInvite;
       const doksDir = path.dirname(this.config.statePath);
       const configPath = path.join(doksDir, 'config.json');

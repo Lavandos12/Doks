@@ -15,6 +15,7 @@ import {
   isImportWizardOpen,
   agentStatus,
   isViewerMode,
+  setViewerMode,
   selectBoardWithScope,
   TEAM_MAIN_BOARD_ID,
   SOLO_MAIN_BOARD_ID,
@@ -123,7 +124,8 @@ export function App() {
     if (activeBoardId && activeBoardId !== 'default') {
       const newPath = `/b/${activeBoardId}`;
       if (window.location.pathname !== newPath) {
-        window.history.replaceState(null, '', newPath);
+        const fullUrl = `${newPath}${window.location.search}${window.location.hash}`;
+        window.history.replaceState(null, '', fullUrl);
       }
     }
   }, [activeBoardId]);
@@ -149,7 +151,7 @@ export function App() {
 
   return (
     <div class={`app-layout theme-dark view-board-canvas ${isViewer ? 'is-viewer-mode' : ''}`}>
-      {/* Compact Read-Only Indicator for Mobile/Bridge sessions */}
+      {/* Compact Read-Only Indicator for Mobile/Bridge sessions with 3.2 unlock option */}
       {isViewer && (
         <div
           class="bridge-viewer-banner"
@@ -169,13 +171,33 @@ export function App() {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            gap: '8px',
+            gap: '12px',
             backdropFilter: 'blur(8px)',
             boxShadow: '0 2px 8px rgba(0, 0, 0, 0.3)'
           }}
         >
-          <Icon name="smartphone" size={13} />
-          <span>Mobile Viewer (Live Sync Active)</span>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+            <Icon name="smartphone" size={13} />
+            <span>Mobile Viewer (Live Sync Active)</span>
+          </div>
+          <button
+            type="button"
+            class="viewer-unlock-btn"
+            onClick={() => setViewerMode(false)}
+            style={{
+              background: 'rgba(255, 255, 255, 0.12)',
+              border: '1px solid rgba(255, 255, 255, 0.25)',
+              borderRadius: '4px',
+              color: '#ffffff',
+              fontSize: '10.5px',
+              fontWeight: 600,
+              padding: '2px 8px',
+              cursor: 'pointer'
+            }}
+            title="Enable Editing"
+          >
+            Unlock Editing
+          </button>
         </div>
       )}
 

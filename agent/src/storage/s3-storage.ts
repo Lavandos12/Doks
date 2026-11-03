@@ -62,7 +62,8 @@ export class S3Storage {
       const fileData = fs.readFileSync(localFilePath);
       const endpointUrl = new URL(this.config.endpoint);
       const cleanPath = endpointUrl.pathname.replace(/\/+$/, '');
-      const fullPath = `${cleanPath}/${encodeURIComponent(this.config.bucket)}/${encodeURIComponent(remoteKey)}`;
+      const encodedKey = remoteKey.split('/').map(encodeURIComponent).join('/');
+    const fullPath = `${cleanPath}/${encodeURIComponent(this.config.bucket)}/${encodedKey}`;
       const targetUrl = `${endpointUrl.origin}${fullPath}`;
 
       const now = new Date();
@@ -110,7 +111,8 @@ export class S3Storage {
     try {
       const endpointUrl = new URL(this.config.endpoint);
       const cleanPath = endpointUrl.pathname.replace(/\/+$/, '');
-      const fullPath = `${cleanPath}/${encodeURIComponent(this.config.bucket)}/${encodeURIComponent(remoteKey)}`;
+      const encodedKey = remoteKey.split('/').map(encodeURIComponent).join('/');
+    const fullPath = `${cleanPath}/${encodeURIComponent(this.config.bucket)}/${encodedKey}`;
       const targetUrl = `${endpointUrl.origin}${fullPath}`;
 
       const now = new Date();

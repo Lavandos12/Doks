@@ -122,6 +122,8 @@ export interface HttpServerOptions {
 
 export class AgentHttpServer {
   private fastify: FastifyInstance;
+  private static readonly CLOUD_DOMAIN_REGEX = /^([a-z0-9-]+\.)*(onrender\.com|fly\.dev|zeabur\.app|northflank\.app)$/i;
+  private loginAttempts = new Map<string, { count: number; resetAt: number }>();
   private config: AgentConfig;
   private docManager: DocManager;
   private peerService: PeerService;
@@ -214,63 +216,26 @@ export class AgentHttpServer {
         return;
       }
       const host = req.headers.host || '';
-      const [hostName] = host.split(':');
+      const rawForwarded = req.headers['x-forwarded-host'];
+      const effectiveHost = typeof rawForwarded === 'string' ? rawForwarded.split(',')[0].trim() : host;
+      const [hostName] = effectiveHost.split(':');
 
-      // Allow standard loopback, private LAN, cloud domains (Northflank, Zeabur, Fly.io), and configured bind addresses
-      const isCloudOrLocal =
-        hostName === '127.0.0.1' ||
-        hostName === 'localhost' ||
-        hostName === '[::1]' ||
-        hostName.startsWith('192.168.') ||
-        hostName.startsWith('10.') ||
-        hostName.startsWith('172.') ||
-        hostName.startsWith('26.') ||
-        hostName.includes('code.run') ||
-        hostName.includes('northflank.app') ||
-        hostName.includes('onrender.com') ||
-        hostName.includes('zeabur.app') ||
-        hostName.includes('fly.dev') ||
-        process.env.DOKS_HOST === '0.0.0.0' ||
-        Boolean(process.env.PORT);
-
-      if (!isCloudOrLocal && this.config.bindAddress && this.config.bindAddress !== 'auto' && this.config.bindAddress !== '0.0.0.0') {
-        if (hostName !== this.config.bindAddress) {
-          reply.code(403).send({ error: 'Forbidden: Invalid Host header' });
-          return;
-        }
+      // Strict Host header validation (1.2 & 1.3)
+      if (!this.isAllowedHost(hostName)) {
+        reply.code(403).send({ error: 'Forbidden: Invalid Host header' });
+        return;
       }
 
-      // Cross-Origin check
+      // Cross-Origin check (1.2)
       const origin = req.headers.origin;
       if (origin) {
         try {
           const originUrl = new URL(origin);
-          const radminIp = detectRadminIp();
-          const allowedOriginHosts = ['127.0.0.1', 'localhost', '[::1]'];
-          if (radminIp) allowedOriginHosts.push(radminIp);
-          if (this.config.bindAddress && this.config.bindAddress !== 'auto' && this.config.bindAddress !== '0.0.0.0') {
-            allowedOriginHosts.push(this.config.bindAddress);
-          }
+          const originHost = originUrl.hostname.toLowerCase();
+          const isCloudflareOrigin = this.bridgeService.getStatus().enabled && originHost.endsWith('.trycloudflare.com');
+          const isAllowed = originUrl.host === host || this.isAllowedHost(originHost) || isCloudflareOrigin;
 
-          const isAllowedOriginHost =
-            originUrl.host === host ||
-            originUrl.hostname === '127.0.0.1' ||
-            originUrl.hostname === 'localhost' ||
-            originUrl.hostname === '[::1]' ||
-            originUrl.hostname.startsWith('192.168.') ||
-            originUrl.hostname.startsWith('10.') ||
-            originUrl.hostname.startsWith('172.') ||
-            originUrl.hostname.startsWith('26.') ||
-            originUrl.hostname.includes('code.run') ||
-            originUrl.hostname.includes('northflank.app') ||
-            originUrl.hostname.includes('onrender.com') ||
-            originUrl.hostname.includes('zeabur.app') ||
-            originUrl.hostname.includes('fly.dev') ||
-            allowedOriginHosts.includes(originUrl.hostname);
-
-          const isCloudflareOrigin = this.bridgeService.getStatus().enabled && originUrl.hostname.endsWith('.trycloudflare.com');
-
-          if (!isAllowedOriginHost && !isCloudflareOrigin) {
+          if (!isAllowed) {
             reply.code(403).send({ error: 'Forbidden: Invalid Origin header' });
             return;
           }
@@ -310,6 +275,7 @@ export class AgentHttpServer {
       const urlPath = req.url.split('?')[0];
       const isViewer = this.isViewerSession(req);
       const isLoopback = this.isLoopbackRequest(req);
+      const isHost = !isViewer && (this.isHostSession(req) || isLoopback);
 
       // Public bootstrap routes accessible without prior cookies:
       // Static UI (/ and /b/), network status, auth login, and on remote/cloud (/api/status, /api/network-status)
@@ -376,6 +342,32 @@ export class AgentHttpServer {
     return this.bridgeService;
   }
 
+  private isPrivateIPv4(ip: string): boolean {
+    const m = ip.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+    if (!m) return false;
+    const [o1, o2, o3, o4] = [parseInt(m[1], 10), parseInt(m[2], 10), parseInt(m[3], 10), parseInt(m[4], 10)];
+    if (o1 > 255 || o2 > 255 || o3 > 255 || o4 > 255) return false;
+    if (o1 === 10) return true;
+    if (o1 === 172 && o2 >= 16 && o2 <= 31) return true;
+    if (o1 === 192 && o2 === 168) return true;
+    if (o1 === 26) return true; // Radmin VPN 26.0.0.0/8
+    return false;
+  }
+
+  private isAllowedHost(hostName: string): boolean {
+    if (!hostName) return false;
+    const lower = hostName.toLowerCase();
+    if (lower === '127.0.0.1' || lower === 'localhost' || lower === '::1' || lower === '[::1]') return true;
+    if (this.isPrivateIPv4(lower)) return true;
+    if (AgentHttpServer.CLOUD_DOMAIN_REGEX.test(lower)) return true;
+    if (this.config.bindAddress && this.config.bindAddress !== 'auto' && this.config.bindAddress !== '0.0.0.0') {
+      if (lower === this.config.bindAddress.toLowerCase()) return true;
+    }
+    const radminIp = detectRadminIp();
+    if (radminIp && lower === radminIp.toLowerCase()) return true;
+    return false;
+  }
+
   private isLoopbackRequest(req: any): boolean {
     const ip = (req.ip || req.raw?.socket?.remoteAddress || req.socket?.remoteAddress || '').replace(/^::ffff:/, '');
     return ip === '127.0.0.1' || ip === '::1';
@@ -383,15 +375,7 @@ export class AgentHttpServer {
 
   private isPrivateNetworkRequest(req: any): boolean {
     const ip = (req.ip || req.raw?.socket?.remoteAddress || req.socket?.remoteAddress || '').replace(/^::ffff:/, '');
-    if (ip.startsWith('26.')) return true;
-    if (ip.startsWith('192.168.')) return true;
-    if (ip.startsWith('10.')) return true;
-    const match = ip.match(/^172\.(\d+)\./);
-    if (match) {
-      const octet = parseInt(match[1], 10);
-      if (octet >= 16 && octet <= 31) return true;
-    }
-    return false;
+    return this.isPrivateIPv4(ip);
   }
 
   private isHostSession(req: any): boolean {
@@ -423,11 +407,24 @@ export class AgentHttpServer {
   }
 
   private isViewerSession(req: any): boolean {
-    const bridgeCookie = req.cookies?.doks_bridge;
-    const bridgeHeader = req.headers?.['x-doks-bridge'];
     const queryBridgeToken = (req.query as any)?.b || (req.query as any)?.bridge;
-    const token = bridgeCookie || bridgeHeader || queryBridgeToken;
-    return typeof token === 'string' && this.bridgeService.isValidBridgeToken(token);
+    const bridgeHeader = req.headers?.['x-doks-bridge'];
+    // Explicit bridge token via query param or header always indicates bridge viewer session
+    if (typeof queryBridgeToken === 'string' && this.bridgeService.isValidBridgeToken(queryBridgeToken)) {
+      return true;
+    }
+    if (typeof bridgeHeader === 'string' && this.bridgeService.isValidBridgeToken(bridgeHeader)) {
+      return true;
+    }
+    // Lingering doks_bridge cookie: ignored if the request has an authenticated host session or is loopback
+    const bridgeCookie = req.cookies?.doks_bridge;
+    if (typeof bridgeCookie === 'string' && this.bridgeService.isValidBridgeToken(bridgeCookie)) {
+      if (this.isHostSession(req) || this.isLoopbackRequest(req)) {
+        return false;
+      }
+      return true;
+    }
+    return false;
   }
 
   private isValidSession(req: any): boolean {
@@ -494,20 +491,49 @@ export class AgentHttpServer {
   }
 
   private setupRoutes(): void {
-    // POST /api/auth/login: Team password authentication
+    // POST /api/auth/login: Team password authentication with constant-time check & rate limiting (1.4)
     this.fastify.post('/api/auth/login', async (req, reply) => {
+      const clientIp = (req.ip || req.raw?.socket?.remoteAddress || req.socket?.remoteAddress || 'unknown').replace(/^::ffff:/, '');
+      const now = Date.now();
+      const attempt = this.loginAttempts.get(clientIp);
+
+      if (attempt && attempt.count >= 5 && now < attempt.resetAt) {
+        const retryAfter = Math.ceil((attempt.resetAt - now) / 1000);
+        reply.header('Retry-After', retryAfter.toString());
+        return reply.code(429).send({
+          ok: false,
+          error: 'Too many failed login attempts. Please try again in 1 minute.',
+          retryAfter
+        });
+      }
+
       const configuredPassword = process.env.DOKS_PASSWORD || process.env.TEAM_PASSWORD || '';
       if (!configuredPassword) {
         return { ok: true, token: this.sessionToken };
       }
       const body = req.body as any;
-      const candidate = body?.password || '';
-      if (candidate === configuredPassword) {
+      const candidate = (body?.password || '').toString();
+
+      // Timing-attack defense: compare SHA-256 hashes of candidate and configured password with timingSafeEqual
+      const hashCandidate = crypto.createHash('sha256').update(candidate, 'utf8').digest();
+      const hashExpected = crypto.createHash('sha256').update(configuredPassword, 'utf8').digest();
+      const isMatch = crypto.timingSafeEqual(hashCandidate, hashExpected);
+
+      if (isMatch) {
+        this.loginAttempts.delete(clientIp);
         reply.setCookie('doks_session', this.sessionToken, { path: '/', httpOnly: false, sameSite: 'lax' });
         reply.setCookie('doks_peer', this.peerSessionToken, { path: '/', httpOnly: false, sameSite: 'lax' });
         return { ok: true, token: this.sessionToken };
       }
-      reply.code(403).send({ ok: false, error: 'Invalid team password' });
+
+      // Record failed attempt
+      const newCount = (attempt && now < attempt.resetAt ? attempt.count : 0) + 1;
+      this.loginAttempts.set(clientIp, {
+        count: newCount,
+        resetAt: attempt && now < attempt.resetAt ? attempt.resetAt : now + 60_000
+      });
+
+      return reply.code(403).send({ ok: false, error: 'Invalid team password' });
     });
 
     // API: Config & Peer status
@@ -577,16 +603,19 @@ export class AgentHttpServer {
       };
     });
 
-    // GET /api/network-status: Direct status overview for ShareModal & co-authors
+    // GET /api/network-status: Direct status overview for ShareModal & co-authors (1.1 masked for non-host)
     this.fastify.get('/api/network-status', async (req) => {
+      const isHost = this.isHostSession(req);
       const overview = detectNetworkOverview({
         p2pEnabled: this.p2pMeshEnabled,
-        teamKey: this.config.teamKey,
+        teamKey: isHost ? this.config.teamKey : '',
         port: this.config.peerPort,
         peerId: this.config.agentId
       });
       return {
         ...overview,
+        inviteUri: isHost ? overview.inviteUri : undefined,
+        inviteLink: isHost ? overview.inviteUri : undefined,
         running: true,
         ip: overview.lanIp || '127.0.0.1',
         port: this.config.webPort,
@@ -597,16 +626,19 @@ export class AgentHttpServer {
       };
     });
 
-    // GET /api/network: Guaranteed non-null inviteUri and P2P overview
+    // GET /api/network: Guaranteed non-null inviteUri and P2P overview (1.1 masked for non-host)
     this.fastify.get('/api/network', async (req) => {
+      const isHost = this.isHostSession(req);
       const overview = detectNetworkOverview({
         p2pEnabled: this.p2pMeshEnabled,
-        teamKey: this.config.teamKey,
+        teamKey: isHost ? this.config.teamKey : '',
         port: this.config.peerPort,
         peerId: this.config.agentId
       });
       return {
         ...overview,
+        inviteUri: isHost ? overview.inviteUri : undefined,
+        inviteLink: isHost ? overview.inviteUri : undefined,
         peers: this.peerService.getPeersStatus(),
         connectedCount: this.peerService.getConnectedCount(),
         discoveredLanRooms: this.peerService.getDiscoveredLanRooms()
@@ -758,14 +790,15 @@ export class AgentHttpServer {
       };
     });
 
-    // API: Add peer
+    // API: Add peer (1.6 protect team key mutation)
     this.fastify.post('/api/peers', async (req, reply) => {
+      const isHost = this.isHostSession(req);
       const body = req.body as { address?: string; peer?: string };
       const target = body?.address || body?.peer;
       if (!target) {
         return reply.code(400).send({ error: 'address or peer is required' });
       }
-      this.peerService.addPeer(target);
+      this.peerService.addPeer(target, isHost);
       return {
         success: true,
         peers: this.peerService.getPeersStatus(),
@@ -1323,6 +1356,9 @@ export class AgentHttpServer {
       let content = '';
       let asBoard = false;
       const scope = ((req.query as any)?.scope === 'solo' ? 'solo' : 'team') as WorkspaceScope;
+      if (scope === 'solo' && !this.isHostSession(req)) {
+        return reply.code(403).send({ error: 'Forbidden: Solo workspace is private to host' });
+      }
 
       const customName = req.headers['x-file-name'] as string;
       if (customName) {

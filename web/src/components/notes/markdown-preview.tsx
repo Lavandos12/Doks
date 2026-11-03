@@ -45,6 +45,23 @@ export function MarkdownPreview({ content, onToggleCheckbox, onNavigateWikilink 
   let calloutTitle = '';
   let calloutLines: string[] = [];
 
+  let inBlockquote = false;
+  let blockquoteLines: string[] = [];
+
+  const flushBlockquote = (key: string) => {
+    if (blockquoteLines.length > 0) {
+      renderedElements.push(
+        <blockquote key={key} class="preview-blockquote">
+          {blockquoteLines.map((ql, qidx) => (
+            <p key={qidx}>{renderInlineMarkdown(ql, onNavigateWikilink)}</p>
+          ))}
+        </blockquote>
+      );
+    }
+    inBlockquote = false;
+    blockquoteLines = [];
+  };
+
   const flushCodeBlock = (key: string) => {
     renderedElements.push(
       <div key={key} class="preview-code-block">
@@ -126,6 +143,7 @@ export function MarkdownPreview({ content, onToggleCheckbox, onNavigateWikilink 
     // Callout detection: > [!note] Title
     const calloutMatch = trimmed.match(/^>\s*\[!([a-zA-Z0-9_-]+)\]\s*(.*)$/);
     if (calloutMatch) {
+      if (inBlockquote) flushBlockquote(`quote-${i}`);
       if (inCallout) flushCallout(`callout-${i}`);
       inCallout = true;
       calloutType = calloutMatch[1];
@@ -142,6 +160,77 @@ export function MarkdownPreview({ content, onToggleCheckbox, onNavigateWikilink 
         continue;
       } else {
         flushCallout(`callout-${i}`);
+      }
+    }
+
+    // Standard Blockquote detection (> line that is not a callout)
+    if (trimmed.startsWith('>')) {
+      inBlockquote = true;
+      blockquoteLines.push(trimmed.replace(/^>\s?/, ''));
+      continue;
+    } else if (inBlockquote) {
+      flushBlockquote(`quote-${i}`);
+    }
+
+    // 3.6 Standard Markdown Table detection: header row with | and next row with delimiter | --- |
+    if (!inCodeBlock && !inCallout && !inBlockquote && trimmed.includes('|') && i + 1 < lines.length) {
+      const nextTrimmed = lines[i + 1].trim();
+      const isDelimiter = /^\|?(\s*:?-+:?\s*\|)+\s*:?-+:?\s*\|?$/.test(nextTrimmed);
+      if (isDelimiter) {
+        const parseRow = (rowStr: string): string[] => {
+          let t = rowStr.trim();
+          if (t.startsWith('|')) t = t.slice(1);
+          if (t.endsWith('|')) t = t.slice(0, -1);
+          return t.split('|').map((c) => c.trim());
+        };
+
+        const headers = parseRow(trimmed);
+        const delimiters = parseRow(nextTrimmed);
+        const alignments = delimiters.map((d) => {
+          const leftColon = d.startsWith(':');
+          const rightColon = d.endsWith(':');
+          if (leftColon && rightColon) return 'center';
+          if (rightColon) return 'right';
+          return 'left';
+        });
+
+        const rows: string[][] = [];
+        i += 2;
+        while (i < lines.length) {
+          const rowLine = lines[i].trim();
+          if (!rowLine.includes('|') || rowLine === '') break;
+          rows.push(parseRow(rowLine));
+          i++;
+        }
+        i--; // decrement because for-loop will i++
+
+        renderedElements.push(
+          <div key={`table-${i}`} class="preview-table-container">
+            <table class="preview-table">
+              <thead>
+                <tr>
+                  {headers.map((h, ci) => (
+                    <th key={ci} style={{ textAlign: alignments[ci] || 'left' }}>
+                      {renderInlineMarkdown(h, onNavigateWikilink)}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((row, ri) => (
+                  <tr key={ri}>
+                    {row.map((cell, ci) => (
+                      <td key={ci} style={{ textAlign: alignments[ci] || 'left' }}>
+                        {renderInlineMarkdown(cell, onNavigateWikilink)}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        );
+        continue;
       }
     }
 
@@ -207,6 +296,7 @@ export function MarkdownPreview({ content, onToggleCheckbox, onNavigateWikilink 
 
   if (inCodeBlock) flushCodeBlock('code-end');
   if (inCallout) flushCallout('callout-end');
+  if (inBlockquote) flushBlockquote('quote-end');
 
   return <div class="markdown-preview-root">{renderedElements}</div>;
 }

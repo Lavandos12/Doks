@@ -28,9 +28,16 @@ export function ShareModal({ isOpen, onClose, initialTab = 'share' }: ShareModal
   if (!isOpen) return null;
 
   const effectiveBoardId = currentBoardId || 'default';
+  const isLocalHost = typeof window !== 'undefined' &&
+    (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+  const lanHost = isLocalHost ? (agentStatus.value?.lanIp || agentStatus.value?.effectiveIp) : undefined;
+  const portPart = typeof window !== 'undefined' && window.location.port ? `:${window.location.port}` : '';
+  const lanBase = lanHost ? `${window.location.protocol}//${lanHost}${portPart}` : (typeof window !== 'undefined' ? window.location.origin : 'http://127.0.0.1:4780');
+
   const shareLink = typeof window !== 'undefined'
     ? `${window.location.origin}/b/${effectiveBoardId}`
     : `http://127.0.0.1:4780/b/${effectiveBoardId}`;
+  const lanShareLink = `${lanBase}/b/${effectiveBoardId}`;
 
   const copyShareLink = () => {
     navigator.clipboard.writeText(shareLink);
@@ -39,13 +46,14 @@ export function ShareModal({ isOpen, onClose, initialTab = 'share' }: ShareModal
     setTimeout(() => setCopied(false), 2000);
   };
 
-  // Audit 3.1: Supply valid bridge URL or cryptographic bridge token instead of static ?bridge=1
+  // Audit 3.1: Supply valid bridge URL or LAN-aware QR link so phones on Wi-Fi connect seamlessly
   const bridgeUrl = agentStatus.value?.bridge?.primaryUrl;
   const bridgeToken = (agentStatus.value?.bridge as any)?.bridgeToken;
+  const baseLinkForPhone = bridgeUrl ? bridgeUrl : lanShareLink;
   const phoneShareLink = bridgeUrl || (
     bridgeToken
-      ? `${shareLink}${shareLink.includes('?') ? '&' : '?'}b=${bridgeToken}`
-      : `${shareLink}${shareLink.includes('?') ? '&' : '?'}bridge=1`
+      ? `${baseLinkForPhone}${baseLinkForPhone.includes('?') ? '&' : '?'}b=${bridgeToken}`
+      : `${baseLinkForPhone}${baseLinkForPhone.includes('?') ? '&' : '?'}bridge=1`
   );
 
   // Generate vector SVG QR code path for instant rendering

@@ -154,6 +154,10 @@ export class YjsClient {
     }
   }
 
+    public getDoc(docName: string): Y.Doc | undefined {
+    return this.docs.get(docName);
+  }
+
   public getOrCreateDoc(docName: string): Y.Doc {
     let doc = this.docs.get(docName);
     if (!doc) {
