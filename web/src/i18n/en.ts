@@ -146,7 +146,6 @@ export const en = {
   'settings.disabled': 'Disabled',
   'settings.theme': 'Interface Theme',
   'settings.theme_dark': 'Dark (Black-Purple)',
-  'settings.theme_light': 'Light',
   'settings.language': 'Interface Language',
   'settings.board_export': 'Board Export',
   'settings.board_export_desc': 'Save the current board as vector SVG or JSON Canvas structure.',

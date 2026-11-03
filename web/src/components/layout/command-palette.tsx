@@ -13,8 +13,6 @@ import {
   createNote,
   createBoard,
   toggleSplitView,
-  theme,
-  setTheme,
   currentView,
   setScope,
   currentScope,
@@ -165,16 +163,6 @@ export function CommandPalette() {
         icon: 'columns',
         action: () => {
           toggleSplitView();
-          close();
-        }
-      },
-      {
-        id: 'cmd-toggle-theme',
-        title: `Switch theme to ${theme.value === 'dark' ? 'Light' : 'Dark'}`,
-        subtitle: 'System theme appearance',
-        icon: theme.value === 'dark' ? 'sun' : 'moon',
-        action: () => {
-          setTheme(theme.value === 'dark' ? 'light' : 'dark');
           close();
         }
       },

@@ -149,15 +149,14 @@ export function setScope(newScope: WorkspaceScope): void {
   }
 }
 
-// Persisted theme (B16)
-const savedTheme = typeof localStorage !== 'undefined' ? (localStorage.getItem('doks_theme') as 'dark' | 'light') : null;
-export const theme = signal<'dark' | 'light'>(savedTheme || 'dark');
+// System theme: permanently locked to dark mode
+export const theme = signal<'dark'>('dark');
 
-export function setTheme(t: 'dark' | 'light'): void {
-  theme.value = t;
-  if (typeof localStorage !== 'undefined') {
-    localStorage.setItem('doks_theme', t);
-  }
+export function setTheme(_t?: 'dark'): void {
+  theme.value = 'dark';
+}
+if (typeof localStorage !== 'undefined' && localStorage.getItem('doks_theme')) {
+  localStorage.removeItem('doks_theme');
 }
 
 export const currentView = signal<ViewType>('notes');

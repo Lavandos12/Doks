@@ -1,6 +1,6 @@
 import { h, VNode } from 'preact';
 import { useState, useEffect } from 'preact/hooks';
-import { theme, agentStatus, currentScope } from '../../state/app-state.js';
+import { agentStatus, currentScope } from '../../state/app-state.js';
 import { Icon } from '../../ui/icons.js';
 import { showToast } from '../../ui/toast.js';
 import { api } from '../../api/client.js';
@@ -197,17 +197,6 @@ export function SettingsModal({
                   onClick={() => onSetSnapToGrid?.(!snapToGrid)}
                 >
                   {snapToGrid ? t('settings.enabled') : t('settings.disabled')}
-                </button>
-              </div>
-
-              <div class="settings-section-card">
-                <label class="settings-card-label">{t('settings.theme')}</label>
-                <button
-                  type="button"
-                  class="btn-secondary"
-                  onClick={() => (theme.value = theme.value === 'dark' ? 'light' : 'dark')}
-                >
-                  {theme.value === 'dark' ? t('settings.theme_dark') : t('settings.theme_light')}
                 </button>
               </div>
 

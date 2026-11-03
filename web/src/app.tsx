@@ -148,7 +148,7 @@ export function App() {
   const isViewer = Boolean(isViewerMode.value || agentStatus.value?.viewerMode);
 
   return (
-    <div class={`app-layout theme-${theme.value} view-board-canvas ${isViewer ? 'is-viewer-mode' : ''}`}>
+    <div class={`app-layout theme-dark view-board-canvas ${isViewer ? 'is-viewer-mode' : ''}`}>
       {/* Compact Read-Only Indicator for Mobile/Bridge sessions */}
       {isViewer && (
         <div

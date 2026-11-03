@@ -44,36 +44,6 @@
   --canvas-color-6: #c678dd; /* purple */
 }
 
-.theme-light {
-  /* Stage C Light Theme Tokens */
-  --bg-primary: #f4f5f8;
-  --bg-secondary: #ffffff;
-  --bg-card: #ffffff;
-  --bg-card-hover: #ebeef5;
-  --border-color: #d8dde6;
-  --border-focus: #9da5b4;
-  --text-primary: #1a1d25;
-  --text-secondary: #4f5666;
-  --text-muted: #8b92a2;
-  --accent: #5e6edb;
-  --accent-hover: #4b5bc4;
-  --danger: #ef4444;
-  --success: #10b981;
-  --warning: #f59e0b;
-
-  --bg-main: var(--bg-primary);
-  --bg-sidebar: var(--bg-secondary);
-  --text-main: var(--text-primary);
-
-  /* Obsidian JSON Canvas 1-6 sticky colors (Light) */
-  --canvas-color-1: #e06c75;
-  --canvas-color-2: #d19a66;
-  --canvas-color-3: #e5c07b;
-  --canvas-color-4: #98c379;
-  --canvas-color-5: #56b6c2;
-  --canvas-color-6: #c678dd;
-}
-
 * {
   box-sizing: border-box;
   margin: 0;
@@ -1526,9 +1496,6 @@ input:focus, select:focus, textarea:focus {
   user-select: none;
 }
 
-.theme-light .board-container {
-  background-color: #f8fafc !important;
-}
 
 .canvas-grid-svg-layer {
   position: absolute;
@@ -3271,9 +3238,6 @@ input:focus, select:focus, textarea:focus {
   background-color: #090a0f !important;
 }
 
-.theme-light .board-container {
-  background-color: #f8fafc !important;
-}
 
 /* 8-Point Resize Handles (Strictly on Corners & Borders) */
 .node-resize-handles-layer {
@@ -6831,11 +6795,6 @@ button.doks-color-dot.active {
   padding: 0 !important;
 }
 
-.theme-light .board-node-box.type-image {
-  background: rgba(255, 255, 255, 0.75) !important;
-  border: 1px solid rgba(0, 0, 0, 0.1) !important;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12) !important;
-}
 
 .board-node-box.type-image.selected {
   outline: 2px solid var(--accent, #6366f1) !important;
@@ -7722,73 +7681,4 @@ html, body, #app, .app-layout {
   .canvas-bottom-right-hud .hud-btn:last-child {
     display: none !important;
   }
-}
-
-
-/* ==========================================================================
-   Complete Light Theme Overhaul ("Белая тема") - Section 4
-   ========================================================================== */
-.theme-light .liquid-glass-surface {
-  background: rgba(255, 255, 255, 0.88) !important;
-  border: 1px solid rgba(0, 0, 0, 0.08) !important;
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.08) !important;
-  color: #1e293b !important;
-}
-
-.theme-light .miro-dock-btn {
-  color: #475569 !important;
-}
-
-.theme-light .miro-dock-btn:hover {
-  background: rgba(0, 0, 0, 0.05) !important;
-  color: #0f172a !important;
-}
-
-.theme-light .miro-dock-btn.active {
-  background: #ede9fe !important;
-  color: #6d28d9 !important;
-}
-
-.theme-light .miro-menu-item {
-  color: #334155 !important;
-}
-
-.theme-light .miro-menu-item:hover {
-  background: rgba(0, 0, 0, 0.05) !important;
-  color: #0f172a !important;
-}
-
-.theme-light .miro-action-pill {
-  background: rgba(0, 0, 0, 0.04) !important;
-  border-color: rgba(0, 0, 0, 0.08) !important;
-  color: #334155 !important;
-}
-
-.theme-light .miro-action-pill:hover {
-  background: rgba(0, 0, 0, 0.08) !important;
-  color: #0f172a !important;
-}
-
-.theme-light .node-inline-textarea,
-.theme-light .shape-inline-textarea,
-.theme-light .type-text .node-inline-textarea {
-  color: #1e293b !important;
-}
-
-.theme-light .node-table-wrapper {
-  background: #ffffff !important;
-  border: 1px solid #e2e8f0 !important;
-  color: #0f172a !important;
-}
-
-.theme-light .node-table-grid input {
-  background: #f8fafc !important;
-  color: #0f172a !important;
-  border: 1px solid #cbd5e1 !important;
-}
-
-.theme-light .node-chart-card {
-  background: #ffffff !important;
-  border: 1px solid #e2e8f0 !important;
-  color: #0f172a !important;
 }

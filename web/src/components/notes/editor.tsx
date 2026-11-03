@@ -15,7 +15,6 @@ import {
   notes,
   openTab,
   renameNote,
-  theme,
   selectedBoardId,
   currentScope,
   ensureSplitTabs,
@@ -144,9 +143,7 @@ export function NoteEditor({ noteId }: NoteEditorProps) {
       EditorView.lineWrapping
     ];
 
-    if (theme.value === 'dark') {
-      extensions.push(oneDark);
-    }
+    extensions.push(oneDark);
 
     const state = EditorState.create({
       doc: yText.toString(),
@@ -163,7 +160,7 @@ export function NoteEditor({ noteId }: NoteEditorProps) {
       view.destroy();
       viewRef.current = null;
     };
-  }, [noteId, editorMode, theme.value]);
+  }, [noteId, editorMode]);
 
   // Ctrl+E hotkey to toggle Live Preview / Source
   useEffect(() => {

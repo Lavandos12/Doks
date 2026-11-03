@@ -36,7 +36,6 @@ import {
   workspaceMode,
   setWorkspaceMode,
   isCommandPaletteOpen,
-  theme,
   allBoards,
   allTrashNotes,
   allTrashBoards,
@@ -306,7 +305,6 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
   const [activeTool, setActiveTool] = useState<CanvasTool>('select');
   const [isSpacePressed, setIsSpacePressed] = useState(false);
 
-  const isDarkTheme = theme.value !== 'light';
 
   // Data from Yjs
   const [nodesList, setNodesList] = useState<BoardNodeData[]>([]);
@@ -383,7 +381,6 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
     color: string,
     baseWidth: number,
     mode: 'pen' | 'brush' | 'highlighter',
-    isDark: boolean,
     points?: Point[]
   ) => {
     if (mode === 'brush') {
@@ -457,7 +454,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
             opacity: 0.35,
             strokeLinecap: 'butt',
             strokeLinejoin: 'round',
-            mixBlendMode: isDark ? 'screen' : 'multiply'
+            mixBlendMode: 'screen'
           }}
         />
       );
@@ -4778,7 +4775,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
       {gridType !== 'none' && (() => {
         const cleanBoardId = (boardId || 'default').replace(/[^a-zA-Z0-9_-]/g, '_');
         const grid = computeContinuousGrid(viewport.zoom, viewport.x, viewport.y);
-        const baseStroke = isDarkTheme ? '255, 255, 255' : '15, 23, 42';
+        const baseStroke = '255, 255, 255';
 
         return (
           <svg
@@ -5166,7 +5163,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
 
           const stickyBg = isSticky && nodeColorHex !== CANVAS_COLORS.default ? `${nodeColorHex}26` : undefined;
           const borderColor = isFrame
-            ? (isDarkTheme ? 'rgba(255, 255, 255, 0.18)' : 'rgba(0, 0, 0, 0.18)')
+            ? 'rgba(255, 255, 255, 0.18)'
             : node.type === 'text' || isImage
             ? 'transparent'
             : isSticky && nodeColorHex !== CANVAS_COLORS.default
@@ -6429,7 +6426,6 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                     color,
                     baseWidth,
                     mode,
-                    isDarkTheme,
                     (drawNode as any).points
                   )}
                 </g>
@@ -6445,7 +6441,6 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                 drawColor,
                 drawWidth,
                 drawMode,
-                isDarkTheme,
                 currentStroke
               )}
             </g>
