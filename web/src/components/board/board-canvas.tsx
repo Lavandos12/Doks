@@ -269,7 +269,7 @@ function renderShapeSvg(node: BoardNodeData, colorHex: string) {
 
 /**
  * Dynamically computes an ideal font size based on bounding box dimensions and text length.
- * Clamps safely between 12px and 140px using word-wrap aware iterative binary search.
+ * Clamps safely between 14px and 120px using word-wrap aware iterative binary search.
  */
 export function calculateAutoFontSize(text: string, w: number, h: number, type?: string): number {
   const padW = Math.max(20, w - 24);
@@ -281,9 +281,9 @@ export function calculateAutoFontSize(text: string, w: number, h: number, type?:
     return Math.min(Math.max(14, Math.round(h * 0.14)), 72);
   }
 
-  // Iterative binary search for font size between 12px and 140px
-  let low = 12;
-  let high = Math.min(Math.round(h * 0.5), 140);
+  // Iterative binary search for font size between 14px and 120px
+  let low = 14;
+  let high = Math.min(Math.round(h * 0.5), 120);
   let best = low;
 
   while (low <= high) {
@@ -557,6 +557,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
     startXPos: number;
     startYPos: number;
     startFontSize?: number;
+    hasManualFontSize?: boolean;
   } | null>(null);
 
   // Smart Alignment Guides
@@ -919,42 +920,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
 
   // Viewport virtualization
   
-  // Bounded Board Workspace Representation
-  const boardBounds = useMemo(() => {
-    const activeNodes = nodesList.filter((n) => !n.deleted);
-    let minX = -1000;
-    let minY = -800;
-    let maxX = 3000;
-    let maxY = 2200;
-
-    if (activeNodes.length > 0) {
-      minX = Infinity;
-      minY = Infinity;
-      maxX = -Infinity;
-      maxY = -Infinity;
-      for (const n of activeNodes) {
-        minX = Math.min(minX, n.x);
-        minY = Math.min(minY, n.y);
-        maxX = Math.max(maxX, n.x + n.w);
-        maxY = Math.max(maxY, n.y + n.h);
-      }
-    }
-
-    const contentW = maxX - minX;
-    const contentH = maxY - minY;
-    const centerX = (minX + maxX) / 2;
-    const centerY = (minY + maxY) / 2;
-
-    const haloW = Math.max(4000, contentW + 1200);
-    const haloH = Math.max(3000, contentH + 1000);
-
-    return {
-      x: Math.round(centerX - haloW / 2),
-      y: Math.round(centerY - haloH / 2),
-      w: Math.round(haloW),
-      h: Math.round(haloH)
-    };
-  }, [nodesList]);
+  
 
   const visibleNodes = useMemo(() => {
     if (nodesList.length < 40) return nodesList;
@@ -2772,9 +2738,14 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
             nodeMap.set('y', Math.round(newY));
             nodeMap.set('w', Math.round(newW));
             nodeMap.set('h', Math.round(newH));
-            if (nodeType === 'text' && isCorner && resizeState.startFontSize && startW > 0) {
-              const scaledFontSize = Math.min(Math.max(12, Math.round(resizeState.startFontSize * (newW / startW))), 140);
-              nodeMap.set('fontSize', scaledFontSize);
+            if (isCorner && startW > 0 && resizeState.startFontSize) {
+              if (nodeType === 'text') {
+                const scaledFontSize = Math.min(140, Math.max(12, Math.round(resizeState.startFontSize * (newW / startW))));
+                nodeMap.set('fontSize', scaledFontSize);
+              } else if ((nodeType === 'sticky' || nodeType === 'shape') && resizeState.hasManualFontSize) {
+                const newFontSize = Math.min(120, Math.max(12, Math.round(resizeState.startFontSize * (newW / startW))));
+                nodeMap.set('fontSize', newFontSize);
+              }
             }
           }, 'resize-motion');
         }
@@ -3530,8 +3501,8 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
     const availW = containerSize.width || window.innerWidth;
     const availH = containerSize.height || window.innerHeight;
 
-    const paddingX = Math.max(96, availW * 0.12);
-    const paddingY = Math.max(96, availH * 0.12);
+    const paddingX = Math.max(96, availW * 0.15);
+    const paddingY = Math.max(96, availH * 0.15);
 
     const scaleX = (availW - paddingX * 2) / Math.max(contentW, 100);
     const scaleY = (availH - paddingY * 2) / Math.max(contentH, 100);
@@ -3545,7 +3516,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
 
   return (
     <div
-      class={`board-container ${activeTool === 'hand' || isSpacePressed ? 'cursor-grab' : ''} ${activeTool === 'arrow' ? 'tool-arrow' : ''} ${gridType === 'lines' ? 'grid-lines' : gridType === 'none' ? 'grid-none' : ''}`}
+      class={`board-container ${activeTool === 'hand' || isSpacePressed ? 'cursor-grab' : ''} ${activeTool === 'arrow' ? 'tool-arrow' : ''} ${resizeState ? 'is-resizing' : ''} ${gridType === 'lines' ? 'grid-lines' : gridType === 'none' ? 'grid-none' : ''}`}
       ref={containerRef}
       onScroll={(e) => {
         if (e.currentTarget.scrollTop !== 0) e.currentTarget.scrollTop = 0;
@@ -4935,23 +4906,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
           transformOrigin: '0 0'
         }}
       >
-        {/* Bounded Board Sheet Boundary */}
-        <div
-          class="board-boundary"
-          style={{
-            position: 'absolute',
-            left: `${boardBounds.x}px`,
-            top: `${boardBounds.y}px`,
-            width: `${boardBounds.w}px`,
-            height: `${boardBounds.h}px`,
-            backgroundColor: '#0d0e15',
-            border: '1px solid rgba(255, 255, 255, 0.08)',
-            boxShadow: '0 20px 80px rgba(0, 0, 0, 0.6)',
-            borderRadius: '16px',
-            pointerEvents: 'none',
-            zIndex: 0
-          }}
-        />
+        
         {/* Drop Ghost Card Preview */}
         {dropGhost && (
           <div
@@ -5204,7 +5159,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
           const isImage = node.type === 'image' || ((node.fileName || '').match(/\.(png|jpe?g|gif|webp)$/i) && !node.extractedText);
           const isWidget = node.type === 'table' || node.type === 'kanban' || node.type === 'chart' || node.type === 'checklist';
           const shapeClass = node.type === 'shape' && node.shapeVariant ? `shape-variant-${node.shapeVariant}` : '';
-          const frameFontSize = Math.min(Math.max(14, Math.round(Math.min(node.w, node.h) * 0.035)), 48);
+          const frameFontSize = Math.min(54, Math.max(14, Math.round(Math.min(node.w, node.h) * 0.035)));
 
           const stickyBg = isSticky && nodeColorHex !== CANVAS_COLORS.default ? `${nodeColorHex}26` : undefined;
           const borderColor = isFrame
@@ -5730,7 +5685,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                 (() => {
                   const table = parseTableData(node.text);
                   const cols = table[0]?.length || 3;
-                  const baseW = Math.max(280, cols * 115);
+                  const baseW = Math.max(280, cols * 120);
                   const baseH = Math.max(140, 50 + table.length * 38);
                   const targetW = Math.max(60, node.w - 4);
                   const targetH = Math.max(40, node.h - 4);
@@ -5773,7 +5728,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                       <div
                         class="node-table-grid scrollable-card-content"
                         style={{
-                          gridTemplateColumns: `repeat(${table[0]?.length || 3}, minmax(140px, 1fr))`,
+                          gridTemplateColumns: `repeat(${table[0]?.length || 3}, minmax(120px, 1fr))`,
                           gridAutoRows: '38px',
                           alignContent: 'start',
                           flex: 1
@@ -6040,7 +5995,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                   };
 
                   const baseW = 380;
-                  const baseH = 360;
+                  const baseH = Math.max(360, 220 + 40 + themedData.length * 38);
                   const targetW = Math.max(60, node.w - 4);
                   const targetH = Math.max(40, node.h - 4);
                   const scale = Math.max(0.2, Math.min(targetW / baseW, targetH / baseH));
@@ -6141,10 +6096,10 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
 
                       <div class="chart-visual-area">
                         {chartType === 'pie' || chartType === 'donut' ? (
-                          <svg viewBox="0 0 220 220" class="chart-svg-render" style={{ width: '100%', height: '100%', maxWidth: '100%', maxHeight: '100%', flex: 1 }}>
+                          <svg viewBox="0 0 240 240" class="chart-svg-render" style={{ width: '100%', height: '100%', maxWidth: '100%', maxHeight: '100%', flex: 1 }}>
                             {(() => {
-                              const cx = 110;
-                              const cy = 110;
+                              const cx = 120;
+                              const cy = 120;
                               const r = 70;
                               const rIn = chartType === 'donut' ? 44 : 0;
                               let startAngle = -Math.PI / 2;
@@ -6184,6 +6139,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
 
                               const slicePaths: any[] = [];
                               const sliceLabels: any[] = [];
+                              let smallSliceIndex = 0;
 
                               themedData.forEach((seg) => {
                                 const val = Math.max(0, Number(seg.value) || 0);
@@ -6235,10 +6191,18 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                                     </text>
                                   );
                                 } else if (pct > 0) {
+                                  const isStaggered = smallSliceIndex % 2 === 1;
+                                  const calloutRadius = isStaggered ? (r + 28) : (r + 14);
+                                  const textRadius = isStaggered ? (r + 34) : (r + 20);
+                                  smallSliceIndex++;
+
                                   const edgeX = cx + (r - 2) * cosA;
                                   const edgeY = cy + (r - 2) * sinA;
-                                  const outX = cx + (r + 14) * cosA;
-                                  const outY = cy + (r + 14) * sinA;
+                                  const outX = cx + calloutRadius * cosA;
+                                  const outY = cy + calloutRadius * sinA;
+                                  const tx = cx + textRadius * cosA;
+                                  const ty = cy + textRadius * sinA;
+
                                   sliceLabels.push(
                                     <g key={`l-${seg.id}`} style={{ pointerEvents: 'none' }}>
                                       <line
@@ -6249,10 +6213,10 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                                         stroke="rgba(255, 255, 255, 0.45)"
                                         strokeWidth="1"
                                       />
-                                      <circle cx={edgeX.toFixed(1)} cy={edgeY.toFixed(1)} r="1.5" fill="#ffffff" />
+                                      <circle cx={outX.toFixed(1)} cy={outY.toFixed(1)} r="1.5" fill="#ffffff" />
                                       <text
-                                        x={(cx + (r + 20) * cosA).toFixed(1)}
-                                        y={(cy + (r + 20) * sinA).toFixed(1)}
+                                        x={tx.toFixed(1)}
+                                        y={ty.toFixed(1)}
                                         fill="#ffffff"
                                         fontSize="10"
                                         fontWeight="700"
@@ -6559,7 +6523,8 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                           startH: node.h,
                           startXPos: node.x,
                           startYPos: node.y,
-                          startFontSize: node.fontSize || calculateAutoFontSize(node.text, node.w, node.h, node.type)
+                          startFontSize: node.fontSize || calculateAutoFontSize(node.text, node.w, node.h, node.type),
+                          hasManualFontSize: typeof node.fontSize === 'number' && node.fontSize > 0
                         });
                       }}
                     />

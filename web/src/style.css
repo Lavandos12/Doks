@@ -1543,7 +1543,7 @@ input:focus, select:focus, textarea:focus {
   flex: 1;
   position: relative;
   overflow: hidden;
-  background-color: #06070a !important;
+  background-color: #090a0f !important;
   user-select: none;
 }
 
@@ -1876,6 +1876,11 @@ input:focus, select:focus, textarea:focus {
   pointer-events: none;
 }
 
+.board-container.is-resizing .magnetic-port {
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
 .board-node-box.selected:hover .magnetic-port {
   opacity: 1;
   pointer-events: auto;
@@ -1921,26 +1926,26 @@ input:focus, select:focus, textarea:focus {
 }
 
 .port-top {
-  top: -30px;
+  top: -32px;
   left: 50%;
   transform: translateX(-50%);
 }
 
 .port-right {
   top: 50%;
-  right: -30px;
+  right: -32px;
   transform: translateY(-50%);
 }
 
 .port-bottom {
-  bottom: -30px;
+  bottom: -32px;
   left: 50%;
   transform: translateX(-50%);
 }
 
 .port-left {
   top: 50%;
-  left: -30px;
+  left: -32px;
   transform: translateY(-50%);
 }
 
@@ -2049,7 +2054,7 @@ input:focus, select:focus, textarea:focus {
 }
 
 .type-text .node-inline-textarea {
-  font-size: 1.1rem;
+  font-size: inherit;
   font-weight: 500;
 }
 
@@ -3301,7 +3306,7 @@ input:focus, select:focus, textarea:focus {
 }
 
 .board-container {
-  background-color: #06070a !important;
+  background-color: #090a0f !important;
 }
 
 
@@ -3430,7 +3435,7 @@ input:focus, select:focus, textarea:focus {
 
 .chart-visual-area {
   flex: 1;
-  min-height: 120px;
+  min-height: 180px;
   display: flex;
   align-items: center;
   justify-content: center;

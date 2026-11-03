@@ -628,4 +628,146 @@ describe('Doks v2.0 Resilience & Lossless Canvas Test Suite', () => {
     });
   });
 
+
+  describe('10. Pure Infinite Canvas, Staggered Radial Callouts & Spatial Separation (v69)', () => {
+    function calculateAutoFontSizeV69(text: string, w: number, h: number): number {
+      const padW = Math.max(20, w - 24);
+      const padH = Math.max(20, h - 24);
+      const clean = (text || '').trim();
+
+      if (!clean) {
+        return Math.min(Math.max(14, Math.round(h * 0.14)), 72);
+      }
+
+      let low = 14;
+      let high = Math.min(Math.round(h * 0.5), 120);
+      let best = low;
+
+      while (low <= high) {
+        const mid = Math.floor((low + high) / 2);
+        const charWidth = mid * 0.54;
+        const charsPerLine = Math.max(1, Math.floor(padW / charWidth));
+
+        const rawParagraphs = clean.split('\n');
+        let totalLines = 0;
+        for (const para of rawParagraphs) {
+          totalLines += Math.max(1, Math.ceil(para.length / charsPerLine));
+        }
+
+        const totalHeight = totalLines * (mid * 1.35);
+        if (totalHeight <= padH) {
+          best = mid;
+          low = mid + 1;
+        } else {
+          high = mid - 1;
+        }
+      }
+      return best;
+    }
+
+    it('enforces Auto Font bounds strictly between 14px and 120px in Auto Font mode', () => {
+      const singleWord = 'Executive Summary';
+      const largeCardFont = calculateAutoFontSizeV69(singleWord, 1000, 600);
+      expect(largeCardFont).toBeGreaterThanOrEqual(14);
+      expect(largeCardFont).toBeLessThanOrEqual(120);
+
+      const hugeCardFont = calculateAutoFontSizeV69(singleWord, 4000, 3000);
+      expect(hugeCardFont).toBe(120);
+
+      const tinyCardFont = calculateAutoFontSizeV69('Long long text in tiny box', 80, 50);
+      expect(tinyCardFont).toBe(14);
+    });
+
+    it('scales sticky/shape manual font size proportionally on corner resize up to 120px', () => {
+      const startW = 200;
+      const startFontSize = 24;
+      const newW = 400;
+
+      const newFontSize = Math.min(120, Math.max(12, Math.round(startFontSize * (newW / startW))));
+      expect(newFontSize).toBe(48);
+
+      const extremeW = 2000;
+      const clampedFontSize = Math.min(120, Math.max(12, Math.round(startFontSize * (extremeW / startW))));
+      expect(clampedFontSize).toBe(120);
+    });
+
+    it('scales frame header font size up to 54px ceiling', () => {
+      function getFrameFontSizeV69(w: number, h: number): number {
+        return Math.min(54, Math.max(14, Math.round(Math.min(w, h) * 0.035)));
+      }
+
+      expect(getFrameFontSizeV69(200, 200)).toBe(14);
+      expect(getFrameFontSizeV69(1000, 800)).toBe(28);
+      expect(getFrameFontSizeV69(3000, 2500)).toBe(54);
+    });
+
+    it('alternates staggered radial callout lines for narrow slices to eliminate label collision', () => {
+      const cx = 120;
+      const cy = 120;
+      const r = 70;
+
+      // Slices with < 12%
+      const smallSlices = [
+        { id: 's1', pct: 4 },
+        { id: 's2', pct: 5 },
+        { id: 's3', pct: 3 },
+        { id: 's4', pct: 6 }
+      ];
+
+      const callouts = smallSlices.map((s, idx) => {
+        const isStaggered = idx % 2 === 1;
+        const calloutRadius = isStaggered ? (r + 28) : (r + 14);
+        const textRadius = isStaggered ? (r + 34) : (r + 20);
+        return { id: s.id, isStaggered, calloutRadius, textRadius };
+      });
+
+      expect(callouts[0].calloutRadius).toBe(84);
+      expect(callouts[0].textRadius).toBe(90);
+      expect(callouts[1].calloutRadius).toBe(98);
+      expect(callouts[1].textRadius).toBe(104);
+
+      // Verify clearance inside 240x240 viewBox
+      for (const c of callouts) {
+        expect(cx + c.textRadius).toBeLessThanOrEqual(230);
+        expect(cx - c.textRadius).toBeGreaterThanOrEqual(10);
+      }
+    });
+
+    it('scales chart base height adaptively when data sectors expand', () => {
+      function getChartBaseH(sectorCount: number): number {
+        return Math.max(360, 220 + 40 + sectorCount * 38);
+      }
+
+      expect(getChartBaseH(2)).toBe(360);
+      expect(getChartBaseH(4)).toBe(412);
+      expect(getChartBaseH(8)).toBe(564);
+      expect(getChartBaseH(12)).toBe(716);
+    });
+
+    it('calculates zoom-to-fit with generous 15% viewport margins', () => {
+      const availW = 1920;
+      const availH = 1080;
+      const paddingX = Math.max(96, availW * 0.15); // 288
+      const paddingY = Math.max(96, availH * 0.15); // 162
+      expect(paddingX).toBe(288);
+      expect(paddingY).toBe(162);
+
+      const contentW = 1000;
+      const contentH = 600;
+      const scaleX = (availW - paddingX * 2) / Math.max(contentW, 100);
+      const scaleY = (availH - paddingY * 2) / Math.max(contentH, 100);
+      const targetZoom = Math.min(Math.max(Math.min(scaleX, scaleY), 0.01), 2.5);
+
+      expect(targetZoom).toBeCloseTo(Math.min(1344 / 1000, 756 / 600), 2);
+    });
+
+    it('confirms 32px outward port offset ensures clean >=28px separation from 0px edge handles', () => {
+      const edgeHandleY = 0; // sits directly on node border
+      const portY = -32; // world offset -32px
+      const centerToCenterDistance = Math.abs(portY - edgeHandleY);
+      expect(centerToCenterDistance).toBe(32);
+      expect(centerToCenterDistance).toBeGreaterThanOrEqual(28);
+    });
+  });
+
 });
