@@ -2021,8 +2021,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
     const table = parseTableData(currentText);
     const cols = table[0]?.length || 3;
     table.push(Array(cols).fill(''));
-    const calculatedHeight = node.h + 38;
-    if (map) setNodeProperties(map, { text: JSON.stringify(table), h: calculatedHeight });
+    if (map) setNodeProperties(map, { text: JSON.stringify(table) });
   };
 
   const handleAddTableCol = (node: BoardNodeData) => {
@@ -2030,8 +2029,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
     const currentText = map ? (map.get('text')?.toString ? map.get('text').toString() : map.get('text')) : node.text;
     const table = parseTableData(currentText);
     for (const row of table) row.push('');
-    const calculatedWidth = Math.max(node.w, (table[0]?.length || 3) * 140);
-    if (map) setNodeProperties(map, { text: JSON.stringify(table), w: calculatedWidth });
+    if (map) setNodeProperties(map, { text: JSON.stringify(table) });
   };
 
   const handleDelTableRow = (node: BoardNodeData) => {
@@ -2040,8 +2038,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
     const table = parseTableData(currentText);
     if (table.length > 1) {
       table.pop();
-      const calculatedHeight = Math.max(140, node.h - 38);
-      if (map) setNodeProperties(map, { text: JSON.stringify(table), h: calculatedHeight });
+      if (map) setNodeProperties(map, { text: JSON.stringify(table) });
     }
   };
 
@@ -2051,8 +2048,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
     const table = parseTableData(currentText);
     if (table[0]?.length > 1) {
       for (const row of table) row.pop();
-      const calculatedWidth = Math.max(340, (table[0]?.length || 3) * 140);
-      if (map) setNodeProperties(map, { text: JSON.stringify(table), w: calculatedWidth });
+      if (map) setNodeProperties(map, { text: JSON.stringify(table) });
     }
   };
 
@@ -2068,10 +2064,8 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
     cards.push(t('widget.new_card'));
     const map = yNodes.get(node.id);
     if (map) {
-      const requiredH = Math.max(node.h, 110 + cards.length * 52);
       setNodeProperties(map, {
-        description: cards.join('\n'),
-        h: requiredH
+        description: cards.join('\n')
       });
     }
   };
