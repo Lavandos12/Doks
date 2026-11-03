@@ -5552,37 +5552,84 @@ button.doks-color-dot.active {
 .miro-scope-status-pill {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 4px 8px;
-  border-radius: 6px;
-  font-size: 12px;
-  font-weight: 600;
+  gap: 5px;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 9999px;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  line-height: 1;
+  color: #94a3b8;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  transition: all 0.15s ease;
+  user-select: none;
+  cursor: default;
+}
+
+.miro-scope-status-pill:hover {
+  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(255, 255, 255, 0.12);
+  color: #e2e8f0;
+}
+
+.miro-scope-status-pill.solo {
+  background: rgba(139, 92, 246, 0.06);
+  border-color: rgba(139, 92, 246, 0.2);
+  color: #cbd5e1;
+}
+
+.miro-scope-status-pill.solo:hover {
+  background: rgba(139, 92, 246, 0.1);
+  border-color: rgba(139, 92, 246, 0.3);
+  color: #f1f5f9;
+}
+
+.miro-scope-status-pill.team {
+  background: rgba(16, 185, 129, 0.06);
+  border-color: rgba(16, 185, 129, 0.2);
+  color: #cbd5e1;
+}
+
+.miro-scope-status-pill.team:hover {
+  background: rgba(16, 185, 129, 0.1);
+  border-color: rgba(16, 185, 129, 0.3);
+  color: #f1f5f9;
+}
+
+.miro-scope-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.miro-scope-dot.live {
+  background-color: #10b981;
+}
+
+.miro-scope-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 22px;
+  padding: 0 8px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 9999px;
+  font-size: 11px;
+  font-weight: 500;
+  color: #94a3b8;
   cursor: pointer;
-  border: 1px solid transparent;
   transition: all 0.15s ease;
   user-select: none;
 }
 
-.miro-scope-status-pill.solo {
-  background: rgba(139, 92, 246, 0.12);
-  border-color: rgba(139, 92, 246, 0.35);
-  color: #a78bfa;
-}
-
-.miro-scope-status-pill.solo:hover {
-  background: rgba(59, 130, 246, 0.22);
-  border-color: rgba(59, 130, 246, 0.55);
-}
-
-.miro-scope-status-pill.team {
-  background: rgba(16, 185, 129, 0.12);
-  border-color: rgba(16, 185, 129, 0.35);
-  color: #34d399;
-}
-
-.miro-scope-status-pill.team:hover {
-  background: rgba(16, 185, 129, 0.22);
-  border-color: rgba(16, 185, 129, 0.55);
+.miro-scope-action-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.15);
+  color: #f1f5f9;
 }
 
 .miro-scope-tag {
@@ -7499,15 +7546,15 @@ button.settings-color-btn.selected {
 
 /* 7. Zero Blue Solo & Accent Overrides */
 .miro-scope-status-pill.solo {
-  background: rgba(139, 92, 246, 0.15) !important;
-  border-color: rgba(139, 92, 246, 0.4) !important;
-  color: #c084fc !important;
+  background: rgba(139, 92, 246, 0.06) !important;
+  border-color: rgba(139, 92, 246, 0.2) !important;
+  color: #cbd5e1 !important;
 }
 
 .miro-scope-status-pill.solo:hover {
-  background: rgba(139, 92, 246, 0.26) !important;
-  border-color: rgba(167, 139, 250, 0.65) !important;
-  color: #ffffff !important;
+  background: rgba(139, 92, 246, 0.1) !important;
+  border-color: rgba(139, 92, 246, 0.3) !important;
+  color: #f1f5f9 !important;
 }
 
 .miro-scope-tag.solo {

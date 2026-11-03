@@ -98,7 +98,7 @@ export function CommandPalette() {
       },
       {
         id: 'cmd-scope-team',
-        title: `${t('topbar.team')} (Live Sync)`,
+        title: `${t('topbar.team')} Workspace`,
         subtitle: 'Sync with co-authors (Alt+2)',
         icon: 'globe-mesh',
         action: () => {

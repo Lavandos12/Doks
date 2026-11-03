@@ -3502,42 +3502,18 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
         {currentScope.value === 'solo' ? (
           <div
             class="miro-scope-status-pill solo"
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '6px',
-              padding: '4px 10px',
-              background: 'rgba(109, 40, 217, 0.15)',
-              border: '1px solid rgba(139, 92, 246, 0.35)',
-              borderRadius: '20px',
-              fontSize: '11px',
-              color: '#c084fc',
-              fontWeight: 600
-            }}
             title="Solo workspace — private to this computer"
           >
-            <Icon name="lock" size={12} />
-            <span>{t('workspace.solo')}</span>
+            <Icon name="lock" size={11} />
+            <span>Solo</span>
           </div>
         ) : (
           <div
             class="miro-scope-status-pill team"
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '6px',
-              padding: '4px 10px',
-              background: 'rgba(16, 185, 129, 0.12)',
-              border: '1px solid rgba(16, 185, 129, 0.35)',
-              borderRadius: '20px',
-              fontSize: '11px',
-              color: '#34d399',
-              fontWeight: 600
-            }}
-            title="Shared (Live Sync)"
+            title="Shared workspace — live sync active"
           >
-            <span style={{ width: '7px', height: '7px', borderRadius: '50%', backgroundColor: '#10b981', display: 'inline-block' }} />
-            <span>Shared (Live Sync)</span>
+            <span class="miro-scope-dot live" />
+            <span>Shared</span>
           </div>
         )}
 
@@ -3560,24 +3536,10 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
           !isViewerMode.value && (
             <button
               class="miro-scope-action-btn"
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '6px',
-                padding: '4px 10px',
-                background: 'rgba(124, 58, 237, 0.2)',
-                border: '1px solid rgba(139, 92, 246, 0.4)',
-                borderRadius: '20px',
-                fontSize: '11px',
-                color: '#e9d5ff',
-                fontWeight: 600,
-                cursor: 'pointer',
-                transition: 'all 0.15s ease'
-              }}
               onClick={() => setConfirmConvertModal({ isOpen: true, targetScope: 'team' })}
               title="Convert this board to collaborative mode"
             >
-              <Icon name="users" size={13} />
+              <Icon name="users" size={12} />
               <span>{t('workspace.moveToShared')}</span>
             </button>
           )
@@ -3586,19 +3548,6 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
             {/* Copy Invite Link */}
             <button
               class="miro-scope-action-btn"
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '5px',
-                padding: '4px 10px',
-                background: 'rgba(255, 255, 255, 0.05)',
-                border: '1px solid rgba(255, 255, 255, 0.12)',
-                borderRadius: '20px',
-                fontSize: '11px',
-                color: '#e2e8f0',
-                fontWeight: 500,
-                cursor: 'pointer'
-              }}
               onClick={() => {
                 const url = `${window.location.origin}/b/${boardId}`;
                 navigator.clipboard.writeText(url);
@@ -3614,19 +3563,6 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
             {!isViewerMode.value && (
               <button
                 class="miro-scope-action-btn"
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '5px',
-                  padding: '4px 10px',
-                  background: 'rgba(255, 255, 255, 0.05)',
-                  border: '1px solid rgba(255, 255, 255, 0.12)',
-                  borderRadius: '20px',
-                  fontSize: '11px',
-                  color: '#e2e8f0',
-                  fontWeight: 500,
-                  cursor: 'pointer'
-                }}
                 onClick={() => setConfirmConvertModal({ isOpen: true, targetScope: 'solo' })}
                 title="Move back to private solo workspace"
               >
@@ -3634,8 +3570,6 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                 <span>{t('workspace.makePrivate')}</span>
               </button>
             )}
-
-
           </>
         )}
 
