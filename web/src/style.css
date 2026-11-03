@@ -1543,7 +1543,7 @@ input:focus, select:focus, textarea:focus {
   flex: 1;
   position: relative;
   overflow: hidden;
-  background-color: #090a0f !important;
+  background-color: #06070a !important;
   user-select: none;
 }
 
@@ -1838,7 +1838,7 @@ input:focus, select:focus, textarea:focus {
   font-weight: 500;
 }
 
-/* 4 Magnetic Connection Ports (Miro / FigJam standard: 22px outside node border) */
+/* 4 Magnetic Connection Ports (Miro / FigJam standard: 30px outward offset) */
 .magnetic-port {
   position: absolute;
   width: 14px;
@@ -1847,6 +1847,7 @@ input:focus, select:focus, textarea:focus {
   background: #1e1b4b;
   border: 2px solid #818cf8;
   opacity: 0;
+  pointer-events: none;
   transition: opacity 0.15s ease, transform 0.15s ease, background 0.15s ease;
   cursor: crosshair;
   z-index: 40;
@@ -1855,20 +1856,34 @@ input:focus, select:focus, textarea:focus {
 .magnetic-port::before {
   content: '';
   position: absolute;
-  top: -8px;
-  left: -8px;
-  right: -8px;
-  bottom: -8px;
+  top: -10px;
+  left: -10px;
+  right: -10px;
+  bottom: -10px;
   border-radius: 50%;
 }
 
+/* Show ports when node is hovered, or when arrow tool is active */
 .board-node-box:hover .magnetic-port,
-.board-node-box.selected .magnetic-port {
+.board-container.tool-arrow .magnetic-port {
   opacity: 1;
+  pointer-events: auto;
+}
+
+/* Selected nodes keep ports hidden during resize unless explicitly hovered */
+.board-node-box.selected .magnetic-port {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.board-node-box.selected:hover .magnetic-port {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .magnetic-port:hover {
-  transform: scale(1.25);
+  opacity: 1 !important;
+  pointer-events: auto !important;
   background: #312e81;
   border-color: #a5b4fc;
 }
@@ -1906,26 +1921,26 @@ input:focus, select:focus, textarea:focus {
 }
 
 .port-top {
-  top: -22px;
+  top: -30px;
   left: 50%;
   transform: translateX(-50%);
 }
 
 .port-right {
   top: 50%;
-  right: -22px;
+  right: -30px;
   transform: translateY(-50%);
 }
 
 .port-bottom {
-  bottom: -22px;
+  bottom: -30px;
   left: 50%;
   transform: translateX(-50%);
 }
 
 .port-left {
   top: 50%;
-  left: -22px;
+  left: -30px;
   transform: translateY(-50%);
 }
 
@@ -3286,7 +3301,7 @@ input:focus, select:focus, textarea:focus {
 }
 
 .board-container {
-  background-color: #090a0f !important;
+  background-color: #06070a !important;
 }
 
 

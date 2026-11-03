@@ -269,38 +269,41 @@ function renderShapeSvg(node: BoardNodeData, colorHex: string) {
 
 /**
  * Dynamically computes an ideal font size based on bounding box dimensions and text length.
- * Clamps safely between 12px and 120px using word-wrap aware iterative binary search.
+ * Clamps safely between 12px and 140px using word-wrap aware iterative binary search.
  */
 export function calculateAutoFontSize(text: string, w: number, h: number, type?: string): number {
   const padW = Math.max(20, w - 24);
   const padH = Math.max(20, h - 24);
   const clean = (text || '').trim();
-  if (!clean) return Math.min(Math.max(14, Math.round(h * 0.12)), 40);
 
-  // Approximate wrapped line count based on character density per line
-  // An average character takes approx 0.55 * fontSize in width
+  // Empty or minimal text scales proportionally with card height
+  if (!clean) {
+    return Math.min(Math.max(14, Math.round(h * 0.14)), 72);
+  }
+
+  // Iterative binary search for font size between 12px and 140px
   let low = 12;
-  let high = Math.min(Math.round(h * 0.4), 120);
+  let high = Math.min(Math.round(h * 0.5), 140);
   let best = low;
 
   while (low <= high) {
     const mid = Math.floor((low + high) / 2);
-    const charWidth = mid * 0.56;
+    const charWidth = mid * 0.54;
     const charsPerLine = Math.max(1, Math.floor(padW / charWidth));
 
-    // Calculate wrapped lines considering both explicit newlines and line wrapping
-    const rawLines = clean.split('\n');
+    // Break on explicit newlines, then wrap each segment
+    const rawParagraphs = clean.split('\n');
     let totalLines = 0;
-    for (const line of rawLines) {
-      totalLines += Math.max(1, Math.ceil(line.length / charsPerLine));
+    for (const para of rawParagraphs) {
+      totalLines += Math.max(1, Math.ceil(para.length / charsPerLine));
     }
 
-    const requiredHeight = totalLines * (mid * 1.35);
-    if (requiredHeight <= padH) {
+    const totalHeight = totalLines * (mid * 1.35);
+    if (totalHeight <= padH) {
       best = mid;
-      low = mid + 1; // Try larger
+      low = mid + 1; // Try larger font
     } else {
-      high = mid - 1; // Try smaller
+      high = mid - 1; // Too big, reduce font
     }
   }
   return best;
@@ -553,6 +556,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
     startH: number;
     startXPos: number;
     startYPos: number;
+    startFontSize?: number;
   } | null>(null);
 
   // Smart Alignment Guides
@@ -914,6 +918,44 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
   }, [containerSize, animateToViewport]);
 
   // Viewport virtualization
+  
+  // Bounded Board Workspace Representation
+  const boardBounds = useMemo(() => {
+    const activeNodes = nodesList.filter((n) => !n.deleted);
+    let minX = -1000;
+    let minY = -800;
+    let maxX = 3000;
+    let maxY = 2200;
+
+    if (activeNodes.length > 0) {
+      minX = Infinity;
+      minY = Infinity;
+      maxX = -Infinity;
+      maxY = -Infinity;
+      for (const n of activeNodes) {
+        minX = Math.min(minX, n.x);
+        minY = Math.min(minY, n.y);
+        maxX = Math.max(maxX, n.x + n.w);
+        maxY = Math.max(maxY, n.y + n.h);
+      }
+    }
+
+    const contentW = maxX - minX;
+    const contentH = maxY - minY;
+    const centerX = (minX + maxX) / 2;
+    const centerY = (minY + maxY) / 2;
+
+    const haloW = Math.max(4000, contentW + 1200);
+    const haloH = Math.max(3000, contentH + 1000);
+
+    return {
+      x: Math.round(centerX - haloW / 2),
+      y: Math.round(centerY - haloH / 2),
+      w: Math.round(haloW),
+      h: Math.round(haloH)
+    };
+  }, [nodesList]);
+
   const visibleNodes = useMemo(() => {
     if (nodesList.length < 40) return nodesList;
     const marginX = (containerSize.width / viewport.zoom) * 0.25;
@@ -2641,7 +2683,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
 
           // Proportional aspect-ratio resizing for images, circles, and charts on corner handles (Shift toggles freeform)
           const isCorner = handle === 'nw' || handle === 'ne' || handle === 'se' || handle === 'sw';
-          const isProportionalWidget = isImage || isCircle || nodeType === 'chart' || nodeType === 'checklist' || nodeType === 'table' || nodeType === 'kanban' || nodeType === 'code';
+          const isProportionalWidget = isImage || isCircle || nodeType === 'chart' || nodeType === 'checklist' || nodeType === 'table' || nodeType === 'kanban' || nodeType === 'code' || nodeType === 'text';
           const keepProportional = (isProportionalWidget || e.shiftKey) && !(isProportionalWidget && e.shiftKey);
 
           if (keepProportional && isCorner) {
@@ -2730,6 +2772,10 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
             nodeMap.set('y', Math.round(newY));
             nodeMap.set('w', Math.round(newW));
             nodeMap.set('h', Math.round(newH));
+            if (nodeType === 'text' && isCorner && resizeState.startFontSize && startW > 0) {
+              const scaledFontSize = Math.min(Math.max(12, Math.round(resizeState.startFontSize * (newW / startW))), 140);
+              nodeMap.set('fontSize', scaledFontSize);
+            }
           }, 'resize-motion');
         }
       }
@@ -3478,16 +3524,19 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
     }
     const contentW = maxX - minX;
     const contentH = maxY - minY;
-    const padding = 64;
+    const centerX = (minX + maxX) / 2;
+    const centerY = (minY + maxY) / 2;
+
     const availW = containerSize.width || window.innerWidth;
     const availH = containerSize.height || window.innerHeight;
 
-    const scaleX = (availW - padding * 2) / Math.max(contentW, 100);
-    const scaleY = (availH - padding * 2) / Math.max(contentH, 100);
-    const targetZoom = Math.min(Math.max(Math.min(scaleX, scaleY), 0.01), 1.0);
+    const paddingX = Math.max(96, availW * 0.12);
+    const paddingY = Math.max(96, availH * 0.12);
 
-    const centerX = (minX + maxX) / 2;
-    const centerY = (minY + maxY) / 2;
+    const scaleX = (availW - paddingX * 2) / Math.max(contentW, 100);
+    const scaleY = (availH - paddingY * 2) / Math.max(contentH, 100);
+    const targetZoom = Math.min(Math.max(Math.min(scaleX, scaleY), 0.01), 2.5);
+
     const x = availW / 2 - centerX * targetZoom;
     const y = availH / 2 - centerY * targetZoom;
 
@@ -3496,7 +3545,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
 
   return (
     <div
-      class={`board-container ${activeTool === 'hand' || isSpacePressed ? 'cursor-grab' : ''} ${gridType === 'lines' ? 'grid-lines' : gridType === 'none' ? 'grid-none' : ''}`}
+      class={`board-container ${activeTool === 'hand' || isSpacePressed ? 'cursor-grab' : ''} ${activeTool === 'arrow' ? 'tool-arrow' : ''} ${gridType === 'lines' ? 'grid-lines' : gridType === 'none' ? 'grid-none' : ''}`}
       ref={containerRef}
       onScroll={(e) => {
         if (e.currentTarget.scrollTop !== 0) e.currentTarget.scrollTop = 0;
@@ -4886,6 +4935,23 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
           transformOrigin: '0 0'
         }}
       >
+        {/* Bounded Board Sheet Boundary */}
+        <div
+          class="board-boundary"
+          style={{
+            position: 'absolute',
+            left: `${boardBounds.x}px`,
+            top: `${boardBounds.y}px`,
+            width: `${boardBounds.w}px`,
+            height: `${boardBounds.h}px`,
+            backgroundColor: '#0d0e15',
+            border: '1px solid rgba(255, 255, 255, 0.08)',
+            boxShadow: '0 20px 80px rgba(0, 0, 0, 0.6)',
+            borderRadius: '16px',
+            pointerEvents: 'none',
+            zIndex: 0
+          }}
+        />
         {/* Drop Ghost Card Preview */}
         {dropGhost && (
           <div
@@ -5138,6 +5204,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
           const isImage = node.type === 'image' || ((node.fileName || '').match(/\.(png|jpe?g|gif|webp)$/i) && !node.extractedText);
           const isWidget = node.type === 'table' || node.type === 'kanban' || node.type === 'chart' || node.type === 'checklist';
           const shapeClass = node.type === 'shape' && node.shapeVariant ? `shape-variant-${node.shapeVariant}` : '';
+          const frameFontSize = Math.min(Math.max(14, Math.round(Math.min(node.w, node.h) * 0.035)), 48);
 
           const stickyBg = isSticky && nodeColorHex !== CANVAS_COLORS.default ? `${nodeColorHex}26` : undefined;
           const borderColor = isFrame
@@ -5187,22 +5254,22 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                   <>
                     <div
                       class="magnetic-port port-top"
-                      style={{ transform: portTransform('top'), transformOrigin: 'center' }}
+                      style={{ transform: portTransform('top'), transformOrigin: 'center bottom' }}
                       onMouseDown={(e) => handlePortPointerDown(node.id, 'top', e as any)}
                     />
                     <div
                       class="magnetic-port port-right"
-                      style={{ transform: portTransform('right'), transformOrigin: 'center' }}
+                      style={{ transform: portTransform('right'), transformOrigin: 'left center' }}
                       onMouseDown={(e) => handlePortPointerDown(node.id, 'right', e as any)}
                     />
                     <div
                       class="magnetic-port port-bottom"
-                      style={{ transform: portTransform('bottom'), transformOrigin: 'center' }}
+                      style={{ transform: portTransform('bottom'), transformOrigin: 'center top' }}
                       onMouseDown={(e) => handlePortPointerDown(node.id, 'bottom', e as any)}
                     />
                     <div
                       class="magnetic-port port-left"
-                      style={{ transform: portTransform('left'), transformOrigin: 'center' }}
+                      style={{ transform: portTransform('left'), transformOrigin: 'right center' }}
                       onMouseDown={(e) => handlePortPointerDown(node.id, 'left', e as any)}
                     />
                   </>
@@ -5458,6 +5525,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                     <input
                       type="text"
                       class="frame-label-input"
+                      style={{ fontSize: `${frameFontSize}px` }}
                       value={node.text}
                       autoFocus
                       placeholder={t('dock.frame')}
@@ -5478,7 +5546,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                       onMouseDown={(e) => e.stopPropagation()}
                     />
                   ) : (
-                    <span class="frame-label-text">{node.text || t('canvas.frame')}</span>
+                    <span class="frame-label-text" style={{ fontSize: `${frameFontSize}px` }}>{node.text || t('canvas.frame')}</span>
                   )}
                 </div>
               ) : node.type === 'shape' ? (
@@ -6490,7 +6558,8 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                           startW: node.w,
                           startH: node.h,
                           startXPos: node.x,
-                          startYPos: node.y
+                          startYPos: node.y,
+                          startFontSize: node.fontSize || calculateAutoFontSize(node.text, node.w, node.h, node.type)
                         });
                       }}
                     />

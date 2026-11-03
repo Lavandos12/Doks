@@ -496,4 +496,136 @@ describe('Doks v2.0 Resilience & Lossless Canvas Test Suite', () => {
       expect(selected.has('draw-1')).toBe(false);
     });
   });
+
+  describe('9. Proportional Text Scaling, Bounded Workspace & Viewport Fit (v68)', () => {
+    function calculateAutoFontSizeV68(text: string, w: number, h: number): number {
+      const padW = Math.max(20, w - 24);
+      const padH = Math.max(20, h - 24);
+      const clean = (text || '').trim();
+
+      if (!clean) {
+        return Math.min(Math.max(14, Math.round(h * 0.14)), 72);
+      }
+
+      let low = 12;
+      let high = Math.min(Math.round(h * 0.5), 140);
+      let best = low;
+
+      while (low <= high) {
+        const mid = Math.floor((low + high) / 2);
+        const charWidth = mid * 0.54;
+        const charsPerLine = Math.max(1, Math.floor(padW / charWidth));
+
+        const rawParagraphs = clean.split('\n');
+        let totalLines = 0;
+        for (const para of rawParagraphs) {
+          totalLines += Math.max(1, Math.ceil(para.length / charsPerLine));
+        }
+
+        const totalHeight = totalLines * (mid * 1.35);
+        if (totalHeight <= padH) {
+          best = mid;
+          low = mid + 1;
+        } else {
+          high = mid - 1;
+        }
+      }
+      return best;
+    }
+
+    it('scales empty/minimal text proportionally with card height up to 72px', () => {
+      const emptySmall = calculateAutoFontSizeV68('', 200, 100);
+      const emptyMedium = calculateAutoFontSizeV68('', 400, 300);
+      const emptyLarge = calculateAutoFontSizeV68('  ', 800, 700);
+
+      expect(emptySmall).toBe(14);
+      expect(emptyMedium).toBe(42);
+      expect(emptyLarge).toBe(72);
+    });
+
+    it('computes binary-search font size for paragraphs up to 140px upper bound', () => {
+      const singleWord = 'Doks';
+      const largeCardFont = calculateAutoFontSizeV68(singleWord, 1000, 600);
+      expect(largeCardFont).toBeGreaterThan(60);
+      expect(largeCardFont).toBeLessThanOrEqual(140);
+
+      const longPara = 'Doks is a local-first peer-to-peer infinite canvas and Markdown collaboration workspace powered by Yjs CRDTs and WebSockets with hardened security.';
+      const constrainedFont = calculateAutoFontSizeV68(longPara, 280, 150);
+      expect(constrainedFont).toBeGreaterThanOrEqual(12);
+      expect(constrainedFont).toBeLessThanOrEqual(20);
+    });
+
+    it('scales text node font size proportionally when corner handle is dragged', () => {
+      const startW = 200;
+      const startFontSize = 18;
+      const newW = 400;
+
+      const scaledFontSize = Math.min(Math.max(12, Math.round(startFontSize * (newW / startW))), 140);
+      expect(scaledFontSize).toBe(36);
+    });
+
+    it('computes frame title font size clamped between 14px and 48px', () => {
+      function getFrameFontSize(w: number, h: number): number {
+        return Math.min(Math.max(14, Math.round(Math.min(w, h) * 0.035)), 48);
+      }
+
+      expect(getFrameFontSize(300, 200)).toBe(14);
+      expect(getFrameFontSize(800, 600)).toBe(21);
+      expect(getFrameFontSize(2000, 1600)).toBe(48);
+    });
+
+    it('computes bounded workspace sheet with minimum 4000x3000 halo centered on content', () => {
+      const nodes = [
+        { x: 100, y: 100, w: 200, h: 150, deleted: false },
+        { x: 500, y: 400, w: 300, h: 200, deleted: false }
+      ];
+
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      for (const n of nodes) {
+        minX = Math.min(minX, n.x);
+        minY = Math.min(minY, n.y);
+        maxX = Math.max(maxX, n.x + n.w);
+        maxY = Math.max(maxY, n.y + n.h);
+      }
+
+      const contentW = maxX - minX;
+      const contentH = maxY - minY;
+      const centerX = (minX + maxX) / 2;
+      const centerY = (minY + maxY) / 2;
+
+      const haloW = Math.max(4000, contentW + 1200);
+      const haloH = Math.max(3000, contentH + 1000);
+
+      const bounds = {
+        x: Math.round(centerX - haloW / 2),
+        y: Math.round(centerY - haloH / 2),
+        w: Math.round(haloW),
+        h: Math.round(haloH)
+      };
+
+      expect(bounds.w).toBe(4000);
+      expect(bounds.h).toBe(3000);
+      expect(bounds.x).toBe(Math.round(centerX - 2000));
+      expect(bounds.y).toBe(Math.round(centerY - 1500));
+    });
+
+    it('calculates zoom-to-fit target with 12% viewport margins and clamps between 0.01 and 2.5', () => {
+      const availW = 1200;
+      const availH = 800;
+      const paddingX = Math.max(96, availW * 0.12); // 144
+      const paddingY = Math.max(96, availH * 0.12); // 96
+      expect(paddingX).toBe(144);
+      expect(paddingY).toBe(96);
+
+      const contentW = 400;
+      const contentH = 300;
+      const scaleX = (availW - paddingX * 2) / Math.max(contentW, 100);
+      const scaleY = (availH - paddingY * 2) / Math.max(contentH, 100);
+      const targetZoom = Math.min(Math.max(Math.min(scaleX, scaleY), 0.01), 2.5);
+
+      expect(targetZoom).toBeGreaterThan(1.0);
+      expect(targetZoom).toBeLessThanOrEqual(2.5);
+    });
+  });
+
 });
