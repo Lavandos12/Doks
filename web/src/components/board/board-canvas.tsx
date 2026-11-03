@@ -5626,10 +5626,10 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                       <div
                         class="node-table-grid scrollable-card-content"
                         style={{
-                          gridTemplateColumns: `repeat(${table[0]?.length || 3}, minmax(130px, 1fr))`,
-                          gridAutoRows: 'minmax(38px, 1fr)',
-                          flex: 1,
-                          minHeight: '80px'
+                          gridTemplateColumns: `repeat(${table[0]?.length || 3}, minmax(140px, 1fr))`,
+                          gridAutoRows: '38px',
+                          alignContent: 'start',
+                          flex: 1
                         }}
                         onWheel={(e) => { if (!e.ctrlKey && !e.metaKey) e.stopPropagation(); }}
                       >
@@ -5951,29 +5951,44 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
 
                       <div class="chart-visual-area">
                         {chartType === 'pie' || chartType === 'donut' ? (
-                          <svg viewBox="0 0 160 160" class="chart-svg-render" style={{ width: '100%', height: '100%', maxWidth: '100%', maxHeight: '100%', flex: 1 }}>
+                          <svg viewBox="0 0 220 220" class="chart-svg-render" style={{ width: '100%', height: '100%', maxWidth: '100%', maxHeight: '100%', flex: 1 }}>
                             {(() => {
-                              const cx = 80;
-                              const cy = 80;
-                              const r = 68;
-                              const rIn = chartType === 'donut' ? 42 : 0;
+                              const cx = 110;
+                              const cy = 110;
+                              const r = 70;
+                              const rIn = chartType === 'donut' ? 44 : 0;
                               let startAngle = -Math.PI / 2;
 
                               const validSegments = themedData.filter((d) => (Number(d.value) || 0) > 0);
                               if (validSegments.length <= 1) {
                                 const onlyItem = validSegments[0] || themedData[0];
-                                if (chartType === 'pie') {
-                                  return <circle cx={cx} cy={cy} r={r} fill={onlyItem.color} />;
-                                }
                                 return (
-                                  <circle
-                                    cx={cx}
-                                    cy={cy}
-                                    r={(r + rIn) / 2}
-                                    stroke={onlyItem.color}
-                                    strokeWidth={r - rIn}
-                                    fill="none"
-                                  />
+                                  <>
+                                    {chartType === 'pie' ? (
+                                      <circle cx={cx} cy={cy} r={r} fill={onlyItem?.color || '#6366f1'} />
+                                    ) : (
+                                      <circle
+                                        cx={cx}
+                                        cy={cy}
+                                        r={(r + rIn) / 2}
+                                        stroke={onlyItem?.color || '#6366f1'}
+                                        strokeWidth={r - rIn}
+                                        fill="none"
+                                      />
+                                    )}
+                                    <text
+                                      x={cx}
+                                      y={cy}
+                                      fill="#ffffff"
+                                      fontSize="14"
+                                      fontWeight="700"
+                                      textAnchor="middle"
+                                      dominantBaseline="central"
+                                      style={{ filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.85))', pointerEvents: 'none' }}
+                                    >
+                                      100%
+                                    </text>
+                                  </>
                                 );
                               }
 
@@ -6006,13 +6021,14 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
 
                                 slicePaths.push(<path key={`p-${seg.id}`} d={dPath} fill={seg.color} />);
 
-                                // Slices under 10% are too narrow for inline text; their percentages are displayed in the legend rows
                                 const pct = Math.round(fraction * 100);
-                                if (pct >= 10) {
-                                  const midAngle = (startAngle + endAngle) / 2;
+                                const midAngle = (startAngle + endAngle) / 2;
+                                const cosA = Math.cos(midAngle);
+                                const sinA = Math.sin(midAngle);
+                                if (pct >= 12) {
                                   const labelR = chartType === 'donut' ? (r + rIn) / 2 : r * 0.65;
-                                  const lx = cx + labelR * Math.cos(midAngle);
-                                  const ly = cy + labelR * Math.sin(midAngle);
+                                  const lx = cx + labelR * cosA;
+                                  const ly = cy + labelR * sinA;
                                   sliceLabels.push(
                                     <text
                                       key={`l-${seg.id}`}
@@ -6027,6 +6043,36 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                                     >
                                       {pct}%
                                     </text>
+                                  );
+                                } else if (pct > 0) {
+                                  const edgeX = cx + (r - 2) * cosA;
+                                  const edgeY = cy + (r - 2) * sinA;
+                                  const outX = cx + (r + 14) * cosA;
+                                  const outY = cy + (r + 14) * sinA;
+                                  sliceLabels.push(
+                                    <g key={`l-${seg.id}`} style={{ pointerEvents: 'none' }}>
+                                      <line
+                                        x1={edgeX.toFixed(1)}
+                                        y1={edgeY.toFixed(1)}
+                                        x2={outX.toFixed(1)}
+                                        y2={outY.toFixed(1)}
+                                        stroke="rgba(255, 255, 255, 0.45)"
+                                        strokeWidth="1"
+                                      />
+                                      <circle cx={edgeX.toFixed(1)} cy={edgeY.toFixed(1)} r="1.5" fill="#ffffff" />
+                                      <text
+                                        x={(cx + (r + 20) * cosA).toFixed(1)}
+                                        y={(cy + (r + 20) * sinA).toFixed(1)}
+                                        fill="#ffffff"
+                                        fontSize="10"
+                                        fontWeight="700"
+                                        textAnchor="middle"
+                                        dominantBaseline="central"
+                                        style={{ filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.9))' }}
+                                      >
+                                        {pct}%
+                                      </text>
+                                    </g>
                                   );
                                 }
 

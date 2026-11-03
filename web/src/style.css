@@ -6584,7 +6584,8 @@ button.doks-color-dot.active {
   border: 1px solid rgba(255, 255, 255, 0.16);
   border-radius: 6px;
   overflow: auto;
-  grid-auto-rows: minmax(38px, 1fr);
+  grid-auto-rows: 38px;
+  align-content: start;
   box-sizing: border-box;
 }
 
@@ -6593,8 +6594,8 @@ button.doks-color-dot.active {
   padding: 6px 10px;
   display: flex;
   align-items: center;
+  height: 38px;
   min-height: 38px;
-  height: 100%;
   box-sizing: border-box;
 }
 
