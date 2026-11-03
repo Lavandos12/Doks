@@ -7789,3 +7789,10 @@ html, body, #app, .app-layout {
     display: none !important;
   }
 }
+
+.widget-scale-surface {
+  box-sizing: border-box;
+  overflow: hidden;
+  border-radius: 7px;
+  will-change: transform;
+}

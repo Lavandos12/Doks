@@ -1976,8 +1976,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
     items.splice(idx, 1);
     const newText = serializeChecklistItems(items);
     const map = yNodes.get(node.id);
-    const calculatedHeight = Math.max(160, 85 + items.length * 36);
-    if (map) setNodeProperties(map, { text: newText, h: calculatedHeight });
+    if (map) setNodeProperties(map, { text: newText });
   };
 
   const handleAddChecklistItem = (node: BoardNodeData) => {
@@ -1985,8 +1984,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
     items.push({ id: `item-${items.length}`, text: t('widget.new_task'), done: false });
     const newText = serializeChecklistItems(items);
     const map = yNodes.get(node.id);
-    const calculatedHeight = Math.max(160, 85 + items.length * 36);
-    if (map) setNodeProperties(map, { text: newText, h: calculatedHeight });
+    if (map) setNodeProperties(map, { text: newText });
   };
 
   // Table helpers
@@ -2627,7 +2625,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
 
           // Proportional aspect-ratio resizing for images, circles, and charts on corner handles (Shift toggles freeform)
           const isCorner = handle === 'nw' || handle === 'ne' || handle === 'se' || handle === 'sw';
-          const isProportionalWidget = isImage || isCircle || nodeType === 'chart';
+          const isProportionalWidget = isImage || isCircle || nodeType === 'chart' || nodeType === 'checklist' || nodeType === 'table' || nodeType === 'kanban' || nodeType === 'code';
           const keepProportional = (isProportionalWidget || e.shiftKey) && !(isProportionalWidget && e.shiftKey);
 
           if (keepProportional && isCorner) {
@@ -5528,9 +5526,23 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                   const items = parseChecklistItems(node.text);
                   const doneCount = items.filter((it) => it.done).length;
                   const progressPct = items.length > 0 ? Math.round((doneCount / items.length) * 100) : 0;
+                  const baseW = 280;
+                  const baseH = Math.max(180, 85 + items.length * 36);
+                  const targetW = Math.max(60, node.w - 4);
+                  const targetH = Math.max(40, node.h - 4);
+                  const scale = Math.max(0.2, Math.min(targetW / baseW, targetH / baseH));
+                  const innerW = Math.round(targetW / scale);
+                  const innerH = Math.round(targetH / scale);
                   return (
                     <div
-                      class="node-checklist-card"
+                      class="node-checklist-card widget-scale-surface"
+                      style={{
+                        width: `${innerW}px`,
+                        height: `${innerH}px`,
+                        transform: `scale(${scale})`,
+                        transformOrigin: 'top left',
+                        flex: 'none'
+                      }}
                       onClick={(e) => { if (e.shiftKey || e.ctrlKey || e.metaKey) return; if (!selectedNodeIds.has(node.id)) setSelectedNodeIds(new Set([node.id])); }}
                       onWheel={(e) => {
                         if (!e.ctrlKey && !e.metaKey) e.stopPropagation();
@@ -5621,9 +5633,24 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
               ) : node.type === 'table' ? (
                 (() => {
                   const table = parseTableData(node.text);
+                  const cols = table[0]?.length || 3;
+                  const baseW = Math.max(280, cols * 115);
+                  const baseH = Math.max(140, 50 + table.length * 38);
+                  const targetW = Math.max(60, node.w - 4);
+                  const targetH = Math.max(40, node.h - 4);
+                  const scale = Math.max(0.2, Math.min(targetW / baseW, targetH / baseH));
+                  const innerW = Math.round(targetW / scale);
+                  const innerH = Math.round(targetH / scale);
                   return (
                     <div
-                      class="node-table-wrapper"
+                      class="node-table-wrapper widget-scale-surface"
+                      style={{
+                        width: `${innerW}px`,
+                        height: `${innerH}px`,
+                        transform: `scale(${scale})`,
+                        transformOrigin: 'top left',
+                        flex: 'none'
+                      }}
                       onClick={(e) => { if (e.shiftKey || e.ctrlKey || e.metaKey) return; if (!selectedNodeIds.has(node.id)) setSelectedNodeIds(new Set([node.id])); }}
                       onWheel={(e) => {
                         if (!e.ctrlKey && !e.metaKey) e.stopPropagation();
@@ -5686,9 +5713,23 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
               ) : node.type === 'kanban' ? (
                 (() => {
                   const cards = parseKanbanCards(node.description);
+                  const baseW = 280;
+                  const baseH = Math.max(260, 95 + cards.length * 48);
+                  const targetW = Math.max(60, node.w - 4);
+                  const targetH = Math.max(40, node.h - 4);
+                  const scale = Math.max(0.2, Math.min(targetW / baseW, targetH / baseH));
+                  const innerW = Math.round(targetW / scale);
+                  const innerH = Math.round(targetH / scale);
                   return (
                     <div
-                      class="node-kanban-column"
+                      class="node-kanban-column widget-scale-surface"
+                      style={{
+                        width: `${innerW}px`,
+                        height: `${innerH}px`,
+                        transform: `scale(${scale})`,
+                        transformOrigin: 'top left',
+                        flex: 'none'
+                      }}
                       onClick={(e) => { if (e.shiftKey || e.ctrlKey || e.metaKey) return; if (!selectedNodeIds.has(node.id)) setSelectedNodeIds(new Set([node.id])); }}
                       onWheel={(e) => {
                         if (!e.ctrlKey && !e.metaKey) e.stopPropagation();
@@ -5767,9 +5808,23 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
               ) : node.type === 'code' ? (
                 (() => {
                   const lang = node.codeLanguage || 'typescript';
+                  const baseW = 360;
+                  const baseH = 220;
+                  const targetW = Math.max(60, node.w - 4);
+                  const targetH = Math.max(40, node.h - 4);
+                  const scale = Math.max(0.2, Math.min(targetW / baseW, targetH / baseH));
+                  const innerW = Math.round(targetW / scale);
+                  const innerH = Math.round(targetH / scale);
                   return (
                     <div
-                      class="node-code-block"
+                      class="node-code-block widget-scale-surface"
+                      style={{
+                        width: `${innerW}px`,
+                        height: `${innerH}px`,
+                        transform: `scale(${scale})`,
+                        transformOrigin: 'top left',
+                        flex: 'none'
+                      }}
                       onClick={(e) => { if (e.shiftKey || e.ctrlKey || e.metaKey) return; if (!selectedNodeIds.has(node.id)) setSelectedNodeIds(new Set([node.id])); }}
                       onWheel={(e) => {
                         if (!e.ctrlKey && !e.metaKey) e.stopPropagation();
@@ -5888,9 +5943,24 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                     if (map) setNodeProperties(map, { chartType: mode });
                   };
 
+                  const baseW = 380;
+                  const baseH = 360;
+                  const targetW = Math.max(60, node.w - 4);
+                  const targetH = Math.max(40, node.h - 4);
+                  const scale = Math.max(0.2, Math.min(targetW / baseW, targetH / baseH));
+                  const innerW = Math.round(targetW / scale);
+                  const innerH = Math.round(targetH / scale);
+
                   return (
                     <div
-                      class="node-chart-card"
+                      class="node-chart-card widget-scale-surface"
+                      style={{
+                        width: `${innerW}px`,
+                        height: `${innerH}px`,
+                        transform: `scale(${scale})`,
+                        transformOrigin: 'top left',
+                        flex: 'none'
+                      }}
                       onClick={() => setSelectedNodeIds(new Set([node.id]))}
                       onWheel={(e) => {
                         if (!e.ctrlKey && !e.metaKey) e.stopPropagation();
