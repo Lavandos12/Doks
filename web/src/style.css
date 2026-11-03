@@ -3451,62 +3451,75 @@ input:focus, select:focus, textarea:focus {
 .chart-svg-render {
   width: 100%;
   height: 100%;
-  max-width: none;
-  max-height: none;
+  max-width: 320px;
+  max-height: 320px;
+  aspect-ratio: 1 / 1;
   display: block;
+  margin: auto;
   filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.4));
 }
 
 .chart-data-editor {
-  padding: 8px 12px 12px;
+  padding: 12px 14px;
   border-top: 1px solid rgba(255, 255, 255, 0.08);
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  background: rgba(0, 0, 0, 0.2);
+  gap: 8px;
+  background: rgba(0, 0, 0, 0.25);
 }
 
 .chart-data-row {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
 }
 
 .chart-color-dot {
-  width: 14px;
-  height: 14px;
+  width: 16px;
+  height: 16px;
   border-radius: 50%;
-  border: 1px solid rgba(255, 255, 255, 0.5);
+  border: 1.5px solid rgba(255, 255, 255, 0.6);
   cursor: pointer;
   flex-shrink: 0;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.3);
 }
 
 .chart-row-input {
   background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 4px;
-  padding: 2px 6px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 6px;
+  padding: 5px 8px;
   color: #f1f5f9;
-  font-size: 11px;
+  font-size: 13px !important;
+  font-weight: 500;
   outline: none;
+  transition: all 0.15s ease;
+}
+
+.chart-row-input:focus {
+  border-color: var(--accent, #6366f1);
+  background: rgba(255, 255, 255, 0.1);
 }
 
 .chart-row-input.label {
   flex: 1;
+  min-width: 80px;
 }
 
 .chart-row-input.val {
-  width: 52px;
+  width: 64px;
   text-align: right;
+  font-variant-numeric: tabular-nums;
 }
 
 .chart-pct-badge {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
-  color: #818cf8;
+  color: #94a3b8;
   width: 38px;
   text-align: right;
   flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
 }
 
 .chart-del-btn {

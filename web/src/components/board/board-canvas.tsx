@@ -5845,12 +5845,22 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                         { id: '1', label: `${t('widget.category')} A`, value: 75, color: '#6366f1' },
                         { id: '2', label: `${t('widget.category')} B`, value: 25, color: '#10b981' }
                       ];
-                  const chartPrimaryColor = (nodeColorHex && nodeColorHex !== CANVAS_COLORS.default) ? nodeColorHex : '#6366f1';
+                  const THEME_PALETTES: Record<string, string[]> = {
+                    '1': ['#d97706', '#3b82f6', '#10b981', '#ec4899', '#8b5cf6', '#06b6d4'],
+                    '2': ['#3b82f6', '#10b981', '#f59e0b', '#ec4899', '#8b5cf6', '#06b6d4'],
+                    '3': ['#10b981', '#6366f1', '#f59e0b', '#ec4899', '#06b6d4', '#d97706'],
+                    '4': ['#f43f5e', '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#06b6d4'],
+                    '5': ['#8b5cf6', '#10b981', '#f59e0b', '#3b82f6', '#ec4899', '#06b6d4'],
+                    '6': ['#64748b', '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899']
+                  };
+                  const activePalette = THEME_PALETTES[rawColor] || ['#6366f1', '#10b981', '#f59e0b', '#ec4899', '#3b82f6', '#8b5cf6'];
+                  const chartPrimaryColor = activePalette[0];
                   const themedData = data.map((seg, idx) => {
-                    if (idx === 0 && nodeColorHex && nodeColorHex !== CANVAS_COLORS.default) {
-                      return { ...seg, color: nodeColorHex };
-                    }
-                    return seg;
+                    const fallbackColor = activePalette[idx % activePalette.length];
+                    let segColor = seg.color || fallbackColor;
+                    if (idx === 0) segColor = chartPrimaryColor;
+                    else if (segColor === chartPrimaryColor) segColor = fallbackColor;
+                    return { ...seg, color: segColor };
                   });
                   const total = themedData.reduce((sum, d) => sum + (Math.max(0, Number(d.value)) || 0), 0) || 1;
                   const palette = ['#6366f1', '#10b981', '#f59e0b', '#ec4899', '#3b82f6', '#8b5cf6', '#06b6d4', '#f97316'];
