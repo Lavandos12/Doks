@@ -261,13 +261,23 @@ function renderShapeSvg(node: BoardNodeData, colorHex: string) {
  * Clamps safely between 13px (readable minimum) and 56px to prevent overflow or microscopic text.
  */
 export function calculateAutoFontSize(text: string, w: number, h: number, type?: string): number {
-  if (type === 'sticky') return 15;
   const padW = Math.max(24, w - 28);
   const padH = Math.max(24, h - 24);
   const clean = (text || '').trim();
   const lines = clean ? clean.split('\n') : [''];
   const maxLineLen = Math.max(1, ...lines.map((l) => l.trim().length));
   const lineCount = Math.max(1, lines.length);
+
+  // Sticky notes: scale smoothly with card dimensions while preserving readability
+  if (type === 'sticky') {
+    if (!clean) {
+      return Math.min(Math.max(15, Math.round(h * 0.1)), 36);
+    }
+    const sizeByW = padW / (maxLineLen * 0.62);
+    const sizeByH = padH / (lineCount * 1.4);
+    const ideal = Math.min(sizeByW, sizeByH);
+    return Math.min(Math.max(14, Math.round(ideal)), 48);
+  }
 
   // Short labels / symbols (e.g. '-', 'nn', 'Start', 'Title')
   if (clean.length <= 6 && lineCount === 1) {
@@ -2013,7 +2023,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
     const table = parseTableData(currentText);
     const cols = table[0]?.length || 3;
     table.push(Array(cols).fill(''));
-    const calculatedHeight = Math.max(node.h, 50 + table.length * 40);
+    const calculatedHeight = node.h + 38;
     if (map) setNodeProperties(map, { text: JSON.stringify(table), h: calculatedHeight });
   };
 
@@ -2032,7 +2042,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
     const table = parseTableData(currentText);
     if (table.length > 1) {
       table.pop();
-      const calculatedHeight = Math.max(140, 50 + table.length * 40);
+      const calculatedHeight = Math.max(140, node.h - 38);
       if (map) setNodeProperties(map, { text: JSON.stringify(table), h: calculatedHeight });
     }
   };
@@ -3074,6 +3084,13 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
 
   // Pointer down on canvas background
   const handleBackgroundPointerDown = (e: MouseEvent) => {
+    // Reset active inertia RAF loop on pointer down to eliminate race conditions
+    if (rafIdRef.current !== null) {
+      cancelAnimationFrame(rafIdRef.current);
+      rafIdRef.current = null;
+    }
+    targetViewportRef.current = viewportRef.current;
+
     setContextMenu(null);
     setQuickConnect(null);
     setIsBoardsPopoverOpen(false);
@@ -3087,8 +3104,8 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
         setPanState({
           startX: e.clientX,
           startY: e.clientY,
-          originX: viewport.x,
-          originY: viewport.y,
+          originX: viewportRef.current.x,
+          originY: viewportRef.current.y,
           isRmb: true
         } as any);
         return;
@@ -3096,8 +3113,8 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
       setPanState({
         startX: e.clientX,
         startY: e.clientY,
-        originX: viewport.x,
-        originY: viewport.y
+        originX: viewportRef.current.x,
+        originY: viewportRef.current.y
       });
       return;
     }
@@ -3181,6 +3198,13 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
 
   // Pointer down on node: selection & Frame parenting
   const handleNodePointerDown = (node: BoardNodeData, e: MouseEvent | PointerEvent) => {
+    // Reset active inertia RAF loop on pointer down to eliminate race conditions
+    if (rafIdRef.current !== null) {
+      cancelAnimationFrame(rafIdRef.current);
+      rafIdRef.current = null;
+    }
+    targetViewportRef.current = viewportRef.current;
+
     if (e.button !== 0) return;
     if (dragState) return;
 
@@ -6298,7 +6322,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                   id={`node-textarea-${node.id}`}
                   class="node-inline-textarea"
                   style={{
-                    fontSize: `${node.fontSize || (node.type === 'text' ? calculateAutoFontSize(node.text, node.w, node.h, 'text') : 15)}px`,
+                    fontSize: `${node.fontSize || calculateAutoFontSize(node.text, node.w, node.h, node.type)}px`,
                     pointerEvents: editingNodeId === node.id ? 'auto' : 'none'
                   }}
                   value={node.text}
