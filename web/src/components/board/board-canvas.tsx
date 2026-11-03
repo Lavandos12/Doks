@@ -2615,9 +2615,10 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
             ((nodeMap.get('fileName') as string || '').match(/\.(png|jpe?g|gif|webp)$/i) && !nodeMap.get('extractedText'));
           const isCircle = nodeType === 'shape' && (nodeMap.get('shapeVariant') as string) === 'circle';
 
-          // Proportional aspect-ratio resizing for images and circles on corner handles (Shift toggles freeform)
+          // Proportional aspect-ratio resizing for images, circles, and charts on corner handles (Shift toggles freeform)
           const isCorner = handle === 'nw' || handle === 'ne' || handle === 'se' || handle === 'sw';
-          const keepProportional = (isImage || isCircle || e.shiftKey) && !((isImage || isCircle) && e.shiftKey);
+          const isProportionalWidget = isImage || isCircle || nodeType === 'chart';
+          const keepProportional = (isProportionalWidget || e.shiftKey) && !(isProportionalWidget && e.shiftKey);
 
           if (keepProportional && isCorner) {
             const ratio = (startW > 0 && startH > 0) ? (startW / startH) : 1;
@@ -4226,18 +4227,6 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
 
             {activeFlyout === 'widgets' && (
               <div class="miro-flyout-panel miro-widgets-flyout liquid-glass-surface" style={{ display: 'flex', flexDirection: 'column', gap: '4px', minWidth: '160px', padding: '6px' }}>
-                <button
-                  type="button"
-                  class="miro-flyout-item-btn"
-                  style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 10px', background: 'transparent', border: 'none', color: '#f1f5f9', fontSize: '13px', cursor: 'pointer', borderRadius: '6px', textAlign: 'left' }}
-                  onClick={() => {
-                    setActiveTool('line');
-                    setActiveFlyout('none');
-                  }}
-                >
-                  <Icon name="line" size={16} />
-                  <span>Straight Line (L)</span>
-                </button>
                 <button
                   type="button"
                   class="miro-flyout-item-btn"
@@ -5875,10 +5864,9 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                     if (map) setNodeProperties(map, { chartType: mode });
                   };
 
-                  const isWide = node.w >= 480;
                   return (
                     <div
-                      class={`node-chart-card ${isWide ? 'is-wide-layout' : ''}`}
+                      class="node-chart-card"
                       onClick={() => setSelectedNodeIds(new Set([node.id]))}
                       onWheel={(e) => {
                         if (!e.ctrlKey && !e.metaKey) e.stopPropagation();
@@ -6018,9 +6006,9 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
 
                                 slicePaths.push(<path key={`p-${seg.id}`} d={dPath} fill={seg.color} />);
 
-                                // Calculate label midpoint coordinates
+                                // Slices under 10% are too narrow for inline text; their percentages are displayed in the legend rows
                                 const pct = Math.round(fraction * 100);
-                                if (pct >= 6) {
+                                if (pct >= 10) {
                                   const midAngle = (startAngle + endAngle) / 2;
                                   const labelR = chartType === 'donut' ? (r + rIn) / 2 : r * 0.65;
                                   const lx = cx + labelR * Math.cos(midAngle);
@@ -6031,7 +6019,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                                       x={lx.toFixed(1)}
                                       y={ly.toFixed(1)}
                                       fill="#ffffff"
-                                      fontSize="11"
+                                      fontSize="12"
                                       fontWeight="700"
                                       textAnchor="middle"
                                       dominantBaseline="central"
