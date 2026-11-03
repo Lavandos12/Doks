@@ -1289,6 +1289,16 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
         return;
       }
 
+      // Multi-element delete hotkey: always executes when multiple items are selected
+      if ((matchShortcut(e, 'delete') || matchShortcut(e, 'backspace')) && (selectedNodeIds.size > 1 || selectedEdgeId)) {
+        e.preventDefault();
+        if (document.activeElement instanceof HTMLElement) {
+          document.activeElement.blur();
+        }
+        deleteSelected();
+        return;
+      }
+
       // For all subsequent single-key hotkeys, ignore if user is typing inside an editable field
       if (isEditableElementFocused()) return;
 
@@ -2704,7 +2714,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
 
         const newSelected = new Set<string>();
         for (const n of nodesList) {
-          if (!n.deleted && n.type !== 'drawing' && n.x + n.w >= minX && n.x <= maxX && n.y + n.h >= minY && n.y <= maxY) {
+          if (!n.deleted && n.x + n.w >= minX && n.x <= maxX && n.y + n.h >= minY && n.y <= maxY) {
             newSelected.add(n.id);
           }
         }
@@ -3263,7 +3273,8 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
     if (activeTool !== 'select') return;
 
     let newSelected: Set<string>;
-    if (e.shiftKey) {
+    const isMultiModifier = e.shiftKey || e.ctrlKey || e.metaKey;
+    if (isMultiModifier) {
       newSelected = new Set(selectedNodeIds);
       if (newSelected.has(node.id)) newSelected.delete(node.id);
       else newSelected.add(node.id);
@@ -5502,7 +5513,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                       onDblClick={(e) => {
                         if (editingNodeId === node.id) e.stopPropagation();
                       }}
-                      onFocus={() => setSelectedNodeIds(new Set([node.id]))}
+                      onFocus={() => setSelectedNodeIds((prev) => (prev.size > 1 && prev.has(node.id) ? prev : new Set([node.id])))}
                       onInput={(e) => {
                         const map = yNodes.get(node.id);
                         if (map) {
@@ -5531,7 +5542,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                   return (
                     <div
                       class="node-checklist-card"
-                      onClick={() => setSelectedNodeIds(new Set([node.id]))}
+                      onClick={(e) => { if (e.shiftKey || e.ctrlKey || e.metaKey) return; if (!selectedNodeIds.has(node.id)) setSelectedNodeIds(new Set([node.id])); }}
                       onWheel={(e) => {
                         if (!e.ctrlKey && !e.metaKey) e.stopPropagation();
                       }}
@@ -5623,7 +5634,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                   return (
                     <div
                       class="node-table-wrapper"
-                      onClick={() => setSelectedNodeIds(new Set([node.id]))}
+                      onClick={(e) => { if (e.shiftKey || e.ctrlKey || e.metaKey) return; if (!selectedNodeIds.has(node.id)) setSelectedNodeIds(new Set([node.id])); }}
                       onWheel={(e) => {
                         if (!e.ctrlKey && !e.metaKey) e.stopPropagation();
                       }}
@@ -5679,7 +5690,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                   return (
                     <div
                       class="node-kanban-column"
-                      onClick={() => setSelectedNodeIds(new Set([node.id]))}
+                      onClick={(e) => { if (e.shiftKey || e.ctrlKey || e.metaKey) return; if (!selectedNodeIds.has(node.id)) setSelectedNodeIds(new Set([node.id])); }}
                       onWheel={(e) => {
                         if (!e.ctrlKey && !e.metaKey) e.stopPropagation();
                       }}
@@ -5759,7 +5770,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                   return (
                     <div
                       class="node-code-block"
-                      onClick={() => setSelectedNodeIds(new Set([node.id]))}
+                      onClick={(e) => { if (e.shiftKey || e.ctrlKey || e.metaKey) return; if (!selectedNodeIds.has(node.id)) setSelectedNodeIds(new Set([node.id])); }}
                       onWheel={(e) => {
                         if (!e.ctrlKey && !e.metaKey) e.stopPropagation();
                       }}
@@ -6269,7 +6280,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                   onDblClick={(e) => {
                     if (editingNodeId === node.id) e.stopPropagation();
                   }}
-                  onFocus={() => setSelectedNodeIds(new Set([node.id]))}
+                  onFocus={() => setSelectedNodeIds((prev) => (prev.size > 1 && prev.has(node.id) ? prev : new Set([node.id])))}
                   onInput={(e) => {
                     const map = yNodes.get(node.id);
                     if (map) {
@@ -6617,7 +6628,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                 }}
               >
                 <Icon name="trash" size={14} />
-                <span>{t("context.delete")}</span>
+                <span>{selectedNodeIds.size > 1 ? `${t("context.delete")} (${selectedNodeIds.size})` : t("context.delete")}</span>
               </div>
             </>
           )}
