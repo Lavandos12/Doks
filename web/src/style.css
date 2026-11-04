@@ -2027,16 +2027,20 @@ input:focus, select:focus, textarea:focus {
 /* Node Content Area */
 .frame-label-area {
   padding: 8px 12px;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .frame-label-text {
-  font-size: 1rem;
   font-weight: 700;
   color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
 }
 
 .frame-label-input {
-  font-size: 1rem;
   font-weight: 700;
   color: var(--text-primary);
   background: rgba(0, 0, 0, 0.4);
@@ -2046,6 +2050,7 @@ input:focus, select:focus, textarea:focus {
   outline: none;
   font-family: inherit;
   width: 90%;
+  box-sizing: border-box;
 }
 
 .node-inline-textarea {

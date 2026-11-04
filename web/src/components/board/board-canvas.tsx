@@ -286,6 +286,9 @@ function renderShapeSvg(node: BoardNodeData, colorHex: string) {
  * Clamps safely between 12px and 140px using word-wrap aware iterative binary search.
  */
 export function calculateAutoFontSize(text: string, w: number, h: number, type?: string): number {
+  if (type === 'frame') {
+    return Math.min(Math.max(14, Math.round(Math.min(w, h) * 0.035)), 48);
+  }
   const padW = Math.max(20, w - 24);
   const padH = Math.max(20, h - 24);
   const clean = (text || '').trim();
@@ -340,9 +343,10 @@ interface NoteCardContentProps {
   noteId: string;
   scope: WorkspaceScope;
   fallbackTitle: string;
+  fontSize?: number;
 }
 
-function NoteCardContent({ noteId, scope, fallbackTitle }: NoteCardContentProps) {
+function NoteCardContent({ noteId, scope, fallbackTitle, fontSize }: NoteCardContentProps) {
   const [content, setContent] = useState<string>(() => {
     try {
       const docName = getScopedNoteDocName(scope, noteId);
@@ -382,7 +386,8 @@ function NoteCardContent({ noteId, scope, fallbackTitle }: NoteCardContentProps)
         overflowY: 'auto',
         overflowX: 'hidden',
         userSelect: 'text',
-        boxSizing: 'border-box'
+        boxSizing: 'border-box',
+        fontSize: fontSize ? `${fontSize}px` : undefined
       }}
       onWheel={(e) => {
         if (!e.ctrlKey && !e.metaKey) e.stopPropagation();
@@ -5371,7 +5376,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
           const isImage = node.type === 'image' || ((node.fileName || '').match(/\.(png|jpe?g|gif|webp)$/i) && !node.extractedText);
           const isWidget = node.type === 'table' || node.type === 'kanban' || node.type === 'chart' || node.type === 'checklist';
           const shapeClass = node.type === 'shape' && node.shapeVariant ? `shape-variant-${node.shapeVariant}` : '';
-          const frameFontSize = Math.min(Math.max(14, Math.round(Math.min(node.w, node.h) * 0.035)), 48);
+          const frameFontSize = node.fontSize || Math.min(Math.max(14, Math.round(Math.min(node.w, node.h) * 0.035)), 96);
 
           const stickyBg = isSticky && nodeColorHex !== CANVAS_COLORS.default ? `${nodeColorHex}26` : undefined;
           const borderColor = isFrame
@@ -5523,6 +5528,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                       noteId={node.noteId!}
                       scope={effectiveScope}
                       fallbackTitle={noteMeta?.title || t('notes.untitled')}
+                      fontSize={node.fontSize}
                     />
                   );
                 })()
@@ -6044,7 +6050,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                     <input
                       type="text"
                       class="frame-label-input"
-                      style={{ fontSize: `${frameFontSize}px` }}
+                      style={{ fontSize: `${frameFontSize}px`, lineHeight: 1.2 }}
                       value={node.text}
                       autoFocus
                       placeholder={t('dock.frame')}
@@ -6065,7 +6071,12 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                       onMouseDown={(e) => e.stopPropagation()}
                     />
                   ) : (
-                    <span class="frame-label-text" style={{ fontSize: `${frameFontSize}px` }}>{node.text || t('canvas.frame')}</span>
+                    <span
+                      class="frame-label-text"
+                      style={{ fontSize: `${frameFontSize}px`, lineHeight: 1.2, display: 'inline-block' }}
+                    >
+                      {node.text || t('canvas.frame')}
+                    </span>
                   )}
                 </div>
               ) : node.type === 'shape' ? (
@@ -6488,6 +6499,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                       </div>
                       <textarea
                         class="code-textarea-editor"
+                        style={node.fontSize ? { fontSize: `${node.fontSize}px` } : undefined}
                         value={node.text}
                         readOnly={isViewerMode.value}
                         placeholder={`// ${t('widget.code_placeholder')}`}

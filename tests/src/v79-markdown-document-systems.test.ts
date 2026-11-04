@@ -20,7 +20,7 @@ describe('v79 Markdown Document Systems: Full Content Ingestion, Reactivity & Ca
 
   describe('2. Note Card Reactivity & Subscriptions', () => {
     it('should define NoteCardContent component that subscribes to yText.observe', () => {
-      expect(canvasSrc).toContain('function NoteCardContent({ noteId, scope, fallbackTitle }: NoteCardContentProps)');
+      expect(canvasSrc).toContain('function NoteCardContent(');
       expect(canvasSrc).toContain('yText.observe(updateContent);');
       expect(canvasSrc).toContain('yjsClient.requestSync(docName);');
       expect(canvasSrc).toContain('yText.unobserve(updateContent);');
