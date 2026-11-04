@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import * as Y from 'yjs';
@@ -329,13 +330,14 @@ export class SnapshotManager {
       }
 
       const jsonStr = JSON.stringify(payload);
-      if (jsonStr === this.lastR2UploadedHash) return;
+      const hash = crypto.createHash('sha256').update(jsonStr).digest('hex');
+      if (hash === this.lastR2UploadedHash) return;
 
       const tmpPath = path.join(this.snapshotsDir, 'r2-sync-temp.json');
       fs.writeFileSync(tmpPath, jsonStr, 'utf8');
       const uploaded = await this.r2Storage.uploadFile('doks-latest-snapshot.json', tmpPath);
       if (uploaded) {
-        this.lastR2UploadedHash = jsonStr;
+        this.lastR2UploadedHash = hash;
       }
       try {
         fs.unlinkSync(tmpPath);

@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { exec } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
+import v8 from 'node:v8';
 
 // Clear proxy environment variables so Node never routes 127.0.0.1 or 26.x.x.x via Hiddify / sing-box
 delete process.env.HTTP_PROXY;
@@ -89,7 +90,9 @@ Options:
 
   agent.start().then(() => {
     const port = agent.config.webPort;
-    console.log(`[Doks Server] Collaborative Canvas listening on http://0.0.0.0:${port}`);
+    const heapLimitMb = Math.round(v8.getHeapStatistics().heap_size_limit / (1024 * 1024));
+    const hasGc = typeof (global as any).gc === 'function';
+    console.log(`[Doks Server] Collaborative Canvas listening on http://0.0.0.0:${port} (Heap Limit: ${heapLimitMb} MB, GC: ${hasGc ? 'Active' : 'Default'})`);
     if (openBrowser) {
       const localUrl = `http://127.0.0.1:${port}`;
       const openCmd = process.platform === 'win32' ? 'start' : process.platform === 'darwin' ? 'open' : 'xdg-open';

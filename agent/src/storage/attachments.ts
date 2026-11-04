@@ -66,17 +66,21 @@ const MIME_TYPES: Record<string, string> = {
 export class AttachmentManager {
   private attachmentsDir: string;
   private blobsDir: string;
+  private extractedDir: string;
   private metadataPath: string;
   private metadata = new Map<string, AttachmentMetadataRecord>();
+  private extractedCache = new Map<string, string>();
   private incomingChunks = new Map<string, { totalChunks: number; chunks: Map<number, Buffer>; originalName: string; lastActivity: number }>();
 
   constructor(vaultPath: string, blobsDir?: string) {
     this.attachmentsDir = path.join(vaultPath, 'attachments');
     this.blobsDir = blobsDir || path.join(path.dirname(vaultPath), '.doks', 'blobs');
+    this.extractedDir = path.join(path.dirname(this.blobsDir), 'extracted');
     this.metadataPath = path.join(path.dirname(this.blobsDir), 'attachments-meta.json');
 
     fs.mkdirSync(this.attachmentsDir, { recursive: true });
     fs.mkdirSync(this.blobsDir, { recursive: true });
+    fs.mkdirSync(this.extractedDir, { recursive: true });
 
     this.loadMetadata();
   }
@@ -87,6 +91,15 @@ export class AttachmentManager {
         const raw = fs.readFileSync(this.metadataPath, 'utf8');
         const list: AttachmentMetadataRecord[] = JSON.parse(raw);
         for (const item of list) {
+          if (item.extractedText) {
+            try {
+              const textPath = path.join(this.extractedDir, `${item.id}.txt`);
+              if (!fs.existsSync(textPath)) {
+                fs.writeFileSync(textPath, item.extractedText, 'utf8');
+              }
+            } catch {}
+            delete item.extractedText;
+          }
           this.metadata.set(item.id, item);
         }
       } catch {}
@@ -95,9 +108,32 @@ export class AttachmentManager {
 
   private saveMetadata(): void {
     try {
-      const list = Array.from(this.metadata.values());
+      const list = Array.from(this.metadata.values()).map(({ extractedText: _, ...rest }) => rest);
       fs.writeFileSync(this.metadataPath, JSON.stringify(list, null, 2), 'utf8');
     } catch {}
+  }
+
+  public getExtractedText(hash: string): string | undefined {
+    if (this.extractedCache.has(hash)) {
+      return this.extractedCache.get(hash);
+    }
+    const extractedFile = path.join(this.extractedDir, `${hash}.txt`);
+    if (fs.existsSync(extractedFile)) {
+      try {
+        const text = fs.readFileSync(extractedFile, 'utf8');
+        this.cacheExtractedText(hash, text);
+        return text;
+      } catch {}
+    }
+    return undefined;
+  }
+
+  private cacheExtractedText(hash: string, text: string): void {
+    if (this.extractedCache.size >= 25) {
+      const firstKey = this.extractedCache.keys().next().value;
+      if (firstKey) this.extractedCache.delete(firstKey);
+    }
+    this.extractedCache.set(hash, text);
   }
 
   public getAttachmentsDir(): string {
@@ -206,7 +242,15 @@ export class AttachmentManager {
       } catch {}
     }
 
-    // 4. Save metadata record
+    // 4. Save extracted text to disk and cache
+    if (extractedText) {
+      try {
+        fs.writeFileSync(path.join(this.extractedDir, `${hash}.txt`), extractedText, 'utf8');
+        this.cacheExtractedText(hash, extractedText);
+      } catch {}
+    }
+
+    // 5. Save metadata record (extractedText is kept on disk to save heap memory)
     const metaRecord: AttachmentMetadataRecord = {
       id: hash,
       originalName,
@@ -214,8 +258,7 @@ export class AttachmentManager {
       size: buffer.length,
       createdAt: Date.now(),
       fileName: candidateName,
-      humanReadableName,
-      extractedText
+      humanReadableName
     };
     this.metadata.set(hash, metaRecord);
     this.saveMetadata();
@@ -234,8 +277,10 @@ export class AttachmentManager {
   public updateExtractedText(hash: string, text: string): void {
     const record = this.metadata.get(hash);
     if (record) {
-      record.extractedText = text;
-      this.saveMetadata();
+      try {
+        fs.writeFileSync(path.join(this.extractedDir, `${hash}.txt`), text, 'utf8');
+      } catch {}
+      this.cacheExtractedText(hash, text);
     }
   }
 
@@ -264,7 +309,7 @@ export class AttachmentManager {
           size: record.size,
           filePath: blobPath,
           mimeType: record.mimeType,
-          extractedText: record.extractedText
+          extractedText: this.getExtractedText(record.id)
         };
       }
     }

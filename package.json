@@ -36,7 +36,7 @@
     "build": "npm run build --workspace=shared && npm run build --workspace=web && npm run build --workspace=agent",
     "build:protected": "node scripts/build-protected.mjs",
     "pack:release": "node scripts/build-protected.mjs",
-    "start": "node release/doks-server.cjs",
+    "start": "node --max-old-space-size=384 --expose-gc release/doks-server.cjs",
     "dev": "npm run dev:web",
     "dev:agent": "npm run dev --workspace=agent",
     "dev:web": "npm run dev --workspace=web",

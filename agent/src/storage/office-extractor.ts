@@ -58,7 +58,7 @@ function readZipEntry(buf: Buffer, matcher: (filename: string) => boolean): stri
         const slice = buf.subarray(dataStart, dataStart + compSize);
         const raw =
           method === 8
-            ? zlib.inflateRawSync(slice, { maxOutputLength: 20 * 1024 * 1024 })
+            ? zlib.inflateRawSync(slice, { maxOutputLength: 8 * 1024 * 1024 })
             : slice;
         results.push(raw.toString('utf8'));
       }
@@ -115,7 +115,7 @@ function readZipEntriesMap(buf: Buffer, matcher: (filename: string) => boolean):
           const slice = buf.subarray(dataStart, dataStart + compSize);
           const raw =
             method === 8
-              ? zlib.inflateRawSync(slice, { maxOutputLength: 20 * 1024 * 1024 })
+              ? zlib.inflateRawSync(slice, { maxOutputLength: 8 * 1024 * 1024 })
               : slice;
           map.set(name, raw.toString('utf8'));
         } catch {
@@ -147,8 +147,9 @@ function colLetterToIndex(colStr: string): number {
  * cells from Excel .xlsx files and serializes as a multi-sheet workbook JSON payload.
  */
 export function extractTextFromXlsx(buf: Buffer): string {
+  let entries: Map<string, string> | undefined;
   try {
-    const entries = readZipEntriesMap(buf, (name) =>
+    entries = readZipEntriesMap(buf, (name) =>
       name.includes('workbook.xml') ||
       name.includes('sharedStrings.xml') ||
       name.includes('worksheets/sheet')
@@ -295,10 +296,13 @@ export function extractTextFromXlsx(buf: Buffer): string {
     }
 
     if (workbookResult.length > 0) {
+      entries.clear();
       return JSON.stringify({ type: 'workbook', sheets: workbookResult });
     }
   } catch (err) {
     console.error('[OfficeExtractor] XLSX workbook extraction failed:', err);
+  } finally {
+    try { entries?.clear(); } catch {}
   }
   return '';
 }

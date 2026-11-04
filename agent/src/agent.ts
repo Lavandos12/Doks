@@ -23,6 +23,7 @@ export class Agent {
   public r2Storage: R2Storage;
   public peerService: PeerService;
   public httpServer: AgentHttpServer;
+  private memoryGovernorInterval?: NodeJS.Timeout;
 
   constructor(options: ConfigOptions = {}) {
     this.config = loadOrCreateConfig(options);
@@ -45,6 +46,34 @@ export class Agent {
       snapshotManager: this.snapshotManager,
       attachmentManager: this.attachmentManager
     });
+
+    // Proactive memory governor for cloud deployments (Render 512MB threshold)
+    this.memoryGovernorInterval = setInterval(() => {
+      this.checkMemoryHealth();
+    }, 30000);
+    if (this.memoryGovernorInterval.unref) {
+      this.memoryGovernorInterval.unref();
+    }
+  }
+
+  public checkMemoryHealth(): { heapUsedMb: number; rssMb: number; gcTriggered: boolean } {
+    const mem = process.memoryUsage();
+    const heapUsedMb = Math.round(mem.heapUsed / (1024 * 1024));
+    const rssMb = Math.round(mem.rss / (1024 * 1024));
+    let gcTriggered = false;
+
+    // Trigger GC if heap exceeds 180MB or RSS exceeds 320MB (staying safely below 512MB Render free tier)
+    if (heapUsedMb > 180 || rssMb > 320) {
+      if (typeof (global as any).gc === 'function') {
+        (global as any).gc();
+        gcTriggered = true;
+        const afterMem = process.memoryUsage();
+        const afterHeap = Math.round(afterMem.heapUsed / (1024 * 1024));
+        const afterRss = Math.round(afterMem.rss / (1024 * 1024));
+        console.log(`[MemoryGovernor] Cleaned memory: Heap ${heapUsedMb}MB -> ${afterHeap}MB, RSS ${rssMb}MB -> ${afterRss}MB`);
+      }
+    }
+    return { heapUsedMb, rssMb, gcTriggered };
   }
 
   public async start(): Promise<void> {
@@ -76,6 +105,10 @@ export class Agent {
   }
 
   public async stop(): Promise<void> {
+    if (this.memoryGovernorInterval) {
+      clearInterval(this.memoryGovernorInterval);
+      this.memoryGovernorInterval = undefined;
+    }
     try {
       this.httpServer.getBridgeService().disableBridge();
     } catch {}

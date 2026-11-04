@@ -27,7 +27,8 @@ WORKDIR /app
 ENV NODE_ENV=production \
     DOKS_HOST=0.0.0.0 \
     PORT=4780 \
-    DOKS_DATA_DIR=/app/data
+    DOKS_DATA_DIR=/app/data \
+    NODE_OPTIONS="--max-old-space-size=384 --expose-gc"
 
 # Create directory for persistent vault and board data
 RUN mkdir -p /app/data

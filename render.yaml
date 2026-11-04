@@ -12,3 +12,5 @@ services:
         value: 0.0.0.0
       - key: DOKS_DATA_DIR
         value: /app/data
+      - key: NODE_OPTIONS
+        value: "--max-old-space-size=384 --expose-gc"

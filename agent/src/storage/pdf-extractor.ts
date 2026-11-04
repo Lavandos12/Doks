@@ -27,6 +27,9 @@ function decodePdfLiteral(raw: string): string {
  */
 export function extractTextFromPdfBuffer(buf: Buffer): string {
   try {
+    if (buf.length > 25 * 1024 * 1024) {
+      return `PDF Document (${(buf.length / (1024 * 1024)).toFixed(1)} MB)`;
+    }
     const rawStr = buf.toString('binary');
 
     // 1. Estimate page count from PDF catalog
@@ -39,16 +42,19 @@ export function extractTextFromPdfBuffer(buf: Buffer): string {
     const streamRegex = /stream\r?\n([\s\S]*?)\r?\nendstream/g;
     let match: RegExpExecArray | null;
 
+    let streamCount = 0;
     while ((match = streamRegex.exec(rawStr)) !== null) {
+      streamCount++;
+      if (streamCount > 100) break;
       const streamBinary = Buffer.from(match[1], 'binary');
       let decompressed = '';
 
       // Try zlib inflate
       try {
-        decompressed = zlib.inflateSync(streamBinary, { maxOutputLength: 15 * 1024 * 1024 }).toString('utf8');
+        decompressed = zlib.inflateSync(streamBinary, { maxOutputLength: 4 * 1024 * 1024 }).toString('utf8');
       } catch {
         try {
-          decompressed = zlib.inflateRawSync(streamBinary, { maxOutputLength: 15 * 1024 * 1024 }).toString('utf8');
+          decompressed = zlib.inflateRawSync(streamBinary, { maxOutputLength: 4 * 1024 * 1024 }).toString('utf8');
         } catch {
           // If not compressed, use as raw utf8/latin1
           decompressed = streamBinary.toString('utf8');
@@ -86,7 +92,8 @@ export function extractTextFromPdfBuffer(buf: Buffer): string {
 
     // 4. Fallback if no streams contained Tj/TJ: scan for printable UTF-8/ASCII strings in buffer
     if (textPieces.length === 0) {
-      const asciiMatches = rawStr.match(/[A-Za-zА-Яа-я0-9\s.,!?:;()\-–—]{6,}/g);
+      const sample = rawStr.slice(0, 512 * 1024);
+      const asciiMatches = sample.match(/[A-Za-zА-Яа-я0-9\s.,!?:;()\-–—]{6,}/g);
       if (asciiMatches && asciiMatches.length > 0) {
         return asciiMatches
           .map((s) => s.trim())
