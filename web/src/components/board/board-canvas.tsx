@@ -539,7 +539,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
   const [cursorScreenPos, setCursorScreenPos] = useState<{ x: number; y: number } | null>(null);
 
   // Miro Floating Dock & Islands state
-  const [activeFlyout, setActiveFlyout] = useState<'none' | 'sticky' | 'shape' | 'arrow' | 'draw' | 'widgets' | 'docs'>('none');
+  const [activeFlyout, setActiveFlyout] = useState<'none' | 'sticky' | 'shape' | 'arrow' | 'draw' | 'widgets'>('none');
   const [isBoardsPopoverOpen, setIsBoardsPopoverOpen] = useState(false);
   const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
   // network popover centralized in App
@@ -1554,7 +1554,6 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
         if (e.code === 'KeyK') setActiveTool('checklist');
         if (e.code === 'KeyG') setActiveTool('table');
         if (e.code === 'KeyB') setActiveTool('kanban');
-        if (e.code === 'KeyD') setActiveFlyout((prev) => (prev === 'docs' ? 'none' : 'docs'));
         if (e.code === 'KeyL') setActiveTool('line');
         if (e.code === 'KeyM') setIsAutoDiagramModalOpen(true);
         if (e.code === 'KeyI' || e.code === 'KeyU') fileAttachmentInputRef.current?.click();
@@ -2098,172 +2097,6 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
     } catch (err) {
       console.error('Workbook cell edit failed:', err);
     }
-  };
-
-  // Creation helpers for Documents & Sheets
-  const createNewCanvasSpreadsheet = () => {
-    const id = crypto.randomUUID();
-    const cx = (window.innerWidth / 2 - viewport.x) / viewport.zoom;
-    const cy = (window.innerHeight / 2 - viewport.y) / viewport.zoom;
-    const w = 580;
-    const h = 340;
-
-    const initialWorkbook = {
-      type: 'workbook',
-      sheets: [
-        {
-          name: 'Sheet 1',
-          data: [
-            ['Item', 'Description', 'Quantity', 'Price', 'Status'],
-            ['Project Alpha', 'Design system tokens', '1', '$1,200', 'Active'],
-            ['Project Beta', 'Infinite canvas engine', '2', '$3,400', 'In Review'],
-            ['Project Gamma', 'CRDT sync pipelines', '1', '$2,800', 'Done'],
-            ['', '', '', '', '']
-          ]
-        },
-        {
-          name: 'Sheet 2',
-          data: [
-            ['Metric', 'Target', 'Actual', 'Variance'],
-            ['FPS', '120', '120', '0'],
-            ['Sync Latency', '< 15ms', '8ms', '-7ms']
-          ]
-        }
-      ]
-    };
-
-    const nodeMap = new Y.Map();
-    boardDoc.transact(() => {
-      yNodes.set(id, nodeMap);
-      setNodeProperties(nodeMap, {
-        id,
-        type: 'file',
-        x: Math.round(cx - w / 2),
-        y: Math.round(cy - h / 2),
-        w,
-        h,
-        text: 'Spreadsheet.xlsx',
-        fileName: 'Spreadsheet.xlsx',
-        extractedText: JSON.stringify(initialWorkbook),
-        showPreview: true,
-        author: effectiveScope === 'team' ? (agentStatus.value?.memberName || '') : '',
-        done: false,
-        z: 2,
-        deleted: false,
-        locked: false
-      });
-    }, 'user');
-
-    setSelectedNodeIds(new Set([id]));
-    setActiveTool('select');
-    showToast('Created New Spreadsheet (Excel)', 'success');
-  };
-
-  const createNewCanvasDoc = () => {
-    const id = crypto.randomUUID();
-    const cx = (window.innerWidth / 2 - viewport.x) / viewport.zoom;
-    const cy = (window.innerHeight / 2 - viewport.y) / viewport.zoom;
-    const w = 440;
-    const h = 560;
-
-    const initialDoc = `# Project Specification
-
-## 1. Overview
-High-performance local-first infinite canvas for collaborative product architecture.
-
-## 2. Key Objectives
-- **Zero-Latency CRDTs:** Peer-to-peer state replication powered by Yjs.
-- **Vector Surface Scaling:** Responsive typography and layout primitives.
-- **Embedded Documents:** Native multi-sheet spreadsheets and vector PDF sheets.
-
-## 3. Action Items
-- [ ] Review sprint deliverables
-- [ ] Verify 120 FPS canvas kinematics
-- [ ] Validate OpenXML multi-sheet stream parser
-`;
-
-    const nodeMap = new Y.Map();
-    boardDoc.transact(() => {
-      yNodes.set(id, nodeMap);
-      setNodeProperties(nodeMap, {
-        id,
-        type: 'file',
-        x: Math.round(cx - w / 2),
-        y: Math.round(cy - h / 2),
-        w,
-        h,
-        text: 'Document.docx',
-        fileName: 'Document.docx',
-        extractedText: initialDoc,
-        showPreview: true,
-        author: effectiveScope === 'team' ? (agentStatus.value?.memberName || '') : '',
-        done: false,
-        z: 2,
-        deleted: false,
-        locked: false
-      });
-    }, 'user');
-
-    setSelectedNodeIds(new Set([id]));
-    setActiveTool('select');
-    showToast('Created New Document (Word)', 'success');
-  };
-
-  const createNewCanvasPdfPage = () => {
-    const id = crypto.randomUUID();
-    const cx = (window.innerWidth / 2 - viewport.x) / viewport.zoom;
-    const cy = (window.innerHeight / 2 - viewport.y) / viewport.zoom;
-    const w = 480;
-    const h = 680;
-
-    const initialPdf = `# Executive Summary (A4 Document)
-
----
-
-### Project Architecture & Status
-
-**Document ID:** DOC-${Math.floor(1000 + Math.random() * 9000)}  
-**Classification:** Confidential / Team Internal  
-**Scope:** Architecture Review
-
----
-
-#### Key Metrics
-| Milestone | Status | Target Date |
-| :--- | :---: | :--- |
-| Core Canvas Engine | Complete | Q1 |
-| Yjs P2P Sync | Complete | Q2 |
-| Multi-Sheet Excel Parser | Active | Q3 |
-| Production Hardening | In Progress | Q4 |
-
-> Note: All canvas nodes and vector paths are synchronised via local-first CRDTs with cryptographic peer handshakes.
-`;
-
-    const nodeMap = new Y.Map();
-    boardDoc.transact(() => {
-      yNodes.set(id, nodeMap);
-      setNodeProperties(nodeMap, {
-        id,
-        type: 'file',
-        x: Math.round(cx - w / 2),
-        y: Math.round(cy - h / 2),
-        w,
-        h,
-        text: 'Page.pdf',
-        fileName: 'Page.pdf',
-        extractedText: initialPdf,
-        showPreview: true,
-        author: effectiveScope === 'team' ? (agentStatus.value?.memberName || '') : '',
-        done: false,
-        z: 2,
-        deleted: false,
-        locked: false
-      });
-    }, 'user');
-
-    setSelectedNodeIds(new Set([id]));
-    setActiveTool('select');
-    showToast('Created New Page (PDF A4)', 'success');
   };
 
   // Checklist helpers
@@ -4684,61 +4517,6 @@ High-performance local-first infinite canvas for collaborative product architect
                 >
                   <Icon name="chart" size={16} />
                   <span>{t('dock.chart')}</span>
-                </button>
-              </div>
-            )}
-          </div>
-
-          {/* Documents & Sheets Tool (D) */}
-          <div class="miro-dock-tool-wrapper">
-            <button
-              class={`miro-dock-btn ${activeFlyout === 'docs' ? 'active' : ''}`}
-              data-tool="docs"
-              onClick={() => {
-                setActiveFlyout(activeFlyout === 'docs' ? 'none' : 'docs');
-              }}
-              title="Documents & Sheets (D)"
-            >
-              <Icon name="file-plus" size={20} />
-            </button>
-
-            {activeFlyout === 'docs' && (
-              <div class="miro-flyout-panel liquid-glass-surface" style={{ display: 'flex', flexDirection: 'column', gap: '4px', minWidth: '200px', padding: '6px' }}>
-                <button
-                  type="button"
-                  class="miro-flyout-item-btn"
-                  style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 10px', background: 'transparent', border: 'none', color: '#f1f5f9', fontSize: '13px', cursor: 'pointer', borderRadius: '6px', textAlign: 'left' }}
-                  onClick={() => {
-                    createNewCanvasSpreadsheet();
-                    setActiveFlyout('none');
-                  }}
-                >
-                  <Icon name="table" size={16} />
-                  <span>New Spreadsheet (Excel)</span>
-                </button>
-                <button
-                  type="button"
-                  class="miro-flyout-item-btn"
-                  style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 10px', background: 'transparent', border: 'none', color: '#f1f5f9', fontSize: '13px', cursor: 'pointer', borderRadius: '6px', textAlign: 'left' }}
-                  onClick={() => {
-                    createNewCanvasDoc();
-                    setActiveFlyout('none');
-                  }}
-                >
-                  <Icon name="file-text" size={16} />
-                  <span>New Document (Word)</span>
-                </button>
-                <button
-                  type="button"
-                  class="miro-flyout-item-btn"
-                  style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 10px', background: 'transparent', border: 'none', color: '#f1f5f9', fontSize: '13px', cursor: 'pointer', borderRadius: '6px', textAlign: 'left' }}
-                  onClick={() => {
-                    createNewCanvasPdfPage();
-                    setActiveFlyout('none');
-                  }}
-                >
-                  <Icon name="layout-canvas" size={16} />
-                  <span>New Page (PDF A4)</span>
                 </button>
               </div>
             )}

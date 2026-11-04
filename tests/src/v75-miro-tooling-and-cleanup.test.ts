@@ -72,47 +72,16 @@ describe('v75 Miro-Grade Tooling & Cleanup: Align Toolbar Purge, Inline Cell Edi
     });
   });
 
-  describe('4. Documents & Sheets Creation Tool in Left Dock', () => {
-    it('should include file-plus icon in Icons.tsx', () => {
+  describe('4. Documents & Sheets Handling (Natural Import Pipeline)', () => {
+    it('should include file-plus icon in Icons.tsx for asset representation', () => {
       expect(iconsSrc).toContain("'file-plus'");
       expect(iconsSrc).toContain("case 'file-plus':");
     });
 
-    it('should include docs in activeFlyout union and render tool in dock', () => {
-      expect(canvasSrc).toContain("const [activeFlyout, setActiveFlyout] = useState<'none' | 'sticky' | 'shape' | 'arrow' | 'draw' | 'widgets' | 'docs'>('none');");
-      expect(canvasSrc).toContain('data-tool="docs"');
-      expect(canvasSrc).toContain('title="Documents & Sheets (D)"');
-    });
-
-    it('should bind shortcut KeyD to toggle docs flyout', () => {
-      expect(canvasSrc).toContain("if (e.code === 'KeyD') setActiveFlyout((prev) => (prev === 'docs' ? 'none' : 'docs'));");
-    });
-
-    it('should provide flyout buttons for New Spreadsheet, New Document, and New Page', () => {
-      expect(canvasSrc).toContain('<span>New Spreadsheet (Excel)</span>');
-      expect(canvasSrc).toContain('<span>New Document (Word)</span>');
-      expect(canvasSrc).toContain('<span>New Page (PDF A4)</span>');
-    });
-
-    it('should implement createNewCanvasSpreadsheet, createNewCanvasDoc, and createNewCanvasPdfPage', () => {
-      expect(canvasSrc).toContain('const createNewCanvasSpreadsheet = () => {');
-      expect(canvasSrc).toContain('const createNewCanvasDoc = () => {');
-      expect(canvasSrc).toContain('const createNewCanvasPdfPage = () => {');
-
-      // Check spreadsheet dimensions and default sheets
-      expect(canvasSrc).toContain("fileName: 'Spreadsheet.xlsx'");
-      expect(canvasSrc).toContain("const w = 580;");
-      expect(canvasSrc).toContain("const h = 340;");
-
-      // Check doc dimensions
-      expect(canvasSrc).toContain("fileName: 'Document.docx'");
-      expect(canvasSrc).toContain("const w = 440;");
-      expect(canvasSrc).toContain("const h = 560;");
-
-      // Check A4 page dimensions
-      expect(canvasSrc).toContain("fileName: 'Page.pdf'");
-      expect(canvasSrc).toContain("const w = 480;");
-      expect(canvasSrc).toContain("const h = 680;");
+    it('should support multi-sheet and document previews via native file import', () => {
+      expect(canvasSrc).toContain('node.type === \'file\'');
+      expect(canvasSrc).toContain('class="excel-workbook-container"');
+      expect(canvasSrc).toContain('class="excel-sheet-tabs-bar"');
     });
   });
 });
