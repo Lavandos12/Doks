@@ -336,6 +336,64 @@ const getSafeAttachmentUrl = (url?: string, hash?: string): string | undefined =
   return undefined;
 };
 
+interface NoteCardContentProps {
+  noteId: string;
+  scope: WorkspaceScope;
+  fallbackTitle: string;
+}
+
+function NoteCardContent({ noteId, scope, fallbackTitle }: NoteCardContentProps) {
+  const [content, setContent] = useState<string>(() => {
+    try {
+      const docName = getScopedNoteDocName(scope, noteId);
+      const noteDoc = yjsClient.getDoc(docName);
+      if (noteDoc) {
+        return noteDoc.getText('text').toString();
+      }
+    } catch {}
+    return '';
+  });
+
+  useEffect(() => {
+    const docName = getScopedNoteDocName(scope, noteId);
+    const noteDoc = yjsClient.getOrCreateDoc(docName);
+    const yText = noteDoc.getText('text');
+
+    const updateContent = () => {
+      setContent(yText.toString());
+    };
+
+    updateContent();
+    yText.observe(updateContent);
+    yjsClient.requestSync(docName);
+
+    return () => {
+      yText.unobserve(updateContent);
+    };
+  }, [noteId, scope]);
+
+  return (
+    <div
+      class="note-card-content-view scrollable-card-content markdown-body"
+      style={{
+        padding: '10px 14px',
+        height: '100%',
+        width: '100%',
+        overflowY: 'auto',
+        overflowX: 'hidden',
+        userSelect: 'text',
+        boxSizing: 'border-box'
+      }}
+      onWheel={(e) => {
+        if (!e.ctrlKey && !e.metaKey) e.stopPropagation();
+      }}
+      onMouseDown={(e) => e.stopPropagation()}
+    >
+      <MarkdownPreview content={content || `# ${fallbackTitle}`} />
+    </div>
+  );
+}
+
 export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, scopeOverride }: BoardCanvasProps) {
   const effectiveScope: WorkspaceScope = scopeOverride || currentScope.value;
   const containerRef = useRef<HTMLDivElement>(null);
@@ -1189,17 +1247,40 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
 
   const onCreateNoteAndCard = useCallback(
     async (title: string, markdown: string, x: number, y: number) => {
-      const noteId = createNote(title, null);
+      let existingNoteId: string | null = null;
+      maps.notes.forEach((meta, id) => {
+        if (!meta.deleted && meta.title === title) {
+          existingNoteId = id;
+        }
+      });
+
+      const noteId = existingNoteId || createNote(title, null);
       const noteDoc = yjsClient.getOrCreateDoc(getScopedNoteDocName(effectiveScope, noteId));
       const yText = noteDoc.getText('text');
       if (markdown) {
-        boardDoc.transact(() => {
-          yText.delete(0, yText.length);
+        noteDoc.transact(() => {
+          if (yText.length > 0) {
+            yText.delete(0, yText.length);
+          }
           yText.insert(0, markdown);
         });
       }
-      createNoteCardAt(noteId, x, y);
-      showToast(`${t('toast.note_created')}: "${title}"`);
+
+      let existingCardId: string | null = null;
+      yNodes.forEach((nodeMap, id) => {
+        if (!nodeMap.get('deleted') && nodeMap.get('type') === 'note' && nodeMap.get('noteId') === noteId) {
+          existingCardId = id;
+        }
+      });
+
+      if (existingCardId) {
+        setSelectedNodeIds(new Set([existingCardId]));
+        setActiveTool('select');
+        showToast(`${t('toast.note_created')}: "${title}"`);
+      } else {
+        createNoteCardAt(noteId, x, y);
+        showToast(`${t('toast.note_created')}: "${title}"`);
+      }
     },
     [effectiveScope, viewport]
   );
@@ -2052,8 +2133,8 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
         type: 'note',
         x: Math.round(x),
         y: Math.round(y),
-        w: 380,
-        h: 360,
+        w: 420,
+        h: 540,
         noteId,
         text: '',
         color: 'default',
@@ -5437,22 +5518,12 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                     );
                   }
 
-                  const noteDoc = yjsClient.getOrCreateDoc(getScopedNoteDocName(effectiveScope, node.noteId!));
-                  const noteYText = noteDoc.getText('text');
-                  const noteContent = noteYText.toString();
-
-                  // Render live interactive markdown preview directly in card
                   return (
-                    <div
-                      class="note-card-content-view scrollable-card-content markdown-body"
-                      style={{ padding: '8px 12px', userSelect: 'text' }}
-                      onWheel={(e) => {
-                        if (!e.ctrlKey && !e.metaKey) e.stopPropagation();
-                      }}
-                      onMouseDown={(e) => e.stopPropagation()}
-                    >
-                      <MarkdownPreview content={noteContent || `# ${noteMeta?.title || t('notes.untitled')}`} />
-                    </div>
+                    <NoteCardContent
+                      noteId={node.noteId!}
+                      scope={effectiveScope}
+                      fallbackTitle={noteMeta?.title || t('notes.untitled')}
+                    />
                   );
                 })()
               ) : isImage ? (
