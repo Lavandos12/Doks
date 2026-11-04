@@ -6928,34 +6928,93 @@ button.doks-color-dot.active {
 
 /* Responsive Widget Height & Scroll Container Expansion */
 .node-checklist-card {
+  width: 100% !important;
   height: 100% !important;
   display: flex !important;
   flex-direction: column !important;
+  box-sizing: border-box !important;
+  overflow: hidden !important;
 }
 .node-checklist-card .checklist-items-scroll {
-  flex: 1 !important;
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
   overflow-y: auto !important;
   max-height: none !important;
 }
+.node-checklist-card .checklist-add-row-btn {
+  flex: 0 0 auto !important;
+  flex-shrink: 0 !important;
+  margin-top: auto !important;
+}
 
 .node-kanban-column {
+  width: 100% !important;
   height: 100% !important;
   display: flex !important;
   flex-direction: column !important;
+  box-sizing: border-box !important;
+  overflow: hidden !important;
 }
 .node-kanban-column .kanban-cards-area {
-  flex: 1 !important;
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
   overflow-y: auto !important;
+}
+.node-kanban-column .kanban-add-card-btn {
+  flex: 0 0 auto !important;
+  flex-shrink: 0 !important;
+  margin-top: auto !important;
 }
 
 .node-table-wrapper {
+  width: 100% !important;
   height: 100% !important;
   display: flex !important;
   flex-direction: column !important;
+  box-sizing: border-box !important;
+  overflow: hidden !important;
 }
 .node-table-wrapper .node-table-grid {
-  flex: 1 !important;
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
   overflow: auto !important;
+}
+
+.node-code-block {
+  width: 100% !important;
+  height: 100% !important;
+  display: flex !important;
+  flex-direction: column !important;
+  box-sizing: border-box !important;
+  overflow: hidden !important;
+}
+.node-code-block .code-textarea-editor {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  resize: none !important;
+  box-sizing: border-box !important;
+  overflow: auto !important;
+}
+
+.node-chart-card {
+  width: 100% !important;
+  height: 100% !important;
+  display: flex !important;
+  flex-direction: column !important;
+  box-sizing: border-box !important;
+  overflow: hidden !important;
+}
+.node-chart-card .chart-visual-area {
+  flex: 1 1 auto !important;
+  min-height: 80px !important;
+  overflow: hidden !important;
+}
+.node-chart-card .chart-data-editor {
+  flex: 0 0 auto !important;
+  max-height: 140px !important;
+  overflow-y: auto !important;
 }
 
 /* Smart Alignment Guide Styles (Cyan & Magenta Dash, Crosses and Badges) */

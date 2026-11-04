@@ -2920,7 +2920,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
 
           // Proportional aspect-ratio resizing for images, circles, and charts on corner handles (Shift toggles freeform)
           const isCorner = handle === 'nw' || handle === 'ne' || handle === 'se' || handle === 'sw';
-          const isProportionalWidget = isImage || isCircle || nodeType === 'chart' || nodeType === 'checklist' || nodeType === 'table' || nodeType === 'kanban' || nodeType === 'code' || nodeType === 'text';
+          const isProportionalWidget = isImage || isCircle;
           const keepProportional = (isProportionalWidget || e.shiftKey) && !(isProportionalWidget && e.shiftKey);
 
           if (keepProportional && isCorner) {
@@ -6152,22 +6152,16 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                   const items = parseChecklistItems(node.text);
                   const doneCount = items.filter((it) => it.done).length;
                   const progressPct = items.length > 0 ? Math.round((doneCount / items.length) * 100) : 0;
-                  const baseW = 280;
-                  const baseH = Math.max(180, 85 + items.length * 36);
-                  const targetW = Math.max(60, node.w - 4);
-                  const targetH = Math.max(40, node.h - 4);
-                  const scale = Math.max(0.2, Math.min(targetW / baseW, targetH / baseH));
-                  const innerW = Math.round(targetW / scale);
-                  const innerH = Math.round(targetH / scale);
                   return (
                     <div
-                      class="node-checklist-card widget-scale-surface"
+                      class="node-checklist-card"
                       style={{
-                        width: `${innerW}px`,
-                        height: `${innerH}px`,
-                        transform: `scale(${scale})`,
-                        transformOrigin: 'top left',
-                        flex: 'none'
+                        width: '100%',
+                        height: '100%',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        boxSizing: 'border-box',
+                        overflow: 'hidden'
                       }}
                       onClick={(e) => { if (e.shiftKey || e.ctrlKey || e.metaKey) return; if (!selectedNodeIds.has(node.id)) setSelectedNodeIds(new Set([node.id])); }}
                       onWheel={(e) => {
@@ -6246,6 +6240,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                         <button
                           type="button"
                           class="checklist-add-row-btn"
+                          style={{ flex: '0 0 auto', marginTop: 'auto' }}
                           onMouseDown={(e) => e.stopPropagation()}
                           onClick={() => handleAddChecklistItem(node)}
                         >
@@ -6259,23 +6254,16 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
               ) : node.type === 'table' ? (
                 (() => {
                   const table = parseTableData(node.text);
-                  const cols = table[0]?.length || 3;
-                  const baseW = Math.max(280, cols * 115);
-                  const baseH = Math.max(140, 50 + table.length * 38);
-                  const targetW = Math.max(60, node.w - 4);
-                  const targetH = Math.max(40, node.h - 4);
-                  const scale = Math.max(0.2, Math.min(targetW / baseW, targetH / baseH));
-                  const innerW = Math.round(targetW / scale);
-                  const innerH = Math.round(targetH / scale);
                   return (
                     <div
-                      class="node-table-wrapper widget-scale-surface"
+                      class="node-table-wrapper"
                       style={{
-                        width: `${innerW}px`,
-                        height: `${innerH}px`,
-                        transform: `scale(${scale})`,
-                        transformOrigin: 'top left',
-                        flex: 'none'
+                        width: '100%',
+                        height: '100%',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        boxSizing: 'border-box',
+                        overflow: 'hidden'
                       }}
                       onClick={(e) => { if (e.shiftKey || e.ctrlKey || e.metaKey) return; if (!selectedNodeIds.has(node.id)) setSelectedNodeIds(new Set([node.id])); }}
                       onWheel={(e) => {
@@ -6339,22 +6327,16 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
               ) : node.type === 'kanban' ? (
                 (() => {
                   const cards = parseKanbanCards(node.description);
-                  const baseW = 280;
-                  const baseH = Math.max(260, 95 + cards.length * 48);
-                  const targetW = Math.max(60, node.w - 4);
-                  const targetH = Math.max(40, node.h - 4);
-                  const scale = Math.max(0.2, Math.min(targetW / baseW, targetH / baseH));
-                  const innerW = Math.round(targetW / scale);
-                  const innerH = Math.round(targetH / scale);
                   return (
                     <div
-                      class="node-kanban-column widget-scale-surface"
+                      class="node-kanban-column"
                       style={{
-                        width: `${innerW}px`,
-                        height: `${innerH}px`,
-                        transform: `scale(${scale})`,
-                        transformOrigin: 'top left',
-                        flex: 'none'
+                        width: '100%',
+                        height: '100%',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        boxSizing: 'border-box',
+                        overflow: 'hidden'
                       }}
                       onClick={(e) => { if (e.shiftKey || e.ctrlKey || e.metaKey) return; if (!selectedNodeIds.has(node.id)) setSelectedNodeIds(new Set([node.id])); }}
                       onWheel={(e) => {
@@ -6421,6 +6403,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                         <button
                           type="button"
                           class="kanban-add-card-btn"
+                          style={{ flex: '0 0 auto', marginTop: 'auto' }}
                           onMouseDown={(e) => e.stopPropagation()}
                           onClick={() => handleAddKanbanCard(node)}
                         >
@@ -6434,22 +6417,16 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
               ) : node.type === 'code' ? (
                 (() => {
                   const lang = node.codeLanguage || 'typescript';
-                  const baseW = 360;
-                  const baseH = 220;
-                  const targetW = Math.max(60, node.w - 4);
-                  const targetH = Math.max(40, node.h - 4);
-                  const scale = Math.max(0.2, Math.min(targetW / baseW, targetH / baseH));
-                  const innerW = Math.round(targetW / scale);
-                  const innerH = Math.round(targetH / scale);
                   return (
                     <div
-                      class="node-code-block widget-scale-surface"
+                      class="node-code-block"
                       style={{
-                        width: `${innerW}px`,
-                        height: `${innerH}px`,
-                        transform: `scale(${scale})`,
-                        transformOrigin: 'top left',
-                        flex: 'none'
+                        width: '100%',
+                        height: '100%',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        boxSizing: 'border-box',
+                        overflow: 'hidden'
                       }}
                       onClick={(e) => { if (e.shiftKey || e.ctrlKey || e.metaKey) return; if (!selectedNodeIds.has(node.id)) setSelectedNodeIds(new Set([node.id])); }}
                       onWheel={(e) => {
@@ -6570,23 +6547,16 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                     if (map) setNodeProperties(map, { chartType: mode });
                   };
 
-                  const baseW = 380;
-                  const baseH = 360;
-                  const targetW = Math.max(60, node.w - 4);
-                  const targetH = Math.max(40, node.h - 4);
-                  const scale = Math.max(0.2, Math.min(targetW / baseW, targetH / baseH));
-                  const innerW = Math.round(targetW / scale);
-                  const innerH = Math.round(targetH / scale);
-
                   return (
                     <div
-                      class="node-chart-card widget-scale-surface"
+                      class="node-chart-card"
                       style={{
-                        width: `${innerW}px`,
-                        height: `${innerH}px`,
-                        transform: `scale(${scale})`,
-                        transformOrigin: 'top left',
-                        flex: 'none'
+                        width: '100%',
+                        height: '100%',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        boxSizing: 'border-box',
+                        overflow: 'hidden'
                       }}
                       onClick={() => setSelectedNodeIds(new Set([node.id]))}
                       onWheel={(e) => {
