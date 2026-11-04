@@ -94,108 +94,67 @@ function colLetterToIndex(colStr: string): number {
  */
 export function extractTextFromXlsx(buf: Buffer): string {
   try {
-    const sharedXmls = readZipEntry(buf, (name) => name === 'xl/sharedStrings.xml');
-    const sheetXmls = readZipEntry(
-      buf,
-      (name) => name === 'xl/worksheets/sheet1.xml' || name.startsWith('xl/worksheets/sheet')
-    );
-
+    // 1. Scan for sharedStrings.xml
     const sharedStrings: string[] = [];
-    if (sharedXmls.length > 0) {
-      const siRegex = /<si\b[^>]*>([\s\S]*?)<\/si>/gi;
+    const sstMatches = readZipEntry(buf, (name) => name.includes('sharedStrings.xml'));
+    if (sstMatches.length > 0) {
+      const sstXml = sstMatches[0];
+      const siRegex = /<si\b[^>]*>([\s\S]*?)<\/si>/g;
       let siMatch: RegExpExecArray | null;
-      while ((siMatch = siRegex.exec(sharedXmls[0])) !== null) {
-        const siContent = siMatch[1];
-        const tRegex = /<t(?:\s+[^>]*)?>([\s\S]*?)<\/t>/gi;
-        const tParts: string[] = [];
-        let tMatch: RegExpExecArray | null;
-        while ((tMatch = tRegex.exec(siContent)) !== null) {
-          tParts.push(unescapeXml(tMatch[1]));
-        }
-        sharedStrings.push(tParts.join(''));
+      while ((siMatch = siRegex.exec(sstXml)) !== null) {
+        const tMatches = siMatch[1].match(/<t\b[^>]*>([\s\S]*?)<\/t>/g);
+        const val = tMatches ? tMatches.map((t) => unescapeXml(t.replace(/<[^>]+>/g, ''))).join('') : '';
+        sharedStrings.push(val);
       }
     }
 
-    const grid: string[][] = [];
-    const sheetXml = sheetXmls[0] || '';
-    if (sheetXml) {
-      const rowRegex = /<row\b([^>]*)>([\s\S]*?)<\/row>/gi;
-      let rMatch: RegExpExecArray | null;
-      let autoRow = 0;
+    // 2. Scan sheet1.xml
+    const sheetMatches = readZipEntry(
+      buf,
+      (name) => name.includes('sheet1.xml') || name.includes('worksheets/sheet')
+    );
+    if (sheetMatches.length > 0) {
+      const sheetXml = sheetMatches[0];
+      const rowRegex = /<row\b(?:[^>]*r="(\d+)")?[^>]*>([\s\S]*?)<\/row>/g;
+      let rowMatch: RegExpExecArray | null;
+      const rows: string[][] = [];
 
-      while ((rMatch = rowRegex.exec(sheetXml)) !== null) {
-        const rowAttrs = rMatch[1];
-        const rowContent = rMatch[2];
-        const rAttrMatch = rowAttrs.match(/\br="(\d+)"/i);
-        const rowIdx = rAttrMatch ? parseInt(rAttrMatch[1], 10) - 1 : autoRow;
-        autoRow = rowIdx + 1;
+      while ((rowMatch = rowRegex.exec(sheetXml)) !== null) {
+        const rowContent = rowMatch[2];
+        const cellRegex = /<c\b(?:[^>]*r="([A-Z]+)\d+")?(?:[^>]*t="([a-z]+)")?[^>]*>(?:<v>([\s\S]*?)<\/v>|<is><t[^>]*>([\s\S]*?)<\/t><\/is>)?<\/c>/g;
+        let cellMatch: RegExpExecArray | null;
+        const rowCells: string[] = [];
 
-        if (rowIdx < 0 || rowIdx >= 100) continue;
-
-        while (grid.length <= rowIdx) {
-          grid.push([]);
+        while ((cellMatch = cellRegex.exec(rowContent)) !== null) {
+          const type = cellMatch[2];
+          let val = cellMatch[3] !== undefined ? cellMatch[3] : cellMatch[4] || '';
+          if (type === 's') {
+            const idx = parseInt(val, 10);
+            val = !isNaN(idx) && sharedStrings[idx] !== undefined ? sharedStrings[idx] : val;
+          } else if (type === 'b') {
+            val = val === '1' ? 'TRUE' : 'FALSE';
+          }
+          rowCells.push(unescapeXml(val).trim());
         }
-
-        const cRegex = /<c\b([^>]*)>([\s\S]*?)<\/c>/gi;
-        let cMatch: RegExpExecArray | null;
-        let autoCol = 0;
-
-        while ((cMatch = cRegex.exec(rowContent)) !== null) {
-          const cAttrs = cMatch[1];
-          const cContent = cMatch[2];
-
-          const refMatch = cAttrs.match(/\br="([A-Z]+)(\d+)"/i);
-          let colIdx = autoCol;
-          if (refMatch) {
-            colIdx = colLetterToIndex(refMatch[1].toUpperCase());
-          }
-          autoCol = colIdx + 1;
-
-          if (colIdx < 0 || colIdx >= 50) continue;
-
-          const typeMatch = cAttrs.match(/\bt="([^"]+)"/i);
-          const cType = typeMatch ? typeMatch[1] : '';
-
-          let val = '';
-          const vMatch = cContent.match(/<v>([\s\S]*?)<\/v>/i);
-          const isMatch = cContent.match(/<is>[\s\S]*?<t(?:\s+[^>]*)?>([\s\S]*?)<\/t>[\s\S]*?<\/is>/i);
-
-          if (cType === 's' && vMatch) {
-            const strIdx = parseInt(vMatch[1], 10);
-            val = sharedStrings[strIdx] || '';
-          } else if (cType === 'inlineStr' && isMatch) {
-            val = unescapeXml(isMatch[1]);
-          } else if (cType === 'b' && vMatch) {
-            val = vMatch[1] === '1' ? 'TRUE' : 'FALSE';
-          } else if (vMatch) {
-            val = unescapeXml(vMatch[1]);
-          }
-
-          while (grid[rowIdx].length <= colIdx) {
-            grid[rowIdx].push('');
-          }
-          grid[rowIdx][colIdx] = val;
+        if (rowCells.length > 0 && rowCells.some((c) => c.length > 0)) {
+          rows.push(rowCells);
         }
       }
-    }
 
-    if (grid.length > 0) {
-      const maxCols = Math.max(...grid.map((r) => r.length), 1);
-      const normalized = grid.map((r) => {
-        const row = [...r];
-        while (row.length < maxCols) row.push('');
-        return row;
-      });
-
-      while (normalized.length > 1 && normalized[normalized.length - 1].every((c) => !c.trim())) {
-        normalized.pop();
+      if (rows.length > 0) {
+        const maxCols = Math.max(...rows.map((r) => r.length), 1);
+        const normalized = rows.map((r) => {
+          const copy = [...r];
+          while (copy.length < maxCols) copy.push('');
+          return copy;
+        });
+        return JSON.stringify(normalized);
       }
-
-      return JSON.stringify(normalized);
     }
-  } catch {}
-
-  return JSON.stringify([['Column 1', 'Column 2', 'Column 3'], ['', '', ''], ['', '', '']]);
+  } catch (err) {
+    console.error('[OfficeExtractor] XLSX extraction error:', err);
+  }
+  return '';
 }
 
 /**

@@ -809,6 +809,8 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
     }
     return map;
   }, [nodesList, dragState, dragDelta]);
+  const nodeLookupRef = useRef(nodeLookup);
+  nodeLookupRef.current = nodeLookup;
 
   // Container dimensions
   const [containerSize, setContainerSize] = useState({ width: window.innerWidth, height: window.innerHeight });
@@ -831,6 +833,18 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
   const viewportRef = useRef(viewport);
   viewportRef.current = viewport;
   const targetViewportRef = useRef(viewport);
+  const panStateRef = useRef(panState);
+  panStateRef.current = panState;
+  const dragStateRef = useRef(dragState);
+  dragStateRef.current = dragState;
+  const resizeStateRef = useRef(resizeState);
+  resizeStateRef.current = resizeState;
+  const marqueeBoxRef = useRef(marqueeBox);
+  marqueeBoxRef.current = marqueeBox;
+  const nodesListRef = useRef(nodesList);
+  nodesListRef.current = nodesList;
+  const selectedNodeIdsRef = useRef(selectedNodeIds);
+  selectedNodeIdsRef.current = selectedNodeIds;
   const rafIdRef = useRef<number | null>(null);
   const rmbDragDistRef = useRef<number>(0);
 
@@ -971,6 +985,8 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
       return n.x + n.w >= left && n.x <= right && n.y + n.h >= top && n.y <= bottom;
     });
   }, [nodesList, viewport, containerSize, selectedNodeIds]);
+  const visibleNodesRef = useRef<BoardNodeData[]>(visibleNodes);
+  visibleNodesRef.current = visibleNodes;
 
   // Sync Yjs docs and setup Awareness
   useEffect(() => {
@@ -1032,7 +1048,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
       if (
         node.fileHash &&
         !node.extractedText &&
-        (node.fileName || '').match(/\.(docx|txt|md|csv|json|js|ts|py|html|css|pdf)$/i)
+        (node.fileName || '').match(/\.(docx?|xlsx?|txt|md|csv|tsv|json|js|ts|py|html|css|pdf|rtf|odt|ods)$/i)
       ) {
         api.fetch(`/api/attachments/${node.fileHash}/content`)
           .then((res) => (res.ok ? res.json() : null))
@@ -1044,6 +1060,20 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                   map.set('extractedText', data.extractedText);
                   if (map.get('showPreview') === undefined) {
                     map.set('showPreview', true);
+                  }
+                  const isSpreadsheet = (node.fileName || '').match(/\.(xlsx?|csv|tsv|ods)$/i);
+                  if (isSpreadsheet && data.extractedText.trim().startsWith('[[')) {
+                    try {
+                      const parsed = JSON.parse(data.extractedText);
+                      if (Array.isArray(parsed) && parsed.length > 0 && Array.isArray(parsed[0])) {
+                        const cols = parsed[0].length || 3;
+                        const rows = parsed.length || 3;
+                        map.set('type', 'table');
+                        map.set('text', data.extractedText);
+                        map.set('w', Math.max(node.w, cols * 130));
+                        map.set('h', Math.max(node.h, 50 + rows * 38));
+                      }
+                    } catch {}
                   }
                 }, CANVAS_UNDO_ORIGIN);
               }
@@ -1058,8 +1088,9 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
   const screenToCanvas = (clientX: number, clientY: number) => {
     if (!containerRef.current) return { x: 0, y: 0 };
     const rect = containerRef.current.getBoundingClientRect();
-    const x = (clientX - rect.left - viewport.x) / viewport.zoom;
-    const y = (clientY - rect.top - viewport.y) / viewport.zoom;
+    const vp = viewportRef.current;
+    const x = (clientX - rect.left - vp.x) / vp.zoom;
+    const y = (clientY - rect.top - vp.y) / vp.zoom;
     return { x, y };
   };
 
@@ -2582,15 +2613,16 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
       }
 
       // Panning (immediate 1:1 direct pointer tracking)
-      if (panState) {
-        const dx = e.clientX - panState.startX;
-        const dy = e.clientY - panState.startY;
-        if ((panState as any).isRmb) {
+      const currentPanState = panStateRef.current;
+      if (currentPanState) {
+        const dx = e.clientX - currentPanState.startX;
+        const dy = e.clientY - currentPanState.startY;
+        if ((currentPanState as any).isRmb) {
           rmbDragDistRef.current = Math.hypot(dx, dy);
         }
         animateToViewport({
-          x: panState.originX + dx,
-          y: panState.originY + dy
+          x: currentPanState.originX + dx,
+          y: currentPanState.originY + dy
         }, true);
       }
 
@@ -2655,17 +2687,22 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
       }
 
       // Dragging nodes with Smart Alignment Guides & Grid snap
-      if (dragState) {
-        let dx = (e.clientX - dragState.startX) / viewport.zoom;
-        let dy = (e.clientY - dragState.startY) / viewport.zoom;
+      const currentDragState = dragStateRef.current;
+      const currentVp = viewportRef.current;
+      if (currentDragState) {
+        let dx = (e.clientX - currentDragState.startX) / currentVp.zoom;
+        let dy = (e.clientY - currentDragState.startY) / currentVp.zoom;
         const GRID_SIZE = 16;
         let guides: AlignmentGuide[] = [];
 
         // Check alignment against other visible nodes (if single node dragged and not holding Alt)
-        if (selectedNodeIds.size === 1 && !e.altKey) {
-          const activeId = Array.from(selectedNodeIds)[0];
-          const activeInitial = dragState.initialPositions.get(activeId);
-          const activeNode = nodeLookup.get(activeId);
+        const currentSelIds = selectedNodeIdsRef.current;
+        const currentLookup = nodeLookupRef.current;
+        const currentVisNodes = visibleNodesRef.current;
+        if (currentSelIds.size === 1 && !e.altKey) {
+          const activeId = Array.from(currentSelIds)[0];
+          const activeInitial = currentDragState.initialPositions.get(activeId);
+          const activeNode = currentLookup.get(activeId);
 
           if (activeInitial && activeNode) {
             const rawBox: BoxRect = {
@@ -2675,11 +2712,11 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
               w: activeNode.w,
               h: activeNode.h
             };
-            const snapThreshold = 6 / viewport.zoom;
-            const candidates: BoxRect[] = visibleNodes
+            const snapThreshold = 6 / currentVp.zoom;
+            const candidates: BoxRect[] = currentVisNodes
               .filter((n) => {
                 if (n.id === activeId || n.deleted || n.type === 'drawing') return false;
-                if (selectedNodeIds.has(n.id)) return false;
+                if (currentSelIds.has(n.id)) return false;
                 if (Math.abs(n.x - rawBox.x) > 3000 || Math.abs(n.y - rawBox.y) > 3000) return false;
                 return true;
               })
@@ -2705,13 +2742,14 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
       }
 
       // 8-Point Resizing with Smart Alignment Guides
-      if (resizeState) {
-        const dx = (e.clientX - resizeState.startX) / viewport.zoom;
-        const dy = (e.clientY - resizeState.startY) / viewport.zoom;
-        const nodeMap = yNodes.get(resizeState.nodeId);
+      const currentResizeState = resizeStateRef.current;
+      if (currentResizeState) {
+        const dx = (e.clientX - currentResizeState.startX) / currentVp.zoom;
+        const dy = (e.clientY - currentResizeState.startY) / currentVp.zoom;
+        const nodeMap = yNodes.get(currentResizeState.nodeId);
 
         if (nodeMap) {
-          const { handle, startW, startH, startXPos, startYPos } = resizeState;
+          const { handle, startW, startH, startXPos, startYPos } = currentResizeState;
           let newW = startW;
           let newH = startH;
           let newX = startXPos;
@@ -2786,17 +2824,17 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
 
           let guides: AlignmentGuide[] = [];
           if (!e.altKey) {
-            const snapThreshold = Math.min(4, 3 / viewport.zoom);
-            const candidates: BoxRect[] = visibleNodes
+            const snapThreshold = Math.min(4, 3 / currentVp.zoom);
+            const candidates: BoxRect[] = (visibleNodesRef.current || [])
               .filter((n) => {
-                if (n.id === resizeState.nodeId || n.deleted || n.type === 'drawing') return false;
+                if (n.id === currentResizeState.nodeId || n.deleted || n.type === 'drawing') return false;
                 if (Math.abs(n.x - newX) > 3000 || Math.abs(n.y - newY) > 3000) return false;
                 return true;
               })
               .map((n) => ({ id: n.id, x: n.x, y: n.y, w: n.w, h: n.h }));
 
             const snapRes = computeResizeAlignment(
-              { id: resizeState.nodeId, x: newX, y: newY, w: newW, h: newH },
+              { id: currentResizeState.nodeId, x: newX, y: newY, w: newW, h: newH },
               handle,
               candidates,
               snapThreshold
@@ -2814,8 +2852,8 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
             nodeMap.set('y', Math.round(newY));
             nodeMap.set('w', Math.round(newW));
             nodeMap.set('h', Math.round(newH));
-            if (nodeType === 'text' && isCorner && resizeState.startFontSize && startW > 0) {
-              const scaledFontSize = Math.min(Math.max(12, Math.round(resizeState.startFontSize * (newW / startW))), 140);
+            if (nodeType === 'text' && isCorner && currentResizeState.startFontSize && startW > 0) {
+              const scaledFontSize = Math.min(Math.max(12, Math.round(currentResizeState.startFontSize * (newW / startW))), 140);
               nodeMap.set('fontSize', scaledFontSize);
             }
           }, 'resize-motion');
@@ -2823,16 +2861,17 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
       }
 
       // Marquee selection
-      if (marqueeBox) {
+      const currentMarquee = marqueeBoxRef.current;
+      if (currentMarquee) {
         setMarqueeBox((prev) => (prev ? { ...prev, currentX: pos.x, currentY: pos.y } : null));
 
-        const minX = Math.min(marqueeBox.startX, pos.x);
-        const maxX = Math.max(marqueeBox.startX, pos.x);
-        const minY = Math.min(marqueeBox.startY, pos.y);
-        const maxY = Math.max(marqueeBox.startY, pos.y);
+        const minX = Math.min(currentMarquee.startX, pos.x);
+        const maxX = Math.max(currentMarquee.startX, pos.x);
+        const minY = Math.min(currentMarquee.startY, pos.y);
+        const maxY = Math.max(currentMarquee.startY, pos.y);
 
         const newSelected = new Set<string>();
-        for (const n of nodesList) {
+        for (const n of nodesListRef.current) {
           if (!n.deleted && n.type !== 'drawing' && n.x + n.w >= minX && n.x <= maxX && n.y + n.h >= minY && n.y <= maxY) {
             newSelected.add(n.id);
           }
@@ -2841,8 +2880,9 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
       }
 
       // Drag arrow connector with magnetic geometric snapping
-      if (connectingState) {
-        const boxNodes: BoxNode[] = visibleNodes
+      const currentConnecting = connectingStateRef.current;
+      if (currentConnecting) {
+        const boxNodes: BoxNode[] = visibleNodesRef.current
           .filter((n) => !n.deleted && n.type !== 'drawing')
           .map((n) => ({
             id: n.id,
@@ -2851,7 +2891,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
             width: n.w,
             height: n.h
           }));
-        const snapped = findMagneticTargetPort(boxNodes, connectingState.fromNodeId, pos.x, pos.y, 28);
+        const snapped = findMagneticTargetPort(boxNodes, currentConnecting.fromNodeId, pos.x, pos.y, 28);
         setConnectingState((prev) =>
           prev
             ? {
@@ -2873,12 +2913,13 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
       }
 
       // Reconcile dragging for single-step undo
-      if (dragState) {
+      const upDragState = dragStateRef.current;
+      if (upDragState) {
         const delta = dragDeltaRef.current || dragDelta;
         const totalDist = delta ? Math.hypot(delta.dx, delta.dy) : 0;
         if (delta && (delta.dx !== 0 || delta.dy !== 0)) {
           boardDoc.transact(() => {
-            dragState.initialPositions.forEach((initPos, id) => {
+            upDragState.initialPositions.forEach((initPos, id) => {
               const nodeMap = yNodes.get(id);
               if (nodeMap && !nodeMap.get('locked')) {
                 nodeMap.set('x', Math.round(initPos.x + delta.dx));
@@ -2886,10 +2927,10 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
               }
             });
           }, CANVAS_UNDO_ORIGIN);
-        } else if (totalDist < 4 && dragState.initialPositions.size === 1) {
+        } else if (totalDist < 4 && upDragState.initialPositions.size === 1) {
           // Click without drag: enter instant text editing
-          const clickedId = Array.from(dragState.initialPositions.keys())[0];
-          const clickedNode = nodeLookup.get(clickedId);
+          const clickedId = Array.from(upDragState.initialPositions.keys())[0];
+          const clickedNode = nodeLookupRef.current.get(clickedId);
           if (clickedNode && (clickedNode.type === 'text' || clickedNode.type === 'sticky' || clickedNode.type === 'shape')) {
             startEditingNode(clickedId, false);
           }
@@ -2900,18 +2941,19 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
       }
 
       // Reconcile resizing for single-step undo
-      if (resizeState) {
-        const nodeMap = yNodes.get(resizeState.nodeId);
+      const upResizeState = resizeStateRef.current;
+      if (upResizeState) {
+        const nodeMap = yNodes.get(upResizeState.nodeId);
         if (nodeMap) {
           const finalW = nodeMap.get('w');
           const finalH = nodeMap.get('h');
           const finalX = nodeMap.get('x');
           const finalY = nodeMap.get('y');
           if (
-            finalW !== resizeState.startW ||
-            finalH !== resizeState.startH ||
-            finalX !== resizeState.startXPos ||
-            finalY !== resizeState.startYPos
+            finalW !== upResizeState.startW ||
+            finalH !== upResizeState.startH ||
+            finalX !== upResizeState.startXPos ||
+            finalY !== upResizeState.startYPos
           ) {
             boardDoc.transact(() => {
               nodeMap.set('x', finalX);
@@ -3172,17 +3214,13 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
 
     window.addEventListener('pointermove', handleGlobalPointerMove);
     window.addEventListener('pointerup', handleGlobalPointerUp);
-    window.addEventListener('mousemove', handleGlobalPointerMove as any);
-    window.addEventListener('mouseup', handleGlobalPointerUp as any);
     window.addEventListener('blur', handleBlur);
     return () => {
       window.removeEventListener('pointermove', handleGlobalPointerMove);
       window.removeEventListener('pointerup', handleGlobalPointerUp);
-      window.removeEventListener('mousemove', handleGlobalPointerMove as any);
-      window.removeEventListener('mouseup', handleGlobalPointerUp as any);
       window.removeEventListener('blur', handleBlur);
     };
-  }, [panState, dragState, resizeState, marqueeBox, connectingState, viewport, nodesList, visibleNodes, activeTool]);
+  }, []);
 
   // Pointer down on canvas background
   const handleBackgroundPointerDown = (e: MouseEvent) => {
@@ -5481,7 +5519,28 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                   };
 
                   return (
-                    <div class="node-file-wrapper miro-document-card" onMouseDown={(e) => handleNodePointerDown(node, e as any)}>
+                    <div
+                      class="node-file-wrapper miro-document-card"
+                      style={{ position: 'relative' }}
+                      onMouseDown={(e) => handleNodePointerDown(node, e as any)}
+                    >
+                      {!isSelected && (
+                        <div
+                          class="document-click-shield"
+                          style={{
+                            position: 'absolute',
+                            inset: 0,
+                            zIndex: 10,
+                            cursor: 'move',
+                            background: 'transparent'
+                          }}
+                          onMouseDown={(e) => handleNodePointerDown(node, e as any)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedNodeIds(new Set([node.id]));
+                          }}
+                        />
+                      )}
                       <div class="node-file-header" onMouseDown={(e) => handleNodePointerDown(node, e as any)}>
                         <div class="node-file-title-group">
                           <Icon name="file-text" size={16} />
@@ -5533,7 +5592,13 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                             src={getSafeAttachmentUrl(node.fileDataUrl, node.fileHash)}
                             class="node-file-pdf-iframe"
                             title={node.fileName || 'PDF'}
-                            style={{ width: '100%', height: '100%', border: 'none', background: '#ffffff' }}
+                            style={{
+                              width: '100%',
+                              height: '100%',
+                              border: 'none',
+                              background: '#ffffff',
+                              pointerEvents: (dragState || resizeState || panState || isSpacePressed || activeTool === 'hand') ? 'none' : 'auto'
+                            }}
                           />
                         ) : (
                           <div

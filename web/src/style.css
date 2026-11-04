@@ -1721,6 +1721,9 @@ input:focus, select:focus, textarea:focus {
   width: 100%;
   height: 100%;
   pointer-events: auto;
+  will-change: transform;
+  transform-style: flat;
+  backface-visibility: hidden;
 }
 
 /* SVG Connection Layer */
@@ -3315,7 +3318,7 @@ input:focus, select:focus, textarea:focus {
   position: absolute;
   inset: 0;
   pointer-events: none;
-  z-index: 10;
+  z-index: 50 !important;
 }
 
 .resize-handle {

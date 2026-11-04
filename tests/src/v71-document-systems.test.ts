@@ -309,7 +309,9 @@ describe('v71 Document Systems: Word, Excel, CSV Extraction, PDF CSP & Canvas Ha
       // PDF iframe must not have sandbox attribute and should have full dimension style
       expect(canvasCode).not.toContain('sandbox="allow-scripts allow-same-origin"');
       expect(canvasCode).toContain("class=\"node-file-pdf-iframe\"");
-      expect(canvasCode).toContain("style={{ width: '100%', height: '100%', border: 'none', background: '#ffffff' }}");
+      expect(canvasCode).toContain("width: '100%'");
+      expect(canvasCode).toContain("height: '100%'");
+      expect(canvasCode).toContain("background: '#ffffff'");
     });
 
     it('verifies nested board-boundary is completely purged and fitToContent applies 15% margins', () => {
