@@ -58,4 +58,9 @@ describe('v82: Interactive Widget Scaling & Layout Containment Audit', () => {
     expect(styleSrc).toContain('.node-chart-card .chart-visual-area');
     expect(styleSrc).toContain('.node-chart-card .chart-data-editor');
   });
+
+  it('8. Note card content view enforces flex: 1 1 auto and min-height: 0 containment', () => {
+    expect(canvasSrc).toContain("minHeight: 0");
+    expect(styleSrc).toContain('.note-card-content-view {\n  display: flex;\n  flex-direction: column;\n  flex: 1 1 auto;\n  min-height: 0;');
+  });
 });

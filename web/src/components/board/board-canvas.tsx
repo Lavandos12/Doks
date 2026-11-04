@@ -381,6 +381,8 @@ function NoteCardContent({ noteId, scope, fallbackTitle, fontSize }: NoteCardCon
       class="note-card-content-view scrollable-card-content markdown-body"
       style={{
         padding: '10px 14px',
+        flex: '1 1 auto',
+        minHeight: 0,
         height: '100%',
         width: '100%',
         overflowY: 'auto',
