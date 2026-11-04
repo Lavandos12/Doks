@@ -526,7 +526,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
   const [cursorScreenPos, setCursorScreenPos] = useState<{ x: number; y: number } | null>(null);
 
   // Miro Floating Dock & Islands state
-  const [activeFlyout, setActiveFlyout] = useState<'none' | 'sticky' | 'shape' | 'arrow' | 'draw' | 'widgets'>('none');
+  const [activeFlyout, setActiveFlyout] = useState<'none' | 'sticky' | 'shape' | 'arrow' | 'draw' | 'widgets' | 'docs'>('none');
   const [isBoardsPopoverOpen, setIsBoardsPopoverOpen] = useState(false);
   const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
   // network popover centralized in App
@@ -610,6 +610,10 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
 
   // Track active sheet index per workbook node
   const [workbookSheetMap, setWorkbookSheetMap] = useState<Record<string, number>>({});
+
+  // In-place grid editing states
+  const [isEditingGrid, setIsEditingGrid] = useState<Record<string, boolean>>({});
+  const [activeCellEdit, setActiveCellEdit] = useState<{ nodeId: string; sheetIdx: number; rowIdx: number; colIdx: number } | null>(null);
 
   // Internal clipboard for copy/paste (nodes + connecting edges)
 
@@ -1537,7 +1541,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
         if (e.code === 'KeyK') setActiveTool('checklist');
         if (e.code === 'KeyG') setActiveTool('table');
         if (e.code === 'KeyB') setActiveTool('kanban');
-        if (e.code === 'KeyD') setActiveTool('chart');
+        if (e.code === 'KeyD') setActiveFlyout((prev) => (prev === 'docs' ? 'none' : 'docs'));
         if (e.code === 'KeyL') setActiveTool('line');
         if (e.code === 'KeyM') setIsAutoDiagramModalOpen(true);
         if (e.code === 'KeyI' || e.code === 'KeyU') fileAttachmentInputRef.current?.click();
@@ -2049,6 +2053,204 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
     setSelectedNodeIds(new Set([id]));
     setActiveTool('select');
     return id;
+  };
+
+  // In-place Excel Cell Change handler
+  const handleWorkbookCellChange = (nodeId: string, sheetIdx: number, rowIdx: number, colIdx: number, newVal: string) => {
+    const map = yNodes.get(nodeId);
+    if (!map) return;
+    const rawText = map.get('extractedText');
+    if (!rawText) return;
+    try {
+      if (rawText.includes('"sheets"')) {
+        const parsed = JSON.parse(rawText);
+        if (parsed?.sheets?.[sheetIdx]?.data) {
+          if (!parsed.sheets[sheetIdx].data[rowIdx]) {
+            parsed.sheets[sheetIdx].data[rowIdx] = [];
+          }
+          parsed.sheets[sheetIdx].data[rowIdx][colIdx] = newVal;
+          boardDoc.transact(() => {
+            map.set('extractedText', JSON.stringify(parsed));
+          }, 'cell-edit');
+        }
+      } else if (rawText.trim().startsWith('[[')) {
+        const parsed = JSON.parse(rawText);
+        if (Array.isArray(parsed) && parsed[rowIdx]) {
+          parsed[rowIdx][colIdx] = newVal;
+          boardDoc.transact(() => {
+            map.set('extractedText', JSON.stringify(parsed));
+          }, 'cell-edit');
+        }
+      }
+    } catch (err) {
+      console.error('Workbook cell edit failed:', err);
+    }
+  };
+
+  // Creation helpers for Documents & Sheets
+  const createNewCanvasSpreadsheet = () => {
+    const id = crypto.randomUUID();
+    const cx = (window.innerWidth / 2 - viewport.x) / viewport.zoom;
+    const cy = (window.innerHeight / 2 - viewport.y) / viewport.zoom;
+    const w = 580;
+    const h = 340;
+
+    const initialWorkbook = {
+      type: 'workbook',
+      sheets: [
+        {
+          name: 'Sheet 1',
+          data: [
+            ['Item', 'Description', 'Quantity', 'Price', 'Status'],
+            ['Project Alpha', 'Design system tokens', '1', '$1,200', 'Active'],
+            ['Project Beta', 'Infinite canvas engine', '2', '$3,400', 'In Review'],
+            ['Project Gamma', 'CRDT sync pipelines', '1', '$2,800', 'Done'],
+            ['', '', '', '', '']
+          ]
+        },
+        {
+          name: 'Sheet 2',
+          data: [
+            ['Metric', 'Target', 'Actual', 'Variance'],
+            ['FPS', '120', '120', '0'],
+            ['Sync Latency', '< 15ms', '8ms', '-7ms']
+          ]
+        }
+      ]
+    };
+
+    const nodeMap = new Y.Map();
+    boardDoc.transact(() => {
+      yNodes.set(id, nodeMap);
+      setNodeProperties(nodeMap, {
+        id,
+        type: 'file',
+        x: Math.round(cx - w / 2),
+        y: Math.round(cy - h / 2),
+        w,
+        h,
+        text: 'Spreadsheet.xlsx',
+        fileName: 'Spreadsheet.xlsx',
+        extractedText: JSON.stringify(initialWorkbook),
+        showPreview: true,
+        author: effectiveScope === 'team' ? (agentStatus.value?.memberName || '') : '',
+        done: false,
+        z: 2,
+        deleted: false,
+        locked: false
+      });
+    }, 'user');
+
+    setSelectedNodeIds(new Set([id]));
+    setActiveTool('select');
+    showToast('Created New Spreadsheet (Excel)', 'success');
+  };
+
+  const createNewCanvasDoc = () => {
+    const id = crypto.randomUUID();
+    const cx = (window.innerWidth / 2 - viewport.x) / viewport.zoom;
+    const cy = (window.innerHeight / 2 - viewport.y) / viewport.zoom;
+    const w = 440;
+    const h = 560;
+
+    const initialDoc = `# Project Specification
+
+## 1. Overview
+High-performance local-first infinite canvas for collaborative product architecture.
+
+## 2. Key Objectives
+- **Zero-Latency CRDTs:** Peer-to-peer state replication powered by Yjs.
+- **Vector Surface Scaling:** Responsive typography and layout primitives.
+- **Embedded Documents:** Native multi-sheet spreadsheets and vector PDF sheets.
+
+## 3. Action Items
+- [ ] Review sprint deliverables
+- [ ] Verify 120 FPS canvas kinematics
+- [ ] Validate OpenXML multi-sheet stream parser
+`;
+
+    const nodeMap = new Y.Map();
+    boardDoc.transact(() => {
+      yNodes.set(id, nodeMap);
+      setNodeProperties(nodeMap, {
+        id,
+        type: 'file',
+        x: Math.round(cx - w / 2),
+        y: Math.round(cy - h / 2),
+        w,
+        h,
+        text: 'Document.docx',
+        fileName: 'Document.docx',
+        extractedText: initialDoc,
+        showPreview: true,
+        author: effectiveScope === 'team' ? (agentStatus.value?.memberName || '') : '',
+        done: false,
+        z: 2,
+        deleted: false,
+        locked: false
+      });
+    }, 'user');
+
+    setSelectedNodeIds(new Set([id]));
+    setActiveTool('select');
+    showToast('Created New Document (Word)', 'success');
+  };
+
+  const createNewCanvasPdfPage = () => {
+    const id = crypto.randomUUID();
+    const cx = (window.innerWidth / 2 - viewport.x) / viewport.zoom;
+    const cy = (window.innerHeight / 2 - viewport.y) / viewport.zoom;
+    const w = 480;
+    const h = 680;
+
+    const initialPdf = `# Executive Summary (A4 Document)
+
+---
+
+### Project Architecture & Status
+
+**Document ID:** DOC-${Math.floor(1000 + Math.random() * 9000)}  
+**Classification:** Confidential / Team Internal  
+**Scope:** Architecture Review
+
+---
+
+#### Key Metrics
+| Milestone | Status | Target Date |
+| :--- | :---: | :--- |
+| Core Canvas Engine | Complete | Q1 |
+| Yjs P2P Sync | Complete | Q2 |
+| Multi-Sheet Excel Parser | Active | Q3 |
+| Production Hardening | In Progress | Q4 |
+
+> Note: All canvas nodes and vector paths are synchronised via local-first CRDTs with cryptographic peer handshakes.
+`;
+
+    const nodeMap = new Y.Map();
+    boardDoc.transact(() => {
+      yNodes.set(id, nodeMap);
+      setNodeProperties(nodeMap, {
+        id,
+        type: 'file',
+        x: Math.round(cx - w / 2),
+        y: Math.round(cy - h / 2),
+        w,
+        h,
+        text: 'Page.pdf',
+        fileName: 'Page.pdf',
+        extractedText: initialPdf,
+        showPreview: true,
+        author: effectiveScope === 'team' ? (agentStatus.value?.memberName || '') : '',
+        done: false,
+        z: 2,
+        deleted: false,
+        locked: false
+      });
+    }, 'user');
+
+    setSelectedNodeIds(new Set([id]));
+    setActiveTool('select');
+    showToast('Created New Page (PDF A4)', 'success');
   };
 
   // Checklist helpers
@@ -4488,6 +4690,61 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
             )}
           </div>
 
+          {/* Documents & Sheets Tool (D) */}
+          <div class="miro-dock-tool-wrapper">
+            <button
+              class={`miro-dock-btn ${activeFlyout === 'docs' ? 'active' : ''}`}
+              data-tool="docs"
+              onClick={() => {
+                setActiveFlyout(activeFlyout === 'docs' ? 'none' : 'docs');
+              }}
+              title="Documents & Sheets (D)"
+            >
+              <Icon name="file-plus" size={20} />
+            </button>
+
+            {activeFlyout === 'docs' && (
+              <div class="miro-flyout-panel liquid-glass-surface" style={{ display: 'flex', flexDirection: 'column', gap: '4px', minWidth: '200px', padding: '6px' }}>
+                <button
+                  type="button"
+                  class="miro-flyout-item-btn"
+                  style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 10px', background: 'transparent', border: 'none', color: '#f1f5f9', fontSize: '13px', cursor: 'pointer', borderRadius: '6px', textAlign: 'left' }}
+                  onClick={() => {
+                    createNewCanvasSpreadsheet();
+                    setActiveFlyout('none');
+                  }}
+                >
+                  <Icon name="table" size={16} />
+                  <span>New Spreadsheet (Excel)</span>
+                </button>
+                <button
+                  type="button"
+                  class="miro-flyout-item-btn"
+                  style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 10px', background: 'transparent', border: 'none', color: '#f1f5f9', fontSize: '13px', cursor: 'pointer', borderRadius: '6px', textAlign: 'left' }}
+                  onClick={() => {
+                    createNewCanvasDoc();
+                    setActiveFlyout('none');
+                  }}
+                >
+                  <Icon name="file-text" size={16} />
+                  <span>New Document (Word)</span>
+                </button>
+                <button
+                  type="button"
+                  class="miro-flyout-item-btn"
+                  style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 10px', background: 'transparent', border: 'none', color: '#f1f5f9', fontSize: '13px', cursor: 'pointer', borderRadius: '6px', textAlign: 'left' }}
+                  onClick={() => {
+                    createNewCanvasPdfPage();
+                    setActiveFlyout('none');
+                  }}
+                >
+                  <Icon name="layout-canvas" size={16} />
+                  <span>New Page (PDF A4)</span>
+                </button>
+              </div>
+            )}
+          </div>
+
           <div class="miro-dock-divider" />
 
           {/* 10. Mindmap & Auto-Diagrams (M) */}
@@ -4611,42 +4868,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
         </div>
       )}
 
-      {/* Miro Multi-Select Alignment Bar */}
-      {!isViewerMode.value && selectedNodeIds.size > 1 && (
-        <div class="align-toolbar liquid-glass-surface" onClick={(e) => e.stopPropagation()}>
-          <button class="align-toolbar-btn" onClick={() => alignSelectedNodes('left')} title={t('align.left')}>
-            <span>{t('align.left_short')}</span>
-          </button>
-          <button class="align-toolbar-btn" onClick={() => alignSelectedNodes('center')} title={t('align.center')}>
-            <span>{t('align.center_short')}</span>
-          </button>
-          <button class="align-toolbar-btn" onClick={() => alignSelectedNodes('right')} title={t('align.right')}>
-            <span>{t('align.right_short')}</span>
-          </button>
-          <div class="align-toolbar-divider" />
-          <button class="align-toolbar-btn" onClick={() => alignSelectedNodes('top')} title={t('align.top')}>
-            <span>{t('align.top_short')}</span>
-          </button>
-          <button class="align-toolbar-btn" onClick={() => alignSelectedNodes('middle')} title={t('align.middle')}>
-            <span>{t('align.middle_short')}</span>
-          </button>
-          <button class="align-toolbar-btn" onClick={() => alignSelectedNodes('bottom')} title={t('align.bottom')}>
-            <span>{t('align.bottom_short')}</span>
-          </button>
-          <div class="align-toolbar-divider" />
-          <button class="align-toolbar-btn" onClick={() => alignSelectedNodes('distribute-h')} title={t('align.distribute_h')}>
-            <span>{t('align.distribute_h_short')}</span>
-          </button>
-          <button class="align-toolbar-btn" onClick={() => alignSelectedNodes('distribute-v')} title={t('align.distribute_v')}>
-            <span>{t('align.distribute_v_short')}</span>
-          </button>
-          <div class="align-toolbar-divider" />
-          <button class="align-toolbar-btn" onClick={wrapSelectedInFrame} title={`${t('align.group_frame')} (Ctrl+G)`}>
-            <Icon name="frame" size={14} />
-            <span>{t('align.group_frame_short')}</span>
-          </button>
-        </div>
-      )}
+      {/* Multi-select align toolbar purged */}
 
       {/* 2. Floating Context Inspector Bar */}
       {!isViewerMode.value && selectionBounds && selectedNodeIds.size > 0 && (() => {
@@ -4654,7 +4876,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
         const hasOnlyDrawings = selectedNodes.length > 0 && selectedNodes.every((n) => n?.type === 'drawing');
         if (hasOnlyDrawings) return null;
 
-        const minTopClearance = selectedNodeIds.size > 1 ? 132 : 88;
+        const minTopClearance = 88;
         const isToolbarFlipped = selectionBounds.y - 54 < minTopClearance;
         return (
           <div
@@ -5517,38 +5739,12 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                     showToast(`${t('toast.note_created')}: "${noteTitle}"`);
                   };
 
-                  const convertToTableWidget = (e: MouseEvent) => {
-                    e.stopPropagation();
-                    const map = yNodes.get(node.id);
-                    if (map && node.extractedText) {
-                      try {
-                        let matrixData: string[][] | null = null;
-                        if (node.extractedText.includes('"sheets"')) {
-                          const parsed = JSON.parse(node.extractedText);
-                          if (parsed && Array.isArray(parsed.sheets) && parsed.sheets.length > 0) {
-                            const activeIdx = workbookSheetMap[node.id] || 0;
-                            const curSheet = parsed.sheets[activeIdx] || parsed.sheets[0];
-                            matrixData = curSheet.data;
-                          }
-                        } else if (node.extractedText.trim().startsWith('[[')) {
-                          matrixData = JSON.parse(node.extractedText);
-                        }
-                        if (matrixData && Array.isArray(matrixData) && matrixData.length > 0) {
-                          const cols = matrixData[0]?.length || 3;
-                          const rows = matrixData.length || 3;
-                          boardDoc.transact(() => {
-                            setNodeProperties(map, {
-                              type: 'table',
-                              text: JSON.stringify(matrixData),
-                              w: Math.max(node.w, cols * 130),
-                              h: Math.max(node.h, 50 + rows * 38)
-                            });
-                          }, 'user');
-                          showToast('Converted to Table Widget', 'success');
-                        }
-                      } catch {}
-                    }
-                  };
+                  
+
+                  const isSpreadsheetCard = Boolean(
+                    (node.fileName || '').match(/\.(xlsx?|xls|csv|tsv|ods)$/i) ||
+                    (node.extractedText && (node.extractedText.includes('"sheets"') || node.extractedText.trim().startsWith('[[')))
+                  );
 
                   return (
                     <div
@@ -5581,27 +5777,66 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                           </span>
                         </div>
                         <div class="node-file-actions" onMouseDown={(e) => e.stopPropagation()}>
-                          {node.extractedText && (node.extractedText.trim().startsWith('[[') || node.extractedText.includes('"sheets"')) && (
+                          {/* In-place edit toggle for spreadsheet cards without split-screen JSON dump */}
+                          {isSpreadsheetCard ? (
                             <button
                               type="button"
-                              class="node-file-btn"
-                              onClick={convertToTableWidget}
-                              title="Convert to interactive Table Widget"
-                              style={{ color: '#34d399', borderColor: 'rgba(16, 185, 129, 0.4)' }}
+                              class={`node-file-btn ${isEditingGrid[node.id] ? 'active' : ''}`}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setIsEditingGrid((prev) => ({ ...prev, [node.id]: !prev[node.id] }));
+                              }}
+                              title={isEditingGrid[node.id] ? 'Finish cell editing' : 'Edit cells in-place'}
+                              style={isEditingGrid[node.id] ? { color: '#38bdf8', borderColor: 'rgba(56, 189, 248, 0.5)', background: 'rgba(56, 189, 248, 0.15)' } : undefined}
                             >
-                              <Icon name="table" size={12} />
-                              <span>Table Widget</span>
+                              <Icon name={isEditingGrid[node.id] ? 'check' : 'edit'} size={12} />
+                              <span>{isEditingGrid[node.id] ? 'Done' : t('notes.edit')}</span>
                             </button>
+                          ) : (
+                            node.extractedText && (
+                              <button
+                                type="button"
+                                class="node-file-btn"
+                                onClick={convertToNote}
+                                title={t('notes.edit')}
+                              >
+                                <Icon name="note-card" size={12} />
+                                <span>{t('notes.edit')}</span>
+                              </button>
+                            )
                           )}
-                          {node.extractedText && (
+                          {isSpreadsheetCard && (
                             <button
                               type="button"
                               class="node-file-btn"
-                              onClick={convertToNote}
-                              title={t('notes.edit')}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                try {
+                                  const parsed = JSON.parse(node.extractedText || '{}');
+                                  const sIdx = workbookSheetMap[node.id] || 0;
+                                  const sheet = parsed?.sheets?.[sIdx] || parsed?.sheets?.[0];
+                                  const matrixData = sheet?.data || (Array.isArray(parsed) ? parsed : []);
+                                  if (matrixData.length > 0) {
+                                    const csvContent = matrixData.map((row: string[]) => row.map((c: string) => `"${(c || '').replace(/"/g, '""')}"`).join(',')).join('\n');
+                                    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                                    const url = URL.createObjectURL(blob);
+                                    const link = document.createElement('a');
+                                    link.href = url;
+                                    link.download = `${sheet?.name || 'Sheet'}.csv`;
+                                    document.body.appendChild(link);
+                                    link.click();
+                                    document.body.removeChild(link);
+                                    URL.revokeObjectURL(url);
+                                    showToast(`Exported "${sheet?.name || 'Sheet'}.csv"`, 'success');
+                                  }
+                                } catch (err) {
+                                  console.error('Export error:', err);
+                                }
+                              }}
+                              title="Export active sheet as CSV"
                             >
-                              <Icon name="note-card" size={12} />
-                              <span>{t('notes.edit')}</span>
+                              <Icon name="download" size={12} />
+                              <span>Export</span>
                             </button>
                           )}
                           <a
@@ -5701,25 +5936,65 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                                     }}
                                   >
                                     {matrix.map((row, rIdx) =>
-                                      row.map((cell, cIdx) => (
-                                        <div
-                                          key={`${rIdx}-${cIdx}`}
-                                          class="node-table-cell"
-                                          style={{
-                                            background: rIdx === 0 ? 'rgba(56, 189, 248, 0.14)' : (rIdx % 2 === 1 ? '#181b26' : '#141722'),
-                                            fontWeight: rIdx === 0 ? 600 : 400,
-                                            color: rIdx === 0 ? '#38bdf8' : '#e2e8f0',
-                                            padding: '6px 10px',
-                                            fontSize: '12.5px',
-                                            whiteSpace: 'nowrap',
-                                            borderRight: '1px solid rgba(255, 255, 255, 0.06)',
-                                            borderBottom: '1px solid rgba(255, 255, 255, 0.06)'
-                                          }}
-                                          title={cell}
-                                        >
-                                          {cell || '\u00A0'}
-                                        </div>
-                                      ))
+                                      row.map((cell, cIdx) => {
+                                        const isCellEditing =
+                                          Boolean(isEditingGrid[node.id]) ||
+                                          (activeCellEdit?.nodeId === node.id &&
+                                            activeCellEdit?.sheetIdx === activeIdx &&
+                                            activeCellEdit?.rowIdx === rIdx &&
+                                            activeCellEdit?.colIdx === cIdx);
+
+                                        return (
+                                          <div
+                                            key={`${rIdx}-${cIdx}`}
+                                            class="node-table-cell"
+                                            style={{
+                                              background: rIdx === 0 ? 'rgba(56, 189, 248, 0.14)' : (rIdx % 2 === 1 ? '#181b26' : '#141722'),
+                                              fontWeight: rIdx === 0 ? 600 : 400,
+                                              color: rIdx === 0 ? '#38bdf8' : '#e2e8f0',
+                                              padding: isCellEditing ? '0' : '6px 10px',
+                                              fontSize: '12.5px',
+                                              whiteSpace: 'nowrap',
+                                              borderRight: '1px solid rgba(255, 255, 255, 0.06)',
+                                              borderBottom: '1px solid rgba(255, 255, 255, 0.06)',
+                                              cursor: isCellEditing ? 'text' : 'pointer',
+                                              position: 'relative'
+                                            }}
+                                            title={cell}
+                                            onDblClick={(e) => {
+                                              e.stopPropagation();
+                                              setActiveCellEdit({ nodeId: node.id, sheetIdx: activeIdx, rowIdx: rIdx, colIdx: cIdx });
+                                            }}
+                                          >
+                                            {isCellEditing ? (
+                                              <input
+                                                type="text"
+                                                class="excel-cell-input"
+                                                defaultValue={cell}
+                                                autoFocus={activeCellEdit?.rowIdx === rIdx && activeCellEdit?.colIdx === cIdx}
+                                                onMouseDown={(e) => e.stopPropagation()}
+                                                onClick={(e) => e.stopPropagation()}
+                                                onKeyDown={(e) => {
+                                                  e.stopPropagation();
+                                                  if (e.key === 'Enter' || e.key === 'Escape') {
+                                                    handleWorkbookCellChange(node.id, activeIdx, rIdx, cIdx, (e.target as HTMLInputElement).value);
+                                                    setActiveCellEdit(null);
+                                                    (e.target as HTMLInputElement).blur();
+                                                  }
+                                                }}
+                                                onBlur={(e) => {
+                                                  handleWorkbookCellChange(node.id, activeIdx, rIdx, cIdx, (e.target as HTMLInputElement).value);
+                                                  if (activeCellEdit?.rowIdx === rIdx && activeCellEdit?.colIdx === cIdx) {
+                                                    setActiveCellEdit(null);
+                                                  }
+                                                }}
+                                              />
+                                            ) : (
+                                              cell || '\u00A0'
+                                            )}
+                                          </div>
+                                        );
+                                      })
                                     )}
                                   </div>
                                 </div>
