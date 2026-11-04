@@ -2453,7 +2453,7 @@ High-performance local-first infinite canvas for collaborative product architect
 
       // If file is an Excel spreadsheet or CSV with tabular data, create a native interactive Table widget!
       const isSpreadsheet = fileName.toLowerCase().endsWith('.xlsx') || fileName.toLowerCase().endsWith('.xls') || fileName.toLowerCase().endsWith('.csv');
-      if (isSpreadsheet && data.extractedText && data.extractedText.trim().startsWith('[[')) {
+      if (isSpreadsheet && data.extractedText && (data.extractedText.includes('"sheets"') || data.extractedText.trim().startsWith('[['))) {
         try {
           const parsed = JSON.parse(data.extractedText);
           if (Array.isArray(parsed) && parsed.length > 0 && Array.isArray(parsed[0])) {
@@ -5855,18 +5855,37 @@ High-performance local-first infinite canvas for collaborative product architect
 
                       {isPdf ? (
                         getSafeAttachmentUrl(node.fileDataUrl, node.fileHash) ? (
-                          <iframe
-                            src={getSafeAttachmentUrl(node.fileDataUrl, node.fileHash)}
-                            class="node-file-pdf-iframe"
-                            title={node.fileName || 'PDF'}
-                            style={{
-                              width: '100%',
-                              height: '100%',
-                              border: 'none',
-                              background: '#ffffff',
-                              pointerEvents: (dragState || resizeState || panState || isSpacePressed || activeTool === 'hand') ? 'none' : 'auto'
-                            }}
-                          />
+                          <div style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden' }}>
+                            {!isSelected && (
+                              <div
+                                class="pdf-card-select-shield"
+                                style={{
+                                  position: 'absolute',
+                                  inset: 0,
+                                  zIndex: 10,
+                                  cursor: 'move',
+                                  background: 'transparent'
+                                }}
+                                onMouseDown={(e) => handleNodePointerDown(node, e as any)}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedNodeIds(new Set([node.id]));
+                                }}
+                              />
+                            )}
+                            <iframe
+                              src={getSafeAttachmentUrl(node.fileDataUrl, node.fileHash)}
+                              class="node-file-pdf-iframe"
+                              title={node.fileName || 'PDF'}
+                              style={{
+                                width: '100%',
+                                height: '100%',
+                                border: 'none',
+                                background: '#ffffff',
+                                pointerEvents: (!isSelected || dragState || resizeState || panState || isSpacePressed || activeTool === 'hand') ? 'none' : 'auto'
+                              }}
+                            />
+                          </div>
                         ) : (
                           <div
                             class="node-doc-page-container scrollable-card-content"

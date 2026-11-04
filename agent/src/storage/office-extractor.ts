@@ -108,15 +108,19 @@ function readZipEntriesMap(buf: Buffer, matcher: (filename: string) => boolean):
       const name = rawName.replace(/\\/g, '/');
 
       if (matcher(name) && localHeaderOffset + 30 <= buf.length) {
-        const lNameLen = buf.readUInt16LE(localHeaderOffset + 26);
-        const lExtraLen = buf.readUInt16LE(localHeaderOffset + 28);
-        const dataStart = localHeaderOffset + 30 + lNameLen + lExtraLen;
-        const slice = buf.subarray(dataStart, dataStart + compSize);
-        const raw =
-          method === 8
-            ? zlib.inflateRawSync(slice, { maxOutputLength: 20 * 1024 * 1024 })
-            : slice;
-        map.set(name, raw.toString('utf8'));
+        try {
+          const lNameLen = buf.readUInt16LE(localHeaderOffset + 26);
+          const lExtraLen = buf.readUInt16LE(localHeaderOffset + 28);
+          const dataStart = localHeaderOffset + 30 + lNameLen + lExtraLen;
+          const slice = buf.subarray(dataStart, dataStart + compSize);
+          const raw =
+            method === 8
+              ? zlib.inflateRawSync(slice, { maxOutputLength: 20 * 1024 * 1024 })
+              : slice;
+          map.set(name, raw.toString('utf8'));
+        } catch {
+          // Continue loop even if one entry fails
+        }
       }
       ptr += 46 + nameLen + extraLen + commentLen;
     }
