@@ -5514,7 +5514,7 @@ High-performance local-first infinite canvas for collaborative product architect
           const stickyBg = isSticky && nodeColorHex !== CANVAS_COLORS.default ? `${nodeColorHex}26` : undefined;
           const borderColor = isFrame
             ? 'rgba(255, 255, 255, 0.18)'
-            : node.type === 'text' || isImage
+            : node.type === 'text' || isImage || node.type === 'file'
             ? 'transparent'
             : isWidget && nodeColorHex !== CANVAS_COLORS.default
             ? `${nodeColorHex}66`
@@ -5703,7 +5703,7 @@ High-performance local-first infinite canvas for collaborative product architect
                     style={{ width: '100%', height: '100%', objectFit: 'fill', pointerEvents: 'none' }}
                   />
                 </div>
-              ) : node.fileHash ? (
+              ) : (node.type === 'file' || Boolean(node.fileHash)) ? (
                 (() => {
                   const isAud = (node.fileName || '').match(/\.(mp3|ogg|wav)$/i);
                   const isVid = (node.fileName || '').match(/\.(mp4|webm)$/i);
@@ -5838,17 +5838,19 @@ High-performance local-first infinite canvas for collaborative product architect
                               <span>Export</span>
                             </button>
                           )}
-                          <a
-                            href={node.fileDataUrl || `/api/attachments/${node.fileHash}`}
-                            download={node.fileName || 'file'}
-                            class="node-file-btn"
-                            target="_blank"
-                            rel="noopener"
-                            title={t('common.download')}
-                          >
-                            <Icon name="download" size={12} />
-                            <span>{t('common.download')}</span>
-                          </a>
+                          {(node.fileDataUrl || node.fileHash) && (
+                            <a
+                              href={node.fileDataUrl || `/api/attachments/${node.fileHash}`}
+                              download={node.fileName || 'file'}
+                              class="node-file-btn"
+                              target="_blank"
+                              rel="noopener"
+                              title={t('common.download')}
+                            >
+                              <Icon name="download" size={12} />
+                              <span>{t('common.download')}</span>
+                            </a>
+                          )}
                         </div>
                       </div>
 
@@ -5901,7 +5903,7 @@ High-performance local-first infinite canvas for collaborative product architect
                                 transformOrigin: 'top left'
                               }}
                             >
-                              {node.extractedText || t('canvas.extracting_pdf')}
+                              <MarkdownPreview content={node.extractedText || t('canvas.extracting_pdf')} />
                             </div>
                           </div>
                         )

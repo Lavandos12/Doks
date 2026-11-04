@@ -1796,6 +1796,18 @@ input:focus, select:focus, textarea:focus {
   outline-offset: 3px;
 }
 
+.board-node-box.type-file {
+  background: transparent !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
+.board-node-box.type-file.selected {
+  outline: 2px solid var(--accent, #38bdf8) !important;
+  outline-offset: 3px;
+  border-radius: 10px;
+}
+
 .board-node-box.type-text .node-inline-textarea {
   background: transparent !important;
   border: none !important;
