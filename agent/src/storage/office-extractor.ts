@@ -78,27 +78,88 @@ export function extractTextFromOdf(buf: Buffer): string {
 }
 
 /**
- * Converts Excel column letters (e.g. "A", "B", "Z", "AA") to zero-based index.
+ * Zero-dependency ZIP directory parser mapping filenames to inflated XML strings.
  */
-function colLetterToIndex(colStr: string): number {
-  let index = 0;
-  for (let i = 0; i < colStr.length; i++) {
-    index = index * 26 + (colStr.charCodeAt(i) - 64);
+function readZipEntriesMap(buf: Buffer, matcher: (filename: string) => boolean): Map<string, string> {
+  const map = new Map<string, string>();
+  try {
+    let eocdOffset = -1;
+    for (let i = buf.length - 22; i >= Math.max(0, buf.length - 65557); i--) {
+      if (buf.readUInt32LE(i) === 0x06054b50) {
+        eocdOffset = i;
+        break;
+      }
+    }
+    if (eocdOffset === -1) return map;
+
+    const cdOffset = buf.readUInt32LE(eocdOffset + 16);
+    const cdEntries = buf.readUInt16LE(eocdOffset + 10);
+    let ptr = cdOffset;
+
+    for (let e = 0; e < cdEntries && ptr + 46 <= buf.length; e++) {
+      if (buf.readUInt32LE(ptr) !== 0x02014b50) break;
+      const method = buf.readUInt16LE(ptr + 10);
+      const compSize = buf.readUInt32LE(ptr + 20);
+      const nameLen = buf.readUInt16LE(ptr + 28);
+      const extraLen = buf.readUInt16LE(ptr + 30);
+      const commentLen = buf.readUInt16LE(ptr + 32);
+      const localHeaderOffset = buf.readUInt32LE(ptr + 42);
+      const rawName = buf.toString('utf8', ptr + 46, ptr + 46 + nameLen);
+      const name = rawName.replace(/\\/g, '/');
+
+      if (matcher(name) && localHeaderOffset + 30 <= buf.length) {
+        const lNameLen = buf.readUInt16LE(localHeaderOffset + 26);
+        const lExtraLen = buf.readUInt16LE(localHeaderOffset + 28);
+        const dataStart = localHeaderOffset + 30 + lNameLen + lExtraLen;
+        const slice = buf.subarray(dataStart, dataStart + compSize);
+        const raw =
+          method === 8
+            ? zlib.inflateRawSync(slice, { maxOutputLength: 20 * 1024 * 1024 })
+            : slice;
+        map.set(name, raw.toString('utf8'));
+      }
+      ptr += 46 + nameLen + extraLen + commentLen;
+    }
+  } catch (err) {
+    console.error('[OfficeExtractor] ZIP read error:', err);
   }
-  return index - 1;
+  return map;
 }
 
 /**
- * Extracts a 2D matrix (string[][]) from Excel .xlsx files and serializes as JSON.
- * Parses shared strings dictionary and worksheet cell values.
+ * Converts Excel column letters (e.g. "A", "B", "Z", "AA") to zero-based index.
+ */
+function colLetterToIndex(colStr: string): number {
+  let idx = 0;
+  const upper = (colStr || 'A').toUpperCase();
+  for (let i = 0; i < upper.length; i++) {
+    idx = idx * 26 + (upper.charCodeAt(i) - 64);
+  }
+  return idx - 1;
+}
+
+/**
+ * Extracts all worksheets with their exact human-readable names and column-aligned
+ * cells from Excel .xlsx files and serializes as a multi-sheet workbook JSON payload.
  */
 export function extractTextFromXlsx(buf: Buffer): string {
   try {
-    // 1. Scan for sharedStrings.xml
+    const entries = readZipEntriesMap(buf, (name) =>
+      name.includes('workbook.xml') ||
+      name.includes('sharedStrings.xml') ||
+      name.includes('worksheets/sheet')
+    );
+
+    // 1. Parse sharedStrings dictionary
     const sharedStrings: string[] = [];
-    const sstMatches = readZipEntry(buf, (name) => name.includes('sharedStrings.xml'));
-    if (sstMatches.length > 0) {
-      const sstXml = sstMatches[0];
+    let sstXml: string | undefined;
+    for (const [key, val] of entries) {
+      if (key.includes('sharedStrings.xml')) {
+        sstXml = val;
+        break;
+      }
+    }
+    if (sstXml) {
       const siRegex = /<si\b[^>]*>([\s\S]*?)<\/si>/g;
       let siMatch: RegExpExecArray | null;
       while ((siMatch = siRegex.exec(sstXml)) !== null) {
@@ -108,51 +169,132 @@ export function extractTextFromXlsx(buf: Buffer): string {
       }
     }
 
-    // 2. Scan sheet1.xml
-    const sheetMatches = readZipEntry(
-      buf,
-      (name) => name.includes('sheet1.xml') || name.includes('worksheets/sheet')
-    );
-    if (sheetMatches.length > 0) {
-      const sheetXml = sheetMatches[0];
-      const rowRegex = /<row\b(?:[^>]*r="(\d+)")?[^>]*>([\s\S]*?)<\/row>/g;
-      let rowMatch: RegExpExecArray | null;
-      const rows: string[][] = [];
-
-      while ((rowMatch = rowRegex.exec(sheetXml)) !== null) {
-        const rowContent = rowMatch[2];
-        const cellRegex = /<c\b(?:[^>]*r="([A-Z]+)\d+")?(?:[^>]*t="([a-z]+)")?[^>]*>(?:<v>([\s\S]*?)<\/v>|<is><t[^>]*>([\s\S]*?)<\/t><\/is>)?<\/c>/g;
-        let cellMatch: RegExpExecArray | null;
-        const rowCells: string[] = [];
-
-        while ((cellMatch = cellRegex.exec(rowContent)) !== null) {
-          const type = cellMatch[2];
-          let val = cellMatch[3] !== undefined ? cellMatch[3] : cellMatch[4] || '';
-          if (type === 's') {
-            const idx = parseInt(val, 10);
-            val = !isNaN(idx) && sharedStrings[idx] !== undefined ? sharedStrings[idx] : val;
-          } else if (type === 'b') {
-            val = val === '1' ? 'TRUE' : 'FALSE';
-          }
-          rowCells.push(unescapeXml(val).trim());
-        }
-        if (rowCells.length > 0 && rowCells.some((c) => c.length > 0)) {
-          rows.push(rowCells);
-        }
-      }
-
-      if (rows.length > 0) {
-        const maxCols = Math.max(...rows.map((r) => r.length), 1);
-        const normalized = rows.map((r) => {
-          const copy = [...r];
-          while (copy.length < maxCols) copy.push('');
-          return copy;
-        });
-        return JSON.stringify(normalized);
+    // 2. Parse workbook relationships (rId -> sheet path)
+    const relMap: Record<string, string> = {};
+    let relsXml: string | undefined;
+    for (const [key, val] of entries) {
+      if (key.includes('workbook.xml.rels')) {
+        relsXml = val;
+        break;
       }
     }
+    if (relsXml) {
+      const relRegex = /<Relationship\b[^>]*Id="([^"]+)"[^>]*Target="([^"]+)"/g;
+      let rMatch: RegExpExecArray | null;
+      while ((rMatch = relRegex.exec(relsXml)) !== null) {
+        relMap[rMatch[1]] = rMatch[2].replace(/\\/g, '/');
+      }
+    }
+
+    // 3. Parse sheets list from workbook.xml
+    let workbookXml: string | undefined;
+    for (const [key, val] of entries) {
+      if (key.endsWith('workbook.xml') && !key.includes('.rels')) {
+        workbookXml = val;
+        break;
+      }
+    }
+    const sheetsMeta: { name: string; target: string }[] = [];
+    if (workbookXml) {
+      const sheetRegex = /<sheet\b[^>]*name="([^"]+)"[^>]*sheetId="(\d+)"[^>]*(?:r:id="([^"]+)")?/g;
+      let sMatch: RegExpExecArray | null;
+      while ((sMatch = sheetRegex.exec(workbookXml)) !== null) {
+        const name = unescapeXml(sMatch[1]);
+        const sheetId = sMatch[2];
+        const rId = sMatch[3];
+        let target = rId && relMap[rId] ? relMap[rId] : `worksheets/sheet${sheetId}.xml`;
+        if (target.startsWith('/')) target = target.slice(1);
+        if (!target.startsWith('xl/')) target = `xl/${target}`;
+        sheetsMeta.push({ name, target });
+      }
+    }
+
+    // Fallback: if workbook.xml is absent, scan all sheet entries directly
+    if (sheetsMeta.length === 0) {
+      for (const key of entries.keys()) {
+        if (key.includes('worksheets/sheet')) {
+          const matchNum = key.match(/sheet(\d+)\.xml/);
+          const baseName = matchNum ? `Sheet ${matchNum[1]}` : 'Sheet 1';
+          sheetsMeta.push({ name: baseName, target: key });
+        }
+      }
+    }
+
+    // 4. Parse each worksheet into row/col matrix
+    const workbookResult: { name: string; data: string[][] }[] = [];
+
+    for (const meta of sheetsMeta) {
+      let sheetXml = entries.get(meta.target);
+      if (!sheetXml) {
+        for (const [key, val] of entries) {
+          if (key === meta.target || key.endsWith(meta.target.replace(/^xl\//, ''))) {
+            sheetXml = val;
+            break;
+          }
+        }
+      }
+      if (!sheetXml) continue;
+
+      const rows: string[][] = [];
+      const rowRegex = /<row\b[^>]*>([\s\S]*?)<\/row>/g;
+      let rowMatch: RegExpExecArray | null;
+
+      while ((rowMatch = rowRegex.exec(sheetXml)) !== null) {
+        const rowContent = rowMatch[1];
+        const cellRegex = /<c\b([^>]*)>([\s\S]*?)<\/c>/g;
+        let cellMatch: RegExpExecArray | null;
+        const cellMap: Record<number, string> = {};
+        let maxCol = 0;
+        let seqCol = 0;
+
+        while ((cellMatch = cellRegex.exec(rowContent)) !== null) {
+          const attrs = cellMatch[1];
+          const inner = cellMatch[2];
+
+          const rMatch = attrs.match(/\br="([A-Za-z]+)\d+"/);
+          const tMatch = attrs.match(/\bt="([a-z]+)"/i);
+          const type = tMatch ? tMatch[1].toLowerCase() : '';
+
+          const cIdx = rMatch ? colLetterToIndex(rMatch[1]) : seqCol++;
+          maxCol = Math.max(maxCol, cIdx + 1);
+
+          const vMatch = inner.match(/<v>([\s\S]*?)<\/v>/);
+          const isMatch = inner.match(/<is>[\s\S]*?<t[^>]*>([\s\S]*?)<\/t>[\s\S]*?<\/is>/);
+
+          let textVal = vMatch ? vMatch[1] : (isMatch ? isMatch[1] : '');
+          if (type === 's') {
+            const sIdx = parseInt(textVal, 10);
+            textVal = (!isNaN(sIdx) && sharedStrings[sIdx] !== undefined) ? sharedStrings[sIdx] : textVal;
+          } else if (type === 'b') {
+            textVal = textVal === '1' ? 'TRUE' : 'FALSE';
+          }
+          cellMap[cIdx] = unescapeXml(textVal).trim();
+        }
+
+        const alignedRow: string[] = [];
+        for (let c = 0; c < maxCol; c++) {
+          alignedRow.push(cellMap[c] || '');
+        }
+        if (alignedRow.some((val) => val.length > 0)) {
+          rows.push(alignedRow);
+        }
+      }
+
+      // Pad rows to match column width
+      if (rows.length > 0) {
+        const maxWidth = Math.max(...rows.map((r) => r.length));
+        for (const r of rows) {
+          while (r.length < maxWidth) r.push('');
+        }
+        workbookResult.push({ name: meta.name, data: rows });
+      }
+    }
+
+    if (workbookResult.length > 0) {
+      return JSON.stringify({ type: 'workbook', sheets: workbookResult });
+    }
   } catch (err) {
-    console.error('[OfficeExtractor] XLSX extraction error:', err);
+    console.error('[OfficeExtractor] XLSX workbook extraction failed:', err);
   }
   return '';
 }

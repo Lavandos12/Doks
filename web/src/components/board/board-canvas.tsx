@@ -608,6 +608,9 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
   // Remote cursors awareness
   const [remoteCursors, setRemoteCursors] = useState<RemoteCursor[]>([]);
 
+  // Track active sheet index per workbook node
+  const [workbookSheetMap, setWorkbookSheetMap] = useState<Record<string, number>>({});
+
   // Internal clipboard for copy/paste (nodes + connecting edges)
 
 
@@ -1060,6 +1063,20 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                   map.set('extractedText', data.extractedText);
                   if (map.get('showPreview') === undefined) {
                     map.set('showPreview', true);
+                  }
+                  if (data.extractedText.includes('"sheets"')) {
+                    try {
+                      const parsed = JSON.parse(data.extractedText);
+                      if (parsed?.sheets?.[0]?.data) {
+                        const firstSheet = parsed.sheets[0].data;
+                        const cols = firstSheet[0]?.length || 4;
+                        const rows = firstSheet.length || 6;
+                        const targetW = Math.max(node.w || 360, Math.min(840, Math.max(540, cols * 140)));
+                        const targetH = Math.max(node.h || 280, Math.min(600, Math.max(380, 90 + rows * 34)));
+                        map.set('w', targetW);
+                        map.set('h', targetH);
+                      }
+                    } catch {}
                   }
                   const isSpreadsheet = (node.fileName || '').match(/\.(xlsx?|csv|tsv|ods)$/i);
                   if (isSpreadsheet && data.extractedText.trim().startsWith('[[')) {
@@ -2296,6 +2313,9 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
       } else if (isPdf || isWord) {
         w = 420;
         h = 540;
+      } else if (/\.(xlsx?|xls|ods)$/i.test(fileName)) {
+        w = 640;
+        h = 480;
       } else if (hasTextPreview) {
         w = 360;
         h = 280;
@@ -5502,18 +5522,30 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                     const map = yNodes.get(node.id);
                     if (map && node.extractedText) {
                       try {
-                        const parsed = JSON.parse(node.extractedText);
-                        const cols = parsed[0]?.length || 3;
-                        const rows = parsed.length || 3;
-                        boardDoc.transact(() => {
-                          setNodeProperties(map, {
-                            type: 'table',
-                            text: node.extractedText,
-                            w: Math.max(node.w, cols * 130),
-                            h: Math.max(node.h, 50 + rows * 38)
-                          });
-                        }, 'user');
-                        showToast('Converted to Table Widget', 'success');
+                        let matrixData: string[][] | null = null;
+                        if (node.extractedText.includes('"sheets"')) {
+                          const parsed = JSON.parse(node.extractedText);
+                          if (parsed && Array.isArray(parsed.sheets) && parsed.sheets.length > 0) {
+                            const activeIdx = workbookSheetMap[node.id] || 0;
+                            const curSheet = parsed.sheets[activeIdx] || parsed.sheets[0];
+                            matrixData = curSheet.data;
+                          }
+                        } else if (node.extractedText.trim().startsWith('[[')) {
+                          matrixData = JSON.parse(node.extractedText);
+                        }
+                        if (matrixData && Array.isArray(matrixData) && matrixData.length > 0) {
+                          const cols = matrixData[0]?.length || 3;
+                          const rows = matrixData.length || 3;
+                          boardDoc.transact(() => {
+                            setNodeProperties(map, {
+                              type: 'table',
+                              text: JSON.stringify(matrixData),
+                              w: Math.max(node.w, cols * 130),
+                              h: Math.max(node.h, 50 + rows * 38)
+                            });
+                          }, 'user');
+                          showToast('Converted to Table Widget', 'success');
+                        }
                       } catch {}
                     }
                   };
@@ -5549,7 +5581,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                           </span>
                         </div>
                         <div class="node-file-actions" onMouseDown={(e) => e.stopPropagation()}>
-                          {node.extractedText && node.extractedText.trim().startsWith('[[') && (
+                          {node.extractedText && (node.extractedText.trim().startsWith('[[') || node.extractedText.includes('"sheets"')) && (
                             <button
                               type="button"
                               class="node-file-btn"
@@ -5622,6 +5654,123 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                         )
                       ) : (
                         (() => {
+                          let parsedWorkbook: { sheets: { name: string; data: string[][] }[] } | null = null;
+                          if (node.extractedText && node.extractedText.includes('"sheets"')) {
+                            try {
+                              const parsed = JSON.parse(node.extractedText);
+                              if (parsed && Array.isArray(parsed.sheets) && parsed.sheets.length > 0) {
+                                parsedWorkbook = parsed;
+                              }
+                            } catch {}
+                          }
+
+                          if (parsedWorkbook) {
+                            const activeIdx = workbookSheetMap[node.id] || 0;
+                            const currentSheet = parsedWorkbook.sheets[activeIdx] || parsedWorkbook.sheets[0];
+                            const matrix = currentSheet.data;
+
+                            return (
+                              <div
+                                class="excel-workbook-container"
+                                style={{
+                                  display: 'flex',
+                                  flexDirection: 'column',
+                                  width: '100%',
+                                  height: '100%',
+                                  overflow: 'hidden',
+                                  background: '#141620',
+                                  borderRadius: '0 0 8px 8px'
+                                }}
+                              >
+                                {/* Spreadsheet Grid */}
+                                <div
+                                  class="excel-grid-scroll-area"
+                                  style={{ flex: 1, overflow: 'auto', padding: '6px' }}
+                                  onWheel={(e) => {
+                                    if (!e.ctrlKey && !e.metaKey) e.stopPropagation();
+                                  }}
+                                >
+                                  <div
+                                    class="node-table-grid"
+                                    style={{
+                                      gridTemplateColumns: `repeat(${matrix[0]?.length || 3}, minmax(130px, max-content))`,
+                                      gridAutoRows: '34px',
+                                      alignContent: 'start',
+                                      width: 'max-content',
+                                      minWidth: '100%'
+                                    }}
+                                  >
+                                    {matrix.map((row, rIdx) =>
+                                      row.map((cell, cIdx) => (
+                                        <div
+                                          key={`${rIdx}-${cIdx}`}
+                                          class="node-table-cell"
+                                          style={{
+                                            background: rIdx === 0 ? 'rgba(56, 189, 248, 0.14)' : (rIdx % 2 === 1 ? '#181b26' : '#141722'),
+                                            fontWeight: rIdx === 0 ? 600 : 400,
+                                            color: rIdx === 0 ? '#38bdf8' : '#e2e8f0',
+                                            padding: '6px 10px',
+                                            fontSize: '12.5px',
+                                            whiteSpace: 'nowrap',
+                                            borderRight: '1px solid rgba(255, 255, 255, 0.06)',
+                                            borderBottom: '1px solid rgba(255, 255, 255, 0.06)'
+                                          }}
+                                          title={cell}
+                                        >
+                                          {cell || '\u00A0'}
+                                        </div>
+                                      ))
+                                    )}
+                                  </div>
+                                </div>
+
+                                {/* Sheet Switcher Tabs Bar */}
+                                <div
+                                  class="excel-sheet-tabs-bar"
+                                  style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '4px',
+                                    padding: '4px 8px',
+                                    background: '#0c0e14',
+                                    borderTop: '1px solid rgba(255, 255, 255, 0.1)',
+                                    overflowX: 'auto',
+                                    flexShrink: 0
+                                  }}
+                                  onMouseDown={(e) => e.stopPropagation()}
+                                >
+                                  {parsedWorkbook.sheets.map((sheet, sIdx) => (
+                                    <button
+                                      key={sheet.name || sIdx}
+                                      type="button"
+                                      class={`excel-sheet-tab-btn ${activeIdx === sIdx ? 'active' : ''}`}
+                                      style={{
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '6px',
+                                        padding: '4px 10px',
+                                        borderRadius: '6px',
+                                        fontSize: '11.5px',
+                                        fontWeight: 500,
+                                        color: activeIdx === sIdx ? '#38bdf8' : '#94a3b8',
+                                        background: activeIdx === sIdx ? 'rgba(56, 189, 248, 0.15)' : 'transparent',
+                                        border: `1px solid ${activeIdx === sIdx ? 'rgba(56, 189, 248, 0.35)' : 'transparent'}`,
+                                        cursor: 'pointer'
+                                      }}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setWorkbookSheetMap((prev) => ({ ...prev, [node.id]: sIdx }));
+                                      }}
+                                    >
+                                      <Icon name="table" size={12} />
+                                      <span>{sheet.name}</span>
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                            );
+                          }
+
                           if (node.extractedText && node.extractedText.trim().startsWith('[[')) {
                             try {
                               const matrix: string[][] = JSON.parse(node.extractedText);

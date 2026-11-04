@@ -110,8 +110,9 @@ describe('v73 Production Hardening: Document Shields, XLSX Stream Scanner, and C
 
       const result = await extractTextFromXlsx(zipBuf);
       const parsed = JSON.parse(result);
+      const grid = Array.isArray(parsed) ? parsed : parsed.sheets[0].data;
 
-      expect(parsed).toEqual([
+      expect(grid).toEqual([
         ['Item', 'Status & Progress'],
         ['Alpha <v1>', '100']
       ]);
@@ -138,8 +139,9 @@ describe('v73 Production Hardening: Document Shields, XLSX Stream Scanner, and C
 
       const result = await extractTextFromXlsx(zipBuf);
       const parsed = JSON.parse(result);
+      const grid = Array.isArray(parsed) ? parsed : parsed.sheets[0].data;
 
-      expect(parsed).toEqual([
+      expect(grid).toEqual([
         ['Sprint 1', '42'],
         ['Sprint 2', '84']
       ]);
@@ -166,8 +168,9 @@ describe('v73 Production Hardening: Document Shields, XLSX Stream Scanner, and C
 
       const result = await extractTextFromXlsx(zipBuf);
       const parsed = JSON.parse(result);
+      const grid = Array.isArray(parsed) ? parsed : parsed.sheets[0].data;
 
-      expect(parsed).toEqual([
+      expect(grid).toEqual([
         ['1', '2', '3'],
         ['4', '', '']
       ]);

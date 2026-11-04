@@ -248,7 +248,8 @@ describe('v71 Document Systems: Word, Excel, CSV Extraction, PDF CSP & Canvas Ha
       ]);
 
       const json = extractTextFromXlsx(zipBuf);
-      const grid = JSON.parse(json);
+      const parsed = JSON.parse(json);
+      const grid = Array.isArray(parsed) ? parsed : parsed.sheets[0].data;
       expect(Array.isArray(grid)).toBe(true);
       expect(grid.length).toBe(3);
       expect(grid[0]).toEqual(['Item Name', 'Price']);
