@@ -1016,10 +1016,10 @@ export class AgentHttpServer {
 
     // API: Cross-scope bridge transfer (Promote to Team / Fork to Solo)
     this.fastify.post('/api/bridge/transfer', async (req, reply) => {
-      if (!this.isHostSession(req)) {
+      if (!this.isHostSession(req) && !this.isLoopbackRequest(req) && !this.isValidSession(req)) {
         return reply.code(403).send({
           success: false,
-          error: 'Forbidden: Cross-scope bridge transfer requires host privileges'
+          error: 'Forbidden: Cross-scope bridge transfer requires host or member privileges'
         });
       }
       const body = req.body as any;

@@ -6,7 +6,11 @@ import {
   renameBoard,
   deleteBoard,
   convertBoardScope,
-  selectBoardWithScope
+  selectBoardWithScope,
+  isBoardAdmin,
+  duplicateBoardToSolo,
+  teamMaps,
+  soloMaps
 } from '../../state/app-state.js';
 import { Icon } from '../../ui/icons.js';
 import { showToast } from '../../ui/toast.js';
@@ -36,6 +40,11 @@ export function BoardSettingsModal({
   const [title, setTitle] = useState(boardTitle);
   const [isConverting, setIsConverting] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
+
+  const targetMap = scope === 'solo' ? soloMaps.boards : teamMaps.boards;
+  const boardMeta = targetMap.get(boardId);
+  const isAdmin = isBoardAdmin(boardMeta);
+  const creatorDisplay = boardMeta?.creatorName || 'Admin';
 
   useEffect(() => {
     setTitle(boardTitle);
@@ -221,29 +230,75 @@ export function BoardSettingsModal({
                 <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.4 }}>
                   Collaborative board (synced with live cursors).
                 </div>
-                <button
-                  type="button"
-                  disabled={isConverting}
-                  onClick={handleConvertScope}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: 8,
-                    padding: '9px 14px',
-                    borderRadius: 8,
-                    border: '1px solid rgba(139, 92, 246, 0.4)',
-                    background: 'rgba(139, 92, 246, 0.15)',
-                    color: '#c084fc',
-                    fontWeight: 600,
-                    fontSize: 13,
-                    cursor: isConverting ? 'not-allowed' : 'pointer',
-                    transition: 'all 0.15s ease'
-                  }}
-                >
-                  <Icon name="lock" size={15} />
-                  <span>{isConverting ? 'Converting...' : 'Make Solo (this PC only)'}</span>
-                </button>
+                {isAdmin ? (
+                  <button
+                    type="button"
+                    disabled={isConverting}
+                    onClick={handleConvertScope}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 8,
+                      padding: '9px 14px',
+                      borderRadius: 8,
+                      border: '1px solid rgba(139, 92, 246, 0.4)',
+                      background: 'rgba(139, 92, 246, 0.15)',
+                      color: '#c084fc',
+                      fontWeight: 600,
+                      fontSize: 13,
+                      cursor: isConverting ? 'not-allowed' : 'pointer',
+                      transition: 'all 0.15s ease'
+                    }}
+                  >
+                    <Icon name="lock" size={15} />
+                    <span>{isConverting ? 'Converting...' : 'Make Solo (this PC only)'}</span>
+                  </button>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 8,
+                        fontSize: 12,
+                        color: 'var(--text-secondary)',
+                        background: 'rgba(255, 255, 255, 0.04)',
+                        padding: '8px 12px',
+                        borderRadius: 6,
+                        border: '1px solid rgba(255, 255, 255, 0.08)'
+                      }}
+                    >
+                      <Icon name="lock" size={13} class="text-accent" />
+                      <span>Only the board creator (@{creatorDisplay}) can make this board private.</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        await duplicateBoardToSolo(boardId);
+                        onClose();
+                      }}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 8,
+                        padding: '9px 14px',
+                        borderRadius: 8,
+                        border: '1px solid rgba(99, 102, 241, 0.4)',
+                        background: 'rgba(99, 102, 241, 0.15)',
+                        color: '#a5b4fc',
+                        fontWeight: 600,
+                        fontSize: 13,
+                        cursor: 'pointer',
+                        transition: 'all 0.15s ease'
+                      }}
+                    >
+                      <Icon name="fork" size={15} />
+                      <span>Duplicate to Solo</span>
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -383,7 +438,10 @@ export function BoardSettingsModal({
                 <button
                   type="button"
                   class="btn-secondary"
+                  disabled={scope === 'team' && !isAdmin}
+                  title={scope === 'team' && !isAdmin ? 'Only the board creator can delete or clear this board.' : undefined}
                   onClick={() => {
+                    if (scope === 'team' && !isAdmin) return;
                     onClearBoard();
                     onClose();
                   }}
@@ -396,7 +454,8 @@ export function BoardSettingsModal({
                     border: '1px solid rgba(248, 113, 113, 0.3)',
                     background: 'rgba(239, 68, 68, 0.06)',
                     color: '#f87171',
-                    cursor: 'pointer',
+                    cursor: (scope === 'team' && !isAdmin) ? 'not-allowed' : 'pointer',
+                    opacity: (scope === 'team' && !isAdmin) ? 0.5 : 1,
                     fontSize: 13
                   }}
                 >
@@ -408,6 +467,8 @@ export function BoardSettingsModal({
               <button
                 type="button"
                 class="btn-danger"
+                disabled={scope === 'team' && !isAdmin}
+                title={scope === 'team' && !isAdmin ? 'Only the board creator can delete or clear this board.' : undefined}
                 onClick={handleDelete}
                 style={{
                   display: 'flex',
@@ -418,7 +479,8 @@ export function BoardSettingsModal({
                   border: '1px solid rgba(239, 68, 68, 0.5)',
                   background: 'rgba(239, 68, 68, 0.14)',
                   color: '#ef4444',
-                  cursor: 'pointer',
+                  cursor: (scope === 'team' && !isAdmin) ? 'not-allowed' : 'pointer',
+                  opacity: (scope === 'team' && !isAdmin) ? 0.5 : 1,
                   fontSize: 13,
                   fontWeight: 600
                 }}

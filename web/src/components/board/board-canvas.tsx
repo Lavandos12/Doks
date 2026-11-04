@@ -27,6 +27,8 @@ import {
   renameBoard,
   setScope,
   convertBoardScope,
+  isBoardAdmin,
+  duplicateBoardToSolo,
   maps,
   restoreNote,
   createNote,
@@ -3680,16 +3682,27 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
               <span>{t('share.copyLink')}</span>
             </button>
 
-            {/* Make Private */}
+            {/* Make Private or Duplicate to Solo */}
             {!isViewerMode.value && (
-              <button
-                class="miro-scope-action-btn"
-                onClick={() => setConfirmConvertModal({ isOpen: true, targetScope: 'solo' })}
-                title="Move back to private solo workspace"
-              >
-                <Icon name="lock" size={12} />
-                <span>{t('workspace.makePrivate')}</span>
-              </button>
+              isBoardAdmin(currentBoardMeta) ? (
+                <button
+                  class="miro-scope-action-btn"
+                  onClick={() => setConfirmConvertModal({ isOpen: true, targetScope: 'solo' })}
+                  title="Move back to private solo workspace"
+                >
+                  <Icon name="lock" size={12} />
+                  <span>{t('workspace.makePrivate')}</span>
+                </button>
+              ) : (
+                <button
+                  class="miro-scope-action-btn"
+                  onClick={() => duplicateBoardToSolo(boardId)}
+                  title="Create a private copy in your Solo workspace"
+                >
+                  <Icon name="fork" size={12} />
+                  <span>{t('workspace.duplicateToSolo')}</span>
+                </button>
+              )
             )}
           </>
         )}
@@ -6971,6 +6984,10 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
         onClearBoard={() => {
           const targetId = settingsTargetBoard?.id || boardId;
           const targetScope = settingsTargetBoard?.scope || (currentBoardMeta?.scope || effectiveScope);
+          if (targetScope === 'team' && !isBoardAdmin(currentBoardMeta)) {
+            showToast('Permission denied: Only the board creator can clear this board.', 'error');
+            return;
+          }
           const targetDoc = (targetId === boardId && targetScope === effectiveScope)
             ? boardDoc
             : yjsClient.getOrCreateDoc(getScopedBoardDocName(targetScope, targetId));

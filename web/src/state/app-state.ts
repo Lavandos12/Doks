@@ -543,6 +543,30 @@ export function createNote(title = t('sidebar.new_note'), folder: string | null 
   return id;
 }
 
+export function getMyMemberId(): string {
+  let id = typeof localStorage !== 'undefined' ? localStorage.getItem('doks_member_id') : null;
+  if (!id) {
+    id = crypto.randomUUID();
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('doks_member_id', id);
+    }
+  }
+  return id;
+}
+
+export function isBoardAdmin(meta?: BoardMeta | null): boolean {
+  if (!meta) return false;
+  // Solo boards are always owned locally
+  if (meta.scope === 'solo') return true;
+
+  const myId = getMyMemberId();
+  if (meta.creatorId && meta.creatorId === myId) return true;
+
+  // Fallback for legacy boards without creatorId: current host is considered admin
+  if (!meta.creatorId && agentStatus.value?.isHost) return true;
+  return false;
+}
+
 export function createBoard(
   title = t('sidebar.new_board'),
   folder: string | null = null,
@@ -559,7 +583,9 @@ export function createBoard(
     createdAt: Date.now(),
     updatedAt: Date.now(),
     deleted: false,
-    scope
+    scope,
+    creatorId: getMyMemberId(),
+    creatorName: agentStatus.value?.memberName || 'User'
   };
 
   targetDoc.transact(() => {
@@ -735,11 +761,14 @@ export function restoreBoard(id: string, scopeHint?: WorkspaceScope): void {
 }
 
 export function deleteBoard(id: string, scope?: WorkspaceScope): void {
-  const targetMap = scope
-    ? (scope === 'solo' ? soloMaps.boards : teamMaps.boards)
-    : (soloMaps.boards.has(id) ? soloMaps.boards : teamMaps.boards);
+  const effectiveScope = scope || (soloMaps.boards.has(id) ? 'solo' : 'team');
+  const targetMap = effectiveScope === 'solo' ? soloMaps.boards : teamMaps.boards;
   const existing = targetMap.get(id);
   if (existing) {
+    if (effectiveScope === 'team' && !isBoardAdmin(existing)) {
+      showToast('Permission denied: Only the board creator can delete this board.', 'error');
+      return;
+    }
     targetMap.set(id, {
       ...existing,
       deleted: true,
@@ -779,6 +808,44 @@ export function selectBoardWithScope(boardId: string, scope: WorkspaceScope, tit
   openTab('board', boardId, title || t('sidebar.boards'));
 }
 
+export async function duplicateBoardToSolo(boardId: string): Promise<string> {
+  const sourceMap = teamMaps.boards;
+  const meta = sourceMap.get(boardId);
+  const title = `${meta?.title || 'Shared Board'} (Copy)`;
+
+  // 1. Create a new independent board in Solo scope
+  const newBoardId = createBoard(title, null, 'solo', false);
+
+  // 2. Deep-copy all nodes from team board in 'copy' mode (original untouched)
+  try {
+    const srcDoc = yjsClient.getOrCreateDoc(getScopedBoardDocName('team', boardId));
+    const { nodes } = getBoardMaps(srcDoc);
+    const nodeIds: string[] = [];
+    nodes.forEach((nMap, nId) => {
+      if (!nMap.get('deleted')) nodeIds.push(nId);
+    });
+
+    if (nodeIds.length > 0) {
+      await api.transferNodes({
+        fromScope: 'team',
+        toScope: 'solo',
+        boardId,
+        targetBoardId: newBoardId,
+        nodeIds,
+        includeLinkedNotes: true,
+        mode: 'copy'
+      });
+    }
+  } catch (err) {
+    console.error('Failed to duplicate board:', err);
+  }
+
+  // 3. Switch collaborator to their new private Solo copy
+  selectBoardWithScope(newBoardId, 'solo', title);
+  showToast(`Board copied to your private Solo workspace`, 'success');
+  return newBoardId;
+}
+
 export async function convertBoardScope(
   boardId: string,
   fromScope: WorkspaceScope,
@@ -786,12 +853,35 @@ export async function convertBoardScope(
 ): Promise<string> {
   if (fromScope === toScope) return boardId;
 
+  // Guard: Only board creator / admin can make a shared board private
+  if (fromScope === 'team' && toScope === 'solo') {
+    const meta = teamMaps.boards.get(boardId);
+    if (!isBoardAdmin(meta)) {
+      showToast('Permission denied: Only the board creator can make this board private.', 'error');
+      return boardId;
+    }
+  }
+
   const sourceMap = fromScope === 'solo' ? soloMaps.boards : teamMaps.boards;
   const meta = sourceMap.get(boardId);
   const title = meta?.title || t('sidebar.boards');
 
   // 1. Create target board in toScope with the same title
   const newBoardId = createBoard(title, meta?.folder || null, toScope, false);
+
+  // When promoting to team, stamp creator and promotion properties
+  if (toScope === 'team') {
+    const newMeta = teamMaps.boards.get(newBoardId);
+    if (newMeta) {
+      teamMaps.boards.set(newBoardId, {
+        ...newMeta,
+        creatorId: getMyMemberId(),
+        creatorName: agentStatus.value?.memberName || 'User',
+        promotedAt: Date.now(),
+        promotedBy: agentStatus.value?.memberName || 'User'
+      });
+    }
+  }
 
   // 2. Fetch all nodes from source board doc
   try {
