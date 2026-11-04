@@ -90,12 +90,7 @@ export function useCanvasDropZone({
         const targetX = Math.round(basePt.x - CARD_W / 2 + col * (CARD_W + GAP));
         const targetY = Math.round(basePt.y - CARD_H / 2 + row * (CARD_H + GAP));
 
-        const lower = file.name.toLowerCase();
-        if (lower.endsWith('.md') || lower.endsWith('.markdown') || lower.endsWith('.txt')) {
-          const text = await file.text();
-          const cleanTitle = file.name.replace(/\.(md|markdown|txt)$/i, '');
-          await onCreateNoteAndCard(cleanTitle, text, targetX, targetY);
-        } else if (file.type.startsWith('image/')) {
+        if (file.type.startsWith('image/')) {
           const instantBlobUrl = URL.createObjectURL(file);
           await onUploadAndCreateMediaCard(file, targetX, targetY, instantBlobUrl);
         } else {

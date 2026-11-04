@@ -478,7 +478,7 @@ describe('Doks v2.0 Resilience & Lossless Canvas Test Suite', () => {
     });
 
     it('correctly filters out freehand drawing nodes from marquee selection', () => {
-      const nodes = [
+      const nodes: Array<any> = [
         { id: 'card-1', type: 'sticky', x: 100, y: 100, w: 200, h: 120, text: 'Card', color: 'default' },
         { id: 'draw-1', type: 'drawing', x: 120, y: 120, w: 100, h: 80, text: '', color: '#ff0000' }
       ];

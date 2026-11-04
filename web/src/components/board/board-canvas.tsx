@@ -1192,13 +1192,16 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
       const noteId = createNote(title, null);
       const noteDoc = yjsClient.getOrCreateDoc(getScopedNoteDocName(effectiveScope, noteId));
       const yText = noteDoc.getText('text');
-      if (yText.length === 0 && markdown) {
-        yText.insert(0, markdown);
+      if (markdown) {
+        boardDoc.transact(() => {
+          yText.delete(0, yText.length);
+          yText.insert(0, markdown);
+        });
       }
       createNoteCardAt(noteId, x, y);
       showToast(`${t('toast.note_created')}: "${title}"`);
     },
-    [currentScope.value, viewport]
+    [effectiveScope, viewport]
   );
 
   const onLinkExistingNoteToCanvas = useCallback(
@@ -2049,8 +2052,8 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
         type: 'note',
         x: Math.round(x),
         y: Math.round(y),
-        w: 300,
-        h: 240,
+        w: 380,
+        h: 360,
         noteId,
         text: '',
         color: 'default',
@@ -2364,9 +2367,9 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
       } else if (/\.(xlsx?|xls|ods)$/i.test(fileName)) {
         w = 640;
         h = 480;
-      } else if (hasTextPreview) {
-        w = 360;
-        h = 280;
+      } else if (/\.(md|markdown|txt|rtf|odt)$/i.test(fileName) || hasTextPreview) {
+        w = 420;
+        h = 540;
       } else {
         w = 240;
         h = 130;
@@ -5391,17 +5394,19 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                   </span>
                   <button
                     class="node-open-note-btn"
-                    title={t('notes.preview')}
+                    title={t('notes.edit')}
                     onClick={(e) => {
                       e.stopPropagation();
                       if (node.noteId) {
                         const meta = maps.notes.get(node.noteId);
                         openTab('note', node.noteId, meta?.title || node.text);
+                        ensureSplitTabs();
+                        setWorkspaceMode('split');
                       }
                     }}
                   >
-                    <Icon name="file-text" size={12} />
-                    <span>{t('notes.preview')}</span>
+                    <Icon name="edit" size={12} />
+                    <span>{t('notes.edit')}</span>
                   </button>
                 </div>
               )}
@@ -5436,39 +5441,17 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                   const noteYText = noteDoc.getText('text');
                   const noteContent = noteYText.toString();
 
-                  // Render live interactive markdown preview with clickable checkboxes
+                  // Render live interactive markdown preview directly in card
                   return (
                     <div
-                      class="note-card-content-view scrollable-card-content"
-                      onWheel={(e) => e.stopPropagation()}
+                      class="note-card-content-view scrollable-card-content markdown-body"
+                      style={{ padding: '8px 12px', userSelect: 'text' }}
+                      onWheel={(e) => {
+                        if (!e.ctrlKey && !e.metaKey) e.stopPropagation();
+                      }}
+                      onMouseDown={(e) => e.stopPropagation()}
                     >
-                      <div class="note-card-header-title">
-                        {noteMeta?.title || t('notes.untitled')}
-                      </div>
-                      <div class="note-card-body-preview">
-                        {noteContent.split('\n').map((line, lineIdx) => {
-                          const isCheckbox = line.trim().startsWith('- [ ]') || line.trim().startsWith('- [x]');
-                          if (isCheckbox) {
-                            const isChecked = line.trim().startsWith('- [x]');
-                            const labelText = line.replace(/^-\s*\[( |x)\]\s*/, '');
-                            return (
-                              <div key={lineIdx} class="note-checkbox-line">
-                                <input
-                                  type="checkbox"
-                                  checked={isChecked}
-                                  disabled={isViewerMode.value}
-                                  onChange={() => {
-                                    if (isViewerMode.value) return;
-                                    toggleNoteCheckbox(node.noteId!, lineIdx);
-                                  }}
-                                />
-                                <span>{labelText}</span>
-                              </div>
-                            );
-                          }
-                          return <div key={lineIdx} class="note-preview-line">{line || '\u00A0'}</div>;
-                        })}
-                      </div>
+                      <MarkdownPreview content={noteContent || `# ${noteMeta?.title || t('notes.untitled')}`} />
                     </div>
                   );
                 })()

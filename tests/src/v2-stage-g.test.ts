@@ -134,22 +134,22 @@ describe('Stage G: Deterministic AI Context Export (doks-ai/1)', () => {
     });
 
     const md = result.markdown;
-    expect(md).toContain('# Контекст доски: Дорожная карта Doks');
-    expect(md).toContain('Формат: doks-ai/1. Экспорт: 2026-10-24 21:40.');
-    expect(md).toContain('Объектов: 4 (стикеров 3, рамок 1).');
-    expect(md).toContain('Выполнено: 1 из 3 стикеров.');
-    expect(md).toContain('## Рамка «Фаза 1. Старт»');
+    expect(md).toContain('# Board Context: Дорожная карта Doks');
+    expect(md).toContain('Format: doks-ai/1. Export: 2026-10-24 21:40.');
+    expect(md).toContain('Objects: 4 (stickies: 3, frames: 1).');
+    expect(md).toContain('Completed: 1 of 3 stickies.');
+    expect(md).toContain('## Frame "Фаза 1. Старт"');
     expect(md).toContain('Купить домен и VPS');
     expect(md).toContain('Парсер заявок');
-    expect(md).toContain('## Объекты вне рамок');
+    expect(md).toContain('## Elements outside frames');
     expect(md).toContain('Общая заметка вне рамки');
-    expect(md).toContain('## Связи');
+    expect(md).toContain('## Connections');
     expect(md).toContain('→');
-    expect(md).toContain('(«после»)');
-    expect(md).toContain('## Пространственная карта');
-    expect(md).toContain('## Открытые задачи');
+    expect(md).toContain('("после")');
+    expect(md).toContain('## Spatial Map');
+    expect(md).toContain('## Open Tasks');
     expect(md).toContain('Парсер заявок');
-    expect(md).toContain('## Подсказка для ИИ');
+    expect(md).toContain('## Guidance for AI');
     expect(result.openTasksCount).toBe(2);
     expect(result.estimatedTokens).toBeGreaterThan(0);
   });
@@ -294,7 +294,7 @@ describe('Stage G: Deterministic AI Context Export (doks-ai/1)', () => {
     });
 
     expect(result.markdown).not.toContain('Иван');
-    expect(result.markdown).toContain('Участник 1');
+    expect(result.markdown).toContain('Member 1');
   });
 
   it('benchmarks 1000 objects under 2 seconds (Section 5.6)', () => {
@@ -337,7 +337,7 @@ describe('Stage G: Deterministic AI Context Export (doks-ai/1)', () => {
 
     expect(elapsed).toBeLessThan(2000); // Must be faster than 2000ms
     expect(result.charCount).toBeGreaterThan(10000);
-    expect(result.markdown).toContain('Объектов: 1000');
+    expect(result.markdown).toContain('Objects: 1000');
   });
 
   it('exposes POST /api/export/ai endpoint and returns stats', async () => {

@@ -70,14 +70,14 @@ describe('F8: AI Context Export Refinements (Stable IDs, Color Names, Note Check
 
     // Extract short id of id2 from both exports
     // The short id for id2 must be identical in both!
-    const shortIdInAll = exportAll.markdown.match(/([a-zA-Z0-9_]{4,8})\s*\|\s*стикер\s*\|.*Второй/)?.[1];
-    const shortIdInSecond = exportSecond.markdown.match(/([a-zA-Z0-9_]{4,8})\s*\|\s*стикер\s*\|.*Второй/)?.[1];
+    const shortIdInAll = exportAll.markdown.match(/([a-zA-Z0-9_]{4,8})\s*\|\s*sticky\s*\|.*Второй/)?.[1];
+    const shortIdInSecond = exportSecond.markdown.match(/([a-zA-Z0-9_]{4,8})\s*\|\s*sticky\s*\|.*Второй/)?.[1];
 
     expect(shortIdInAll).toBeDefined();
     expect(shortIdInAll).toBe(shortIdInSecond);
   });
 
-  it('2. Maps hex codes like #fef08a to palette color names (жёлтый, etc.)', () => {
+  it('2. Maps hex codes like #fef08a to palette color names (yellow, etc.)', () => {
     const indexDoc = docManager.getOrCreateDoc(DOC_INDEX);
     const { boards } = getIndexMaps(indexDoc);
 
@@ -104,7 +104,7 @@ describe('F8: AI Context Export Refinements (Stable IDs, Color Names, Note Check
     }));
 
     const result = generateAiContext(docManager, { boardId });
-    expect(result.markdown).toContain('жёлтый');
+    expect(result.markdown).toContain('yellow');
     expect(result.markdown).not.toContain('#fef08a');
   });
 
@@ -152,10 +152,10 @@ describe('F8: AI Context Export Refinements (Stable IDs, Color Names, Note Check
 
     const result = generateAiContext(docManager, { boardId, includeNotes: 'cards' });
 
-    expect(result.markdown).toContain('## Открытые задачи');
+    expect(result.markdown).toContain('## Open Tasks');
     expect(result.markdown).toContain('[Спецификация API] Настроить rate limiter');
     expect(result.markdown).toContain('[Спецификация API] Протестировать Range 416');
-    const openTasksSection = result.markdown.slice(result.markdown.indexOf('## Открытые задачи'));
+    const openTasksSection = result.markdown.slice(result.markdown.indexOf('## Open Tasks'));
     expect(openTasksSection).not.toContain('Добавить cors'); // Completed task [x] should not be in open tasks
     expect(result.openTasksCount).toBe(2);
   });

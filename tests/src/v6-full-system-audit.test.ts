@@ -216,8 +216,8 @@ describe('V6 Full System Audit & Master Fix Suite', () => {
         timestamp: '2026-10-27 18:00'
       });
 
-      expect(res.markdown).toContain('# Контекст доски: Личный проект');
-      expect(res.markdown).toContain('чеклист');
+      expect(res.markdown).toContain('# Board Context: Личный проект');
+      expect(res.markdown).toContain('checklist');
       expect(res.markdown).toContain('[typescript] const x: number = 42;');
       expect(res.markdown).toContain('donut: [Разработка: 70%, Маркетинг: 30%]');
       expect(res.markdown).toContain('Дописать тесты');

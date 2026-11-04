@@ -543,7 +543,9 @@ export function createNote(title = t('sidebar.new_note'), folder: string | null 
   return id;
 }
 
+let cachedMemberId: string | null = null;
 export function getMyMemberId(): string {
+  if (cachedMemberId) return cachedMemberId;
   let id = typeof localStorage !== 'undefined' ? localStorage.getItem('doks_member_id') : null;
   if (!id) {
     id = crypto.randomUUID();
@@ -551,6 +553,7 @@ export function getMyMemberId(): string {
       localStorage.setItem('doks_member_id', id);
     }
   }
+  cachedMemberId = id;
   return id;
 }
 

@@ -500,7 +500,7 @@ export class PeerService extends EventEmitter {
     return this.discoveryService ? this.discoveryService.getDiscoveredRooms() : [];
   }
 
-  public addPeer(rawAddress: string, allowKeyAdoption = false): void {
+  public addPeer(rawAddress: string, allowKeyAdoption = true): void {
     let clean = rawAddress.trim();
     if (clean.startsWith('doks://')) {
       clean = clean.slice(7);

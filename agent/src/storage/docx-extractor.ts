@@ -366,6 +366,6 @@ export function extractTextFromDocxBuffer(buf: Buffer): string {
     }
   } catch {}
 
-  // Fallback to legacy binary scanner if OpenXML inflation failed
-  return extractTextFromLegacyDocBuffer(buf);
+  // Return empty string if not a valid document
+  return '';
 }
