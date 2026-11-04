@@ -405,6 +405,7 @@ export const en = {
   'common.save': 'Save',
   'common.delete': 'Delete',
   'common.copy': 'Copy',
+  'common.download': 'Download',
   'minimap.title': 'Minimap (click to pan)',
   'autoDiagram.title': 'Auto Diagram & Mindmap Generator',
   'autoDiagram.presets': 'Presets & Templates',

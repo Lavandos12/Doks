@@ -6,7 +6,8 @@ import {
   extractTextFromXlsx,
   extractTextFromPptx,
   extractTextFromOdf,
-  extractTextFromRtf
+  extractTextFromRtf,
+  extractMatrixFromCsv
 } from './office-extractor.js';
 import { extractTextFromPdfBuffer } from './pdf-extractor.js';
 
@@ -175,6 +176,8 @@ export class AttachmentManager {
       extractedText = extractTextFromDocx(buffer);
     } else if (lowerName.endsWith('.xlsx') || lowerName.endsWith('.xls')) {
       extractedText = extractTextFromXlsx(buffer);
+    } else if (lowerName.endsWith('.csv') || lowerName.endsWith('.tsv')) {
+      extractedText = extractMatrixFromCsv(buffer);
     } else if (lowerName.endsWith('.pptx') || lowerName.endsWith('.ppt')) {
       extractedText = extractTextFromPptx(buffer);
     } else if (lowerName.endsWith('.odt') || lowerName.endsWith('.ods') || lowerName.endsWith('.odp')) {
@@ -186,8 +189,6 @@ export class AttachmentManager {
     } else if (
       lowerName.endsWith('.txt') ||
       lowerName.endsWith('.md') ||
-      lowerName.endsWith('.csv') ||
-      lowerName.endsWith('.tsv') ||
       lowerName.endsWith('.json') ||
       lowerName.endsWith('.xml') ||
       lowerName.endsWith('.yaml') ||

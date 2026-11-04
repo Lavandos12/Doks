@@ -47,6 +47,7 @@ import {
 import { CreateBoardModal } from './create-board-modal.js';
 import { BoardSettingsModal } from './board-settings-modal.js';
 import { NoteEditor } from '../notes/editor.js';
+import { MarkdownPreview } from '../notes/markdown-preview.js';
 import { api } from '../../api/client.js';
 import { CanvasEdgesLayer, type CanvasEdgeModel } from '../CanvasEdgesLayer.js';
 import { useCanvasDropZone } from '../../hooks/useCanvasDropZone.js';
@@ -2208,8 +2209,8 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
           if (Array.isArray(parsed) && parsed.length > 0 && Array.isArray(parsed[0])) {
             const cols = parsed[0].length || 3;
             const rows = parsed.length || 3;
-            const tableW = Math.max(340, Math.min(cols * 130, 800));
-            const tableH = Math.max(180, Math.min(50 + rows * 38, 600));
+            const tableW = Math.max(340, cols * 130);
+            const tableH = Math.max(180, 50 + rows * 38);
             boardDoc.transact(() => {
               yNodes.set(id, nodeMap);
               setNodeProperties(nodeMap, {
@@ -2237,7 +2238,8 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
         } catch {}
       }
 
-      // Calculate proper image dimensions maintaining aspect ratio
+      // Calculate proper image and document dimensions
+      const isWord = /\.(docx?|rtf|odt)$/i.test(fileName);
       let w = 280;
       let h = 200;
       if (isImage) {
@@ -2260,7 +2262,10 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
           }
           if (!fileDataUrl) URL.revokeObjectURL(objUrl);
         } catch {}
-      } else if (hasTextPreview || isPdf) {
+      } else if (isPdf || isWord) {
+        w = 420;
+        h = 540;
+      } else if (hasTextPreview) {
         w = 360;
         h = 280;
       } else {
@@ -3567,8 +3572,8 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
     const availW = containerSize.width || window.innerWidth;
     const availH = containerSize.height || window.innerHeight;
 
-    const paddingX = Math.max(96, availW * 0.12);
-    const paddingY = Math.max(96, availH * 0.12);
+    const paddingX = Math.max(96, availW * 0.15);
+    const paddingY = Math.max(96, availH * 0.15);
 
     const scaleX = (availW - paddingX * 2) / Math.max(contentW, 100);
     const scaleY = (availH - paddingY * 2) / Math.max(contentH, 100);
@@ -5610,7 +5615,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                                   transformOrigin: 'top left'
                                 }}
                               >
-                                {node.extractedText || t('canvas.extracting_doc')}
+                                <MarkdownPreview content={node.extractedText || t('canvas.extracting_doc')} />
                               </div>
                             </div>
                           );
