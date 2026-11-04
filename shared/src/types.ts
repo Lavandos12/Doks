@@ -18,6 +18,8 @@ export interface NoteMeta {
   deletedAt?: number;
   scope?: WorkspaceScope;
   originId?: string;
+  creatorId?: string;
+  creatorName?: string;
   promotedAt?: number;
   promotedBy?: string;
 }
@@ -32,6 +34,8 @@ export interface BoardMeta {
   deletedAt?: number;
   scope?: WorkspaceScope;
   originId?: string;
+  creatorId?: string;
+  creatorName?: string;
   promotedAt?: number;
   promotedBy?: string;
 }
@@ -117,6 +121,8 @@ export interface BoardNodeData {
   deletedAt?: number;
   scope?: WorkspaceScope;
   originId?: string;
+  creatorId?: string;
+  creatorName?: string;
   promotedAt?: number;
   promotedBy?: string;
 }

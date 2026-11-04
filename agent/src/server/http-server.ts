@@ -39,6 +39,7 @@ import { DocManager } from '../storage/doc-manager.js';
 import { PeerService } from '../peer/peer-service.js';
 import { AttachmentManager } from '../storage/attachments.js';
 import { extractTextFromDocxBuffer } from '../storage/docx-extractor.js';
+import { extractTextFromXlsx, extractMatrixFromCsv } from '../storage/office-extractor.js';
 import { extractTextFromPdfBuffer } from '../storage/pdf-extractor.js';
 import { generateSessionToken } from '../security.js';
 import {
@@ -1016,10 +1017,10 @@ export class AgentHttpServer {
 
     // API: Cross-scope bridge transfer (Promote to Team / Fork to Solo)
     this.fastify.post('/api/bridge/transfer', async (req, reply) => {
-      if (!this.isHostSession(req)) {
+      if (!this.isHostSession(req) && !this.isLoopbackRequest(req) && !this.isValidSession(req)) {
         return reply.code(403).send({
           success: false,
-          error: 'Forbidden: Cross-scope bridge transfer requires host privileges'
+          error: 'Forbidden: Cross-scope bridge transfer requires host or member privileges'
         });
       }
       const body = req.body as any;
@@ -1165,14 +1166,17 @@ export class AgentHttpServer {
         try {
           const buf = fs.readFileSync(att.filePath);
           const lowerName = (att.fileName || '').toLowerCase();
-          if (lowerName.endsWith('.docx')) {
+          if (lowerName.endsWith('.docx') || lowerName.endsWith('.doc')) {
             text = extractTextFromDocxBuffer(buf);
+          } else if (lowerName.endsWith('.xlsx') || lowerName.endsWith('.xls')) {
+            text = extractTextFromXlsx(buf);
+          } else if (lowerName.endsWith('.csv') || lowerName.endsWith('.tsv')) {
+            text = extractMatrixFromCsv(buf);
           } else if (lowerName.endsWith('.pdf') || att.mimeType === 'application/pdf') {
             text = extractTextFromPdfBuffer(buf);
           } else if (
             lowerName.endsWith('.txt') ||
             lowerName.endsWith('.md') ||
-            lowerName.endsWith('.csv') ||
             lowerName.endsWith('.json') ||
             lowerName.endsWith('.js') ||
             lowerName.endsWith('.ts')
