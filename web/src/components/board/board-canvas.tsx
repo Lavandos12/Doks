@@ -2200,6 +2200,43 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
         } catch {}
       }
 
+      // If file is an Excel spreadsheet or CSV with tabular data, create a native interactive Table widget!
+      const isSpreadsheet = fileName.toLowerCase().endsWith('.xlsx') || fileName.toLowerCase().endsWith('.xls') || fileName.toLowerCase().endsWith('.csv');
+      if (isSpreadsheet && data.extractedText && data.extractedText.trim().startsWith('[[')) {
+        try {
+          const parsed = JSON.parse(data.extractedText);
+          if (Array.isArray(parsed) && parsed.length > 0 && Array.isArray(parsed[0])) {
+            const cols = parsed[0].length || 3;
+            const rows = parsed.length || 3;
+            const tableW = Math.max(340, Math.min(cols * 130, 800));
+            const tableH = Math.max(180, Math.min(50 + rows * 38, 600));
+            boardDoc.transact(() => {
+              yNodes.set(id, nodeMap);
+              setNodeProperties(nodeMap, {
+                id,
+                type: 'table',
+                x: Math.round(x - tableW / 2),
+                y: Math.round(y - tableH / 2),
+                w: tableW,
+                h: tableH,
+                text: data.extractedText,
+                fileName,
+                fileHash: data.hash,
+                author: effectiveScope === 'team' ? (agentStatus.value?.memberName || '') : '',
+                done: false,
+                z: 2,
+                deleted: false,
+                locked: false
+              });
+            }, 'user');
+            setSelectedNodeIds(new Set([id]));
+            setActiveTool('select');
+            showToast(`Spreadsheet imported as Table: "${fileName}"`, 'success');
+            return;
+          }
+        } catch {}
+      }
+
       // Calculate proper image dimensions maintaining aspect ratio
       let w = 280;
       let h = 200;
@@ -4935,23 +4972,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
           transformOrigin: '0 0'
         }}
       >
-        {/* Bounded Board Sheet Boundary */}
-        <div
-          class="board-boundary"
-          style={{
-            position: 'absolute',
-            left: `${boardBounds.x}px`,
-            top: `${boardBounds.y}px`,
-            width: `${boardBounds.w}px`,
-            height: `${boardBounds.h}px`,
-            backgroundColor: '#0d0e15',
-            border: '1px solid rgba(255, 255, 255, 0.08)',
-            boxShadow: '0 20px 80px rgba(0, 0, 0, 0.6)',
-            borderRadius: '16px',
-            pointerEvents: 'none',
-            zIndex: 0
-          }}
-        />
+
         {/* Drop Ghost Card Preview */}
         {dropGhost && (
           <div
@@ -5433,6 +5454,27 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                     showToast(`${t('toast.note_created')}: "${noteTitle}"`);
                   };
 
+                  const convertToTableWidget = (e: MouseEvent) => {
+                    e.stopPropagation();
+                    const map = yNodes.get(node.id);
+                    if (map && node.extractedText) {
+                      try {
+                        const parsed = JSON.parse(node.extractedText);
+                        const cols = parsed[0]?.length || 3;
+                        const rows = parsed.length || 3;
+                        boardDoc.transact(() => {
+                          setNodeProperties(map, {
+                            type: 'table',
+                            text: node.extractedText,
+                            w: Math.max(node.w, cols * 130),
+                            h: Math.max(node.h, 50 + rows * 38)
+                          });
+                        }, 'user');
+                        showToast('Converted to Table Widget', 'success');
+                      } catch {}
+                    }
+                  };
+
                   return (
                     <div class="node-file-wrapper miro-document-card" onMouseDown={(e) => handleNodePointerDown(node, e as any)}>
                       <div class="node-file-header" onMouseDown={(e) => handleNodePointerDown(node, e as any)}>
@@ -5443,6 +5485,18 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                           </span>
                         </div>
                         <div class="node-file-actions" onMouseDown={(e) => e.stopPropagation()}>
+                          {node.extractedText && node.extractedText.trim().startsWith('[[') && (
+                            <button
+                              type="button"
+                              class="node-file-btn"
+                              onClick={convertToTableWidget}
+                              title="Convert to interactive Table Widget"
+                              style={{ color: '#34d399', borderColor: 'rgba(16, 185, 129, 0.4)' }}
+                            >
+                              <Icon name="table" size={12} />
+                              <span>Table Widget</span>
+                            </button>
+                          )}
                           {node.extractedText && (
                             <button
                               type="button"
@@ -5460,10 +5514,10 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                             class="node-file-btn"
                             target="_blank"
                             rel="noopener"
-                            title={t('settings.download_zip')}
+                            title={t('common.download')}
                           >
                             <Icon name="download" size={12} />
-                            <span>{t('settings.download_zip')}</span>
+                            <span>{t('common.download')}</span>
                           </a>
                         </div>
                       </div>
@@ -5474,7 +5528,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                             src={getSafeAttachmentUrl(node.fileDataUrl, node.fileHash)}
                             class="node-file-pdf-iframe"
                             title={node.fileName || 'PDF'}
-                            sandbox="allow-scripts allow-same-origin"
+                            style={{ width: '100%', height: '100%', border: 'none', background: '#ffffff' }}
                           />
                         ) : (
                           <div
@@ -5497,24 +5551,70 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                           </div>
                         )
                       ) : (
-                        <div
-                          class="node-doc-page-container scrollable-card-content"
-                          onWheel={(e) => {
-                            if (!e.ctrlKey && !e.metaKey) e.stopPropagation();
-                          }}
-                          onMouseDown={(e) => e.stopPropagation()}
-                        >
-                          <div
-                            class="node-doc-sheet"
-                            style={{
-                              width: `${DOC_BASE_WIDTH}px`,
-                              transform: `scale(${scale})`,
-                              transformOrigin: 'top left'
-                            }}
-                          >
-                            {node.extractedText || t('canvas.extracting_doc')}
-                          </div>
-                        </div>
+                        (() => {
+                          if (node.extractedText && node.extractedText.trim().startsWith('[[')) {
+                            try {
+                              const matrix: string[][] = JSON.parse(node.extractedText);
+                              if (Array.isArray(matrix) && matrix.length > 0 && Array.isArray(matrix[0])) {
+                                return (
+                                  <div class="node-table-wrapper" style={{ width: '100%', height: '100%', overflow: 'auto', background: '#161822', borderRadius: '0 0 8px 8px', padding: '6px' }}>
+                                    <div
+                                      class="node-table-grid"
+                                      style={{
+                                        gridTemplateColumns: `repeat(${matrix[0].length}, minmax(110px, 1fr))`,
+                                        gridAutoRows: '32px',
+                                        alignContent: 'start',
+                                        flex: 1
+                                      }}
+                                    >
+                                      {matrix.map((row, rIdx) =>
+                                        row.map((cell, cIdx) => (
+                                          <div
+                                            key={`${rIdx}-${cIdx}`}
+                                            class="node-table-cell"
+                                            style={{
+                                              background: rIdx === 0 ? 'rgba(255, 255, 255, 0.08)' : '#181b26',
+                                              fontWeight: rIdx === 0 ? 600 : 400,
+                                              color: rIdx === 0 ? '#f1f5f9' : '#cbd5e1',
+                                              padding: '4px 8px',
+                                              fontSize: '12px',
+                                              overflow: 'hidden',
+                                              textOverflow: 'ellipsis',
+                                              whiteSpace: 'nowrap'
+                                            }}
+                                            title={cell}
+                                          >
+                                            {cell || '\u00A0'}
+                                          </div>
+                                        ))
+                                      )}
+                                    </div>
+                                  </div>
+                                );
+                              }
+                            } catch {}
+                          }
+                          return (
+                            <div
+                              class="node-doc-page-container scrollable-card-content"
+                              onWheel={(e) => {
+                                if (!e.ctrlKey && !e.metaKey) e.stopPropagation();
+                              }}
+                              onMouseDown={(e) => e.stopPropagation()}
+                            >
+                              <div
+                                class="node-doc-sheet"
+                                style={{
+                                  width: `${DOC_BASE_WIDTH}px`,
+                                  transform: `scale(${scale})`,
+                                  transformOrigin: 'top left'
+                                }}
+                              >
+                                {node.extractedText || t('canvas.extracting_doc')}
+                              </div>
+                            </div>
+                          );
+                        })()
                       )}
                     </div>
                   );
@@ -6141,12 +6241,13 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
 
                       <div class="chart-visual-area">
                         {chartType === 'pie' || chartType === 'donut' ? (
-                          <svg viewBox="0 0 220 220" class="chart-svg-render" style={{ width: '100%', height: '100%', maxWidth: '100%', maxHeight: '100%', flex: 1 }}>
+                          <svg viewBox="0 0 250 250" class="chart-svg-render" style={{ width: '100%', height: '100%', maxWidth: '100%', maxHeight: '100%', flex: 1 }}>
                             {(() => {
-                              const cx = 110;
-                              const cy = 110;
+                              const cx = 125;
+                              const cy = 125;
                               const r = 70;
                               const rIn = chartType === 'donut' ? 44 : 0;
+                              let smallSliceCounter = 0;
                               let startAngle = -Math.PI / 2;
 
                               const validSegments = themedData.filter((d) => (Number(d.value) || 0) > 0);
@@ -6235,10 +6336,14 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                                     </text>
                                   );
                                 } else if (pct > 0) {
+                                  const isStaggered = smallSliceCounter % 2 === 1;
+                                  smallSliceCounter++;
+                                  const calloutR = isStaggered ? (r + 26) : (r + 14);
+                                  const textR = isStaggered ? (r + 34) : (r + 21);
                                   const edgeX = cx + (r - 2) * cosA;
                                   const edgeY = cy + (r - 2) * sinA;
-                                  const outX = cx + (r + 14) * cosA;
-                                  const outY = cy + (r + 14) * sinA;
+                                  const outX = cx + calloutR * cosA;
+                                  const outY = cy + calloutR * sinA;
                                   sliceLabels.push(
                                     <g key={`l-${seg.id}`} style={{ pointerEvents: 'none' }}>
                                       <line
@@ -6246,13 +6351,13 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                                         y1={edgeY.toFixed(1)}
                                         x2={outX.toFixed(1)}
                                         y2={outY.toFixed(1)}
-                                        stroke="rgba(255, 255, 255, 0.45)"
+                                        stroke="rgba(255, 255, 255, 0.55)"
                                         strokeWidth="1"
                                       />
                                       <circle cx={edgeX.toFixed(1)} cy={edgeY.toFixed(1)} r="1.5" fill="#ffffff" />
                                       <text
-                                        x={(cx + (r + 20) * cosA).toFixed(1)}
-                                        y={(cy + (r + 20) * sinA).toFixed(1)}
+                                        x={(cx + textR * cosA).toFixed(1)}
+                                        y={(cy + textR * sinA).toFixed(1)}
                                         fill="#ffffff"
                                         fontSize="10"
                                         fontWeight="700"

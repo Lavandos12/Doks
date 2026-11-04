@@ -203,7 +203,7 @@ export class AgentHttpServer {
       if (!reply.hasHeader('Content-Security-Policy')) {
         reply.header(
           'Content-Security-Policy',
-          "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' data: blob:; connect-src 'self' ws: wss:;"
+          "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' data: blob:; frame-src 'self' blob: data:; object-src 'self' blob: data:; connect-src 'self' ws: wss:;"
         );
       }
     });
@@ -1275,7 +1275,7 @@ export class AgentHttpServer {
       reply.header('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
       reply.header('X-Content-Type-Options', 'nosniff');
       if (att.mimeType === 'application/pdf') {
-        reply.header('Content-Security-Policy', "default-src 'self' blob: data:; style-src 'unsafe-inline';");
+        reply.header('Content-Security-Policy', "default-src 'self' blob: data:; frame-src 'self' blob: data:; object-src 'self' blob: data:; style-src 'self' 'unsafe-inline';");
       } else {
         reply.header('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; sandbox");
       }
