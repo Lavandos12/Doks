@@ -39,6 +39,7 @@ import { DocManager } from '../storage/doc-manager.js';
 import { PeerService } from '../peer/peer-service.js';
 import { AttachmentManager } from '../storage/attachments.js';
 import { extractTextFromDocxBuffer } from '../storage/docx-extractor.js';
+import { extractTextFromXlsx, extractMatrixFromCsv } from '../storage/office-extractor.js';
 import { extractTextFromPdfBuffer } from '../storage/pdf-extractor.js';
 import { generateSessionToken } from '../security.js';
 import {
@@ -203,7 +204,7 @@ export class AgentHttpServer {
       if (!reply.hasHeader('Content-Security-Policy')) {
         reply.header(
           'Content-Security-Policy',
-          "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' data: blob:; connect-src 'self' ws: wss:;"
+          "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' data: blob:; frame-src 'self' blob: data:; object-src 'self' blob: data:; connect-src 'self' ws: wss:;"
         );
       }
     });
@@ -1165,14 +1166,17 @@ export class AgentHttpServer {
         try {
           const buf = fs.readFileSync(att.filePath);
           const lowerName = (att.fileName || '').toLowerCase();
-          if (lowerName.endsWith('.docx')) {
+          if (lowerName.endsWith('.docx') || lowerName.endsWith('.doc')) {
             text = extractTextFromDocxBuffer(buf);
+          } else if (lowerName.endsWith('.xlsx') || lowerName.endsWith('.xls')) {
+            text = extractTextFromXlsx(buf);
+          } else if (lowerName.endsWith('.csv') || lowerName.endsWith('.tsv')) {
+            text = extractMatrixFromCsv(buf);
           } else if (lowerName.endsWith('.pdf') || att.mimeType === 'application/pdf') {
             text = extractTextFromPdfBuffer(buf);
           } else if (
             lowerName.endsWith('.txt') ||
             lowerName.endsWith('.md') ||
-            lowerName.endsWith('.csv') ||
             lowerName.endsWith('.json') ||
             lowerName.endsWith('.js') ||
             lowerName.endsWith('.ts')
@@ -1275,7 +1279,7 @@ export class AgentHttpServer {
       reply.header('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
       reply.header('X-Content-Type-Options', 'nosniff');
       if (att.mimeType === 'application/pdf') {
-        reply.header('Content-Security-Policy', "default-src 'self' blob: data:; style-src 'unsafe-inline';");
+        reply.header('Content-Security-Policy', "default-src 'self' blob: data:; frame-src 'self' blob: data:; object-src 'self' blob: data:; style-src 'self' 'unsafe-inline';");
       } else {
         reply.header('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; sandbox");
       }

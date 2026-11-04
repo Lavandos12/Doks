@@ -5419,9 +5419,43 @@ button.doks-color-dot.active {
   font-size: 14.5px;
   line-height: 1.65;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  white-space: pre-wrap;
+  white-space: normal;
   word-break: break-word;
   user-select: text;
+}
+
+.node-doc-sheet .markdown-preview-root {
+  color: #0f172a;
+  white-space: normal;
+}
+
+.node-doc-sheet .preview-h1,
+.node-doc-sheet .preview-h2,
+.node-doc-sheet .preview-h3,
+.node-doc-sheet .preview-h4,
+.node-doc-sheet .preview-p,
+.node-doc-sheet .preview-list-item {
+  color: #0f172a;
+  border-color: #e2e8f0;
+}
+
+.node-doc-sheet .preview-table {
+  border-color: #cbd5e1;
+}
+
+.node-doc-sheet .preview-table th {
+  background-color: #f1f5f9;
+  color: #0f172a;
+  border-color: #cbd5e1;
+}
+
+.node-doc-sheet .preview-table td {
+  color: #1e293b;
+  border-color: #cbd5e1;
+}
+
+.node-doc-sheet .preview-table tr:nth-child(even) {
+  background-color: #f8fafc;
 }
 
 .node-file-pdf-iframe {

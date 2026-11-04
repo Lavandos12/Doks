@@ -49,6 +49,7 @@ import {
 import { CreateBoardModal } from './create-board-modal.js';
 import { BoardSettingsModal } from './board-settings-modal.js';
 import { NoteEditor } from '../notes/editor.js';
+import { MarkdownPreview } from '../notes/markdown-preview.js';
 import { api } from '../../api/client.js';
 import { CanvasEdgesLayer, type CanvasEdgeModel } from '../CanvasEdgesLayer.js';
 import { useCanvasDropZone } from '../../hooks/useCanvasDropZone.js';
@@ -2154,6 +2155,8 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
       const nodeMap = new Y.Map();
       const isImage = (data.mimeType || fileType || '').startsWith('image/') && !((data.mimeType || '').includes('svg'));
       const isPdf = (data.mimeType || '').includes('pdf') || fileName.toLowerCase().endsWith('.pdf');
+      const isWord = /\.(docx?|rtf|odt)$/i.test(fileName);
+      const isSpreadsheet = /\.(xlsx?|csv)$/i.test(fileName);
       const hasTextPreview = Boolean(data.extractedText);
 
       let fileDataUrl: string | undefined;
@@ -2168,7 +2171,56 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
         } catch {}
       }
 
-      // Calculate proper image dimensions maintaining aspect ratio
+      // Automatically convert spreadsheets (Excel/CSV) into interactive Canvas Table widgets
+      let tableGrid: string[][] | null = null;
+      if (isSpreadsheet && data.extractedText) {
+        try {
+          const parsed = JSON.parse(data.extractedText);
+          if (Array.isArray(parsed) && parsed.length > 0 && Array.isArray(parsed[0])) {
+            tableGrid = parsed;
+          }
+        } catch {}
+      }
+
+      if (tableGrid) {
+        const cols = Math.max(...tableGrid.map((r: any) => (Array.isArray(r) ? r.length : 0)), 1);
+        const normalizedGrid = tableGrid.map((r: any) => {
+          const row = Array.isArray(r) ? [...r] : [];
+          while (row.length < cols) row.push('');
+          return row;
+        });
+        const tableW = Math.max(340, cols * 130);
+        const tableH = Math.max(180, 50 + normalizedGrid.length * 38);
+
+        boardDoc.transact(() => {
+          yNodes.set(id, nodeMap);
+          setNodeProperties(nodeMap, {
+            id,
+            type: 'table',
+            x: Math.round(x - tableW / 2),
+            y: Math.round(y - tableH / 2),
+            w: tableW,
+            h: tableH,
+            text: JSON.stringify(normalizedGrid),
+            fileHash: data.hash,
+            fileName,
+            extractedText: data.extractedText,
+            fileDataUrl,
+            author: effectiveScope === 'team' ? (agentStatus.value?.memberName || '') : '',
+            done: false,
+            z: 2,
+            deleted: false,
+            locked: false
+          });
+        }, 'user');
+
+        setSelectedNodeIds(new Set([id]));
+        setActiveTool('select');
+        showToast(`${t('toast.file_uploaded')}: "${fileName}"`);
+        return;
+      }
+
+      // Calculate proper document/image dimensions
       let w = 280;
       let h = 200;
       if (isImage) {
@@ -2191,7 +2243,10 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
           }
           if (!fileDataUrl) URL.revokeObjectURL(objUrl);
         } catch {}
-      } else if (hasTextPreview || isPdf) {
+      } else if (isPdf || isWord) {
+        w = 420;
+        h = 540;
+      } else if (hasTextPreview) {
         w = 360;
         h = 280;
       } else {
@@ -5428,10 +5483,10 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                             class="node-file-btn"
                             target="_blank"
                             rel="noopener"
-                            title={t('settings.download_zip')}
+                            title={t('common.download')}
                           >
                             <Icon name="download" size={12} />
-                            <span>{t('settings.download_zip')}</span>
+                            <span>{t('common.download')}</span>
                           </a>
                         </div>
                       </div>
@@ -5442,7 +5497,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                             src={getSafeAttachmentUrl(node.fileDataUrl, node.fileHash)}
                             class="node-file-pdf-iframe"
                             title={node.fileName || 'PDF'}
-                            sandbox="allow-scripts allow-same-origin"
+                            style={{ width: '100%', height: '100%', border: 'none', background: '#ffffff' }}
                           />
                         ) : (
                           <div
@@ -5460,7 +5515,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                                 transformOrigin: 'top left'
                               }}
                             >
-                              {node.extractedText || t('canvas.extracting_pdf')}
+                              <MarkdownPreview content={node.extractedText || t('canvas.extracting_pdf')} />
                             </div>
                           </div>
                         )
@@ -5480,7 +5535,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                               transformOrigin: 'top left'
                             }}
                           >
-                            {node.extractedText || t('canvas.extracting_doc')}
+                            <MarkdownPreview content={node.extractedText || t('canvas.extracting_doc')} />
                           </div>
                         </div>
                       )}
