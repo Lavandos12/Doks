@@ -6624,6 +6624,67 @@ button.doks-color-dot.active {
   outline: none !important;
 }
 
+/* Miro-Style Spreadsheet Table Grid & Headers */
+.pdf-card-select-shield {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  cursor: move;
+  background: transparent;
+}
+
+.node-table-index-corner {
+  background: #0e111a;
+  border-right: 1px solid #1e2230;
+  border-bottom: 1px solid #1e2230;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 600;
+  user-select: none;
+}
+
+.node-table-col-header {
+  background: #0e111a;
+  border-right: 1px solid #1e2230;
+  border-bottom: 1px solid #1e2230;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #94a3b8;
+  font-size: 11px;
+  font-weight: 600;
+  user-select: none;
+}
+
+.node-table-row-header {
+  background: #0e111a;
+  border-right: 1px solid #1e2230;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 500;
+  user-select: none;
+}
+
+.excel-cell-input {
+  width: 100% !important;
+  height: 100% !important;
+  background: #1e2230 !important;
+  border: 1px solid #38bdf8 !important;
+  border-radius: 2px !important;
+  color: #f1f5f9 !important;
+  font-size: 12.5px !important;
+  padding: 4px 8px !important;
+  outline: none !important;
+  box-sizing: border-box !important;
+}
+
 /* Kanban Column Container */
 .node-kanban-column {
   display: flex;

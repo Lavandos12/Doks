@@ -107,6 +107,19 @@ export const CANVAS_COLORS: Record<string, string> = {
   default: '#d97706'
 };
 
+/**
+ * Converts 0-based column index to Excel column letters (0 -> A, 1 -> B, 25 -> Z, 26 -> AA).
+ */
+export function getColLetter(idx: number): string {
+  let letter = '';
+  let temp = idx;
+  while (temp >= 0) {
+    letter = String.fromCharCode((temp % 26) + 65) + letter;
+    temp = Math.floor(temp / 26) - 1;
+  }
+  return letter;
+}
+
 export type CanvasTool = 'select' | 'hand' | 'sticky' | 'text' | 'note' | 'frame' | 'arrow' | 'line' | 'shape' | 'draw' | 'eraser' | 'checklist' | 'table' | 'kanban' | 'code' | 'image' | 'widgets' | 'chart';
 
 const HANDLE_ANCHORS: Record<ResizeHandle, string> = {
@@ -4604,7 +4617,7 @@ High-performance local-first infinite canvas for collaborative product architect
           {/* 9. Widgets (+) Menu */}
           <div class="miro-dock-tool-wrapper">
             <button
-              class={`miro-dock-btn ${activeFlyout === 'widgets' || activeTool === 'checklist' || activeTool === 'table' || activeTool === 'kanban' || activeTool === 'code' ? 'active' : ''}`}
+              class={`miro-dock-btn ${activeFlyout === 'widgets' || activeTool === 'checklist' || activeTool === 'kanban' || activeTool === 'code' ? 'active' : ''}`}
               data-tool="widgets"
               onClick={() => {
                 setActiveFlyout(activeFlyout === 'widgets' ? 'none' : 'widgets');
@@ -4629,20 +4642,6 @@ High-performance local-first infinite canvas for collaborative product architect
                 >
                   <Icon name="checklist" size={16} />
                   <span>{t('dock.checklist')}</span>
-                </button>
-                <button
-                  type="button"
-                  class="miro-flyout-item-btn"
-                  style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 10px', background: 'transparent', border: 'none', color: '#f1f5f9', fontSize: '13px', cursor: 'pointer', borderRadius: '6px', textAlign: 'left' }}
-                  onClick={() => {
-                    const cx = (window.innerWidth / 2 - viewport.x) / viewport.zoom;
-                    const cy = (window.innerHeight / 2 - viewport.y) / viewport.zoom;
-                    createNodeAt('table', cx - 170, cy - 90);
-                    setActiveFlyout('none');
-                  }}
-                >
-                  <Icon name="table" size={16} />
-                  <span>{t('dock.table')}</span>
                 </button>
                 <button
                   type="button"
@@ -5916,12 +5915,22 @@ High-performance local-first infinite canvas for collaborative product architect
                                 parsedWorkbook = parsed;
                               }
                             } catch {}
+                          } else if (node.extractedText && node.extractedText.trim().startsWith('[[')) {
+                            try {
+                              const rawMatrix = JSON.parse(node.extractedText);
+                              if (Array.isArray(rawMatrix) && rawMatrix.length > 0 && Array.isArray(rawMatrix[0])) {
+                                parsedWorkbook = {
+                                  sheets: [{ name: 'Sheet 1', data: rawMatrix }]
+                                };
+                              }
+                            } catch {}
                           }
 
                           if (parsedWorkbook) {
                             const activeIdx = workbookSheetMap[node.id] || 0;
                             const currentSheet = parsedWorkbook.sheets[activeIdx] || parsedWorkbook.sheets[0];
                             const matrix = currentSheet.data;
+                            const cols = Math.max(1, ...matrix.map((r) => (Array.isArray(r) ? r.length : 0)));
 
                             return (
                               <div
@@ -5947,74 +5956,137 @@ High-performance local-first infinite canvas for collaborative product architect
                                   <div
                                     class="node-table-grid"
                                     style={{
-                                      gridTemplateColumns: `repeat(${matrix[0]?.length || 3}, minmax(130px, max-content))`,
+                                      gridTemplateColumns: `38px repeat(${cols}, minmax(130px, max-content))`,
+                                      gridTemplateRows: '26px',
                                       gridAutoRows: '34px',
                                       alignContent: 'start',
                                       width: 'max-content',
                                       minWidth: '100%'
                                     }}
                                   >
-                                    {matrix.map((row, rIdx) =>
-                                      row.map((cell, cIdx) => {
-                                        const isCellEditing =
-                                          Boolean(isEditingGrid[node.id]) ||
-                                          (activeCellEdit?.nodeId === node.id &&
-                                            activeCellEdit?.sheetIdx === activeIdx &&
-                                            activeCellEdit?.rowIdx === rIdx &&
-                                            activeCellEdit?.colIdx === cIdx);
+                                    {/* Top Header Row: Corner and Column Letters (A-Z) */}
+                                    <div
+                                      class="node-table-index-corner"
+                                      style={{
+                                        background: '#0e111a',
+                                        borderRight: '1px solid #1e2230',
+                                        borderBottom: '1px solid #1e2230',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        color: '#64748b',
+                                        fontSize: '11px',
+                                        fontWeight: 600,
+                                        height: '100%',
+                                        userSelect: 'none'
+                                      }}
+                                    >
+                                      #
+                                    </div>
+                                    {Array.from({ length: cols }).map((_, cIdx) => (
+                                      <div
+                                        key={`col-hdr-${cIdx}`}
+                                        class="node-table-col-header"
+                                        style={{
+                                          background: '#0e111a',
+                                          borderRight: '1px solid #1e2230',
+                                          borderBottom: '1px solid #1e2230',
+                                          display: 'flex',
+                                          alignItems: 'center',
+                                          justifyContent: 'center',
+                                          color: '#94a3b8',
+                                          fontSize: '11px',
+                                          fontWeight: 600,
+                                          height: '100%',
+                                          userSelect: 'none'
+                                        }}
+                                      >
+                                        {getColLetter(cIdx)}
+                                      </div>
+                                    ))}
 
-                                        return (
-                                          <div
-                                            key={`${rIdx}-${cIdx}`}
-                                            class="node-table-cell"
-                                            style={{
-                                              background: rIdx === 0 ? 'rgba(56, 189, 248, 0.14)' : (rIdx % 2 === 1 ? '#181b26' : '#141722'),
-                                              fontWeight: rIdx === 0 ? 600 : 400,
-                                              color: rIdx === 0 ? '#38bdf8' : '#e2e8f0',
-                                              padding: isCellEditing ? '0' : '6px 10px',
-                                              fontSize: '12.5px',
-                                              whiteSpace: 'nowrap',
-                                              borderRight: '1px solid rgba(255, 255, 255, 0.06)',
-                                              borderBottom: '1px solid rgba(255, 255, 255, 0.06)',
-                                              cursor: isCellEditing ? 'text' : 'pointer',
-                                              position: 'relative'
-                                            }}
-                                            title={cell}
-                                            onDblClick={(e) => {
-                                              e.stopPropagation();
-                                              setActiveCellEdit({ nodeId: node.id, sheetIdx: activeIdx, rowIdx: rIdx, colIdx: cIdx });
-                                            }}
-                                          >
-                                            {isCellEditing ? (
-                                              <input
-                                                type="text"
-                                                class="excel-cell-input"
-                                                defaultValue={cell}
-                                                autoFocus={activeCellEdit?.rowIdx === rIdx && activeCellEdit?.colIdx === cIdx}
-                                                onMouseDown={(e) => e.stopPropagation()}
-                                                onClick={(e) => e.stopPropagation()}
-                                                onKeyDown={(e) => {
-                                                  e.stopPropagation();
-                                                  if (e.key === 'Enter' || e.key === 'Escape') {
+                                    {/* Matrix Data Rows with Leading Row Number (1-N) */}
+                                    {matrix.map((row, rIdx) => (
+                                      <Fragment key={`row-group-${rIdx}`}>
+                                        <div
+                                          class="node-table-row-header"
+                                          style={{
+                                            background: '#0e111a',
+                                            borderRight: '1px solid #1e2230',
+                                            borderBottom: '1px solid rgba(255, 255, 255, 0.06)',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            color: '#64748b',
+                                            fontSize: '11px',
+                                            fontWeight: 500,
+                                            userSelect: 'none'
+                                          }}
+                                        >
+                                          {rIdx + 1}
+                                        </div>
+                                        {Array.from({ length: cols }).map((_, cIdx) => {
+                                          const cell = (Array.isArray(row) && row[cIdx] !== undefined) ? row[cIdx] : '';
+                                          const isCellEditing =
+                                            Boolean(isEditingGrid[node.id]) ||
+                                            (activeCellEdit?.nodeId === node.id &&
+                                              activeCellEdit?.sheetIdx === activeIdx &&
+                                              activeCellEdit?.rowIdx === rIdx &&
+                                              activeCellEdit?.colIdx === cIdx);
+
+                                          return (
+                                            <div
+                                              key={`${rIdx}-${cIdx}`}
+                                              class="node-table-cell"
+                                              style={{
+                                                background: rIdx === 0 ? 'rgba(56, 189, 248, 0.14)' : (rIdx % 2 === 1 ? '#181b26' : '#141722'),
+                                                fontWeight: rIdx === 0 ? 600 : 400,
+                                                color: rIdx === 0 ? '#38bdf8' : '#e2e8f0',
+                                                padding: isCellEditing ? '0' : '6px 10px',
+                                                fontSize: '12.5px',
+                                                whiteSpace: 'nowrap',
+                                                borderRight: '1px solid rgba(255, 255, 255, 0.06)',
+                                                borderBottom: '1px solid rgba(255, 255, 255, 0.06)',
+                                                cursor: isCellEditing ? 'text' : 'pointer',
+                                                position: 'relative'
+                                              }}
+                                              title={cell}
+                                              onDblClick={(e) => {
+                                                e.stopPropagation();
+                                                setActiveCellEdit({ nodeId: node.id, sheetIdx: activeIdx, rowIdx: rIdx, colIdx: cIdx });
+                                              }}
+                                            >
+                                              {isCellEditing ? (
+                                                <input
+                                                  type="text"
+                                                  class="excel-cell-input"
+                                                  defaultValue={cell}
+                                                  autoFocus={activeCellEdit?.rowIdx === rIdx && activeCellEdit?.colIdx === cIdx}
+                                                  onMouseDown={(e) => e.stopPropagation()}
+                                                  onClick={(e) => e.stopPropagation()}
+                                                  onKeyDown={(e) => {
+                                                    e.stopPropagation();
+                                                    if (e.key === 'Enter' || e.key === 'Escape') {
+                                                      handleWorkbookCellChange(node.id, activeIdx, rIdx, cIdx, (e.target as HTMLInputElement).value);
+                                                      setActiveCellEdit(null);
+                                                      (e.target as HTMLInputElement).blur();
+                                                    }
+                                                  }}
+                                                  onBlur={(e) => {
                                                     handleWorkbookCellChange(node.id, activeIdx, rIdx, cIdx, (e.target as HTMLInputElement).value);
-                                                    setActiveCellEdit(null);
-                                                    (e.target as HTMLInputElement).blur();
-                                                  }
-                                                }}
-                                                onBlur={(e) => {
-                                                  handleWorkbookCellChange(node.id, activeIdx, rIdx, cIdx, (e.target as HTMLInputElement).value);
-                                                  if (activeCellEdit?.rowIdx === rIdx && activeCellEdit?.colIdx === cIdx) {
-                                                    setActiveCellEdit(null);
-                                                  }
-                                                }}
-                                              />
-                                            ) : (
-                                              cell || '\u00A0'
-                                            )}
-                                          </div>
-                                        );
-                                      })
-                                    )}
+                                                    if (activeCellEdit?.rowIdx === rIdx && activeCellEdit?.colIdx === cIdx) {
+                                                      setActiveCellEdit(null);
+                                                    }
+                                                  }}
+                                                />
+                                              ) : (
+                                                cell || '\u00A0'
+                                              )}
+                                            </div>
+                                          );
+                                        })}
+                                      </Fragment>
+                                    ))}
                                   </div>
                                 </div>
 

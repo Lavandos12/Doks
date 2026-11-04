@@ -194,7 +194,7 @@ describe('v73 Production Hardening: Document Shields, XLSX Stream Scanner, and C
     });
 
     it('should disable pointer events on PDF iframes during canvas manipulation', () => {
-      expect(canvasSrc).toContain("pointerEvents: (dragState || resizeState || panState || isSpacePressed || activeTool === 'hand') ? 'none' : 'auto'");
+      expect(canvasSrc).toContain("pointerEvents: (!isSelected || dragState || resizeState || panState || isSpacePressed || activeTool === 'hand') ? 'none' : 'auto'");
     });
 
     it('should set resize handles layer z-index to 50 !important in style.css', () => {
