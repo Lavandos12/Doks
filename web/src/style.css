@@ -6928,19 +6928,32 @@ button.doks-color-dot.active {
   gap: 6px;
 }
 
-/* Responsive Widget Height & Scroll Container Expansion */
+/* Responsive Widget Height & Strict Flexbox Containment Armor */
 .node-checklist-card {
   width: 100% !important;
   height: 100% !important;
+  flex: 1 1 0 !important;
+  min-height: 0 !important;
+  max-height: 100% !important;
   display: flex !important;
   flex-direction: column !important;
   box-sizing: border-box !important;
   overflow: hidden !important;
+  border-radius: 6px !important;
+}
+.node-checklist-card .checklist-title-row {
+  flex: 0 0 auto !important;
+  flex-shrink: 0 !important;
+}
+.node-checklist-card .checklist-progress-container {
+  flex: 0 0 auto !important;
+  flex-shrink: 0 !important;
 }
 .node-checklist-card .checklist-items-scroll {
   flex: 1 1 auto !important;
   min-height: 0 !important;
   overflow-y: auto !important;
+  overflow-x: hidden !important;
   max-height: none !important;
 }
 .node-checklist-card .checklist-add-row-btn {
@@ -6952,15 +6965,24 @@ button.doks-color-dot.active {
 .node-kanban-column {
   width: 100% !important;
   height: 100% !important;
+  flex: 1 1 0 !important;
+  min-height: 0 !important;
+  max-height: 100% !important;
   display: flex !important;
   flex-direction: column !important;
   box-sizing: border-box !important;
   overflow: hidden !important;
+  border-radius: 6px !important;
+}
+.node-kanban-column .kanban-header-bar {
+  flex: 0 0 auto !important;
+  flex-shrink: 0 !important;
 }
 .node-kanban-column .kanban-cards-area {
   flex: 1 1 auto !important;
   min-height: 0 !important;
   overflow-y: auto !important;
+  overflow-x: hidden !important;
 }
 .node-kanban-column .kanban-add-card-btn {
   flex: 0 0 auto !important;
@@ -6971,10 +6993,18 @@ button.doks-color-dot.active {
 .node-table-wrapper {
   width: 100% !important;
   height: 100% !important;
+  flex: 1 1 0 !important;
+  min-height: 0 !important;
+  max-height: 100% !important;
   display: flex !important;
   flex-direction: column !important;
   box-sizing: border-box !important;
   overflow: hidden !important;
+  border-radius: 6px !important;
+}
+.node-table-wrapper .node-table-toolbar {
+  flex: 0 0 auto !important;
+  flex-shrink: 0 !important;
 }
 .node-table-wrapper .node-table-grid {
   flex: 1 1 auto !important;
@@ -6985,10 +7015,18 @@ button.doks-color-dot.active {
 .node-code-block {
   width: 100% !important;
   height: 100% !important;
+  flex: 1 1 0 !important;
+  min-height: 0 !important;
+  max-height: 100% !important;
   display: flex !important;
   flex-direction: column !important;
   box-sizing: border-box !important;
   overflow: hidden !important;
+  border-radius: 6px !important;
+}
+.node-code-block .code-header-bar {
+  flex: 0 0 auto !important;
+  flex-shrink: 0 !important;
 }
 .node-code-block .code-textarea-editor {
   flex: 1 1 auto !important;
@@ -7003,10 +7041,18 @@ button.doks-color-dot.active {
 .node-chart-card {
   width: 100% !important;
   height: 100% !important;
+  flex: 1 1 0 !important;
+  min-height: 0 !important;
+  max-height: 100% !important;
   display: flex !important;
   flex-direction: column !important;
   box-sizing: border-box !important;
   overflow: hidden !important;
+  border-radius: 6px !important;
+}
+.node-chart-card .card-top-drag-header {
+  flex: 0 0 auto !important;
+  flex-shrink: 0 !important;
 }
 .node-chart-card .chart-visual-area {
   flex: 1 1 auto !important;
@@ -7941,13 +7987,6 @@ html, body, #app, .app-layout {
   .canvas-bottom-right-hud .hud-btn:last-child {
     display: none !important;
   }
-}
-
-.widget-scale-surface {
-  box-sizing: border-box;
-  overflow: hidden;
-  border-radius: 7px;
-  will-change: transform;
 }
 
 /* Miro-Grade In-Place Excel Cell Editing */

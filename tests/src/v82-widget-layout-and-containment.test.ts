@@ -20,14 +20,16 @@ describe('v82: Interactive Widget Scaling & Layout Containment Audit', () => {
     expect(canvasSrc).toContain("node.type === 'checklist'");
     expect(canvasSrc).toContain('class="node-checklist-card"');
     expect(canvasSrc).toContain('checklist-add-row-btn');
-    expect(canvasSrc).toContain("style={{ flex: '0 0 auto', marginTop: 'auto' }}");
+    expect(canvasSrc).toContain("flex: '0 0 auto'");
+    expect(canvasSrc).toContain("flexShrink: 0");
   });
 
   it('3. Kanban widget uses 100% flexbox containment and pinned add card button', () => {
     expect(canvasSrc).toContain("node.type === 'kanban'");
     expect(canvasSrc).toContain('class="node-kanban-column"');
     expect(canvasSrc).toContain('kanban-add-card-btn');
-    expect(canvasSrc).toContain("style={{ flex: '0 0 auto', marginTop: 'auto' }}");
+    expect(canvasSrc).toContain("flex: '0 0 auto'");
+    expect(canvasSrc).toContain("flexShrink: 0");
   });
 
   it('4. Code block widget uses responsive textarea with zero-min-height flex', () => {

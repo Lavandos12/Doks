@@ -167,7 +167,16 @@ export class AgentHttpServer {
     if (fs.existsSync(this.webDistPath)) {
       this.fastify.register(fastifyStatic, {
         root: this.webDistPath,
-        prefix: '/'
+        prefix: '/',
+        setHeaders: (res, pathName) => {
+          if (pathName.endsWith('.html') || pathName === '/' || pathName === '') {
+            res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+            res.setHeader('Pragma', 'no-cache');
+            res.setHeader('Expires', '0');
+          } else if (pathName.startsWith('/assets/')) {
+            res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+          }
+        }
       });
     } else {
       // Fallback root endpoint to set session cookie even when web dist is not built
@@ -179,6 +188,9 @@ export class AgentHttpServer {
     // Direct share route fallback for SPA routing
     this.fastify.get('/b/:boardId', async (_req, reply) => {
       if (fs.existsSync(this.webDistPath)) {
+        reply.header('Cache-Control', 'no-cache, no-store, must-revalidate');
+        reply.header('Pragma', 'no-cache');
+        reply.header('Expires', '0');
         return reply.sendFile('index.html');
       } else {
         return reply.type('text/html').send('<!doctype html><html><body><h1>Doks</h1></body></html>');
@@ -187,6 +199,9 @@ export class AgentHttpServer {
 
     this.fastify.get('/b/:boardId/*', async (_req, reply) => {
       if (fs.existsSync(this.webDistPath)) {
+        reply.header('Cache-Control', 'no-cache, no-store, must-revalidate');
+        reply.header('Pragma', 'no-cache');
+        reply.header('Expires', '0');
         return reply.sendFile('index.html');
       } else {
         return reply.type('text/html').send('<!doctype html><html><body><h1>Doks</h1></body></html>');
@@ -1877,6 +1892,9 @@ export class AgentHttpServer {
           reply.code(404).send({ error: 'Not found' });
           return;
         }
+        reply.header('Cache-Control', 'no-cache, no-store, must-revalidate');
+        reply.header('Pragma', 'no-cache');
+        reply.header('Expires', '0');
         return reply.sendFile('index.html');
       });
     }

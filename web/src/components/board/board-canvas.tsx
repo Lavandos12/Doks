@@ -2190,6 +2190,32 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
     }
   };
 
+  // Helper for widget minimum dimensions
+  const getWidgetMinBounds = (nodeType?: string): { minW: number; minH: number } => {
+    switch (nodeType) {
+      case 'checklist':
+        return { minW: 220, minH: 150 };
+      case 'kanban':
+        return { minW: 240, minH: 180 };
+      case 'table':
+        return { minW: 240, minH: 130 };
+      case 'chart':
+        return { minW: 260, minH: 200 };
+      case 'code':
+        return { minW: 220, minH: 130 };
+      case 'note':
+        return { minW: 220, minH: 160 };
+      case 'file':
+        return { minW: 200, minH: 140 };
+      case 'text':
+        return { minW: 60, minH: 32 };
+      case 'shape':
+        return { minW: 50, minH: 50 };
+      default:
+        return { minW: 80, minH: 50 };
+    }
+  };
+
   // Checklist helpers
   const parseChecklistItems = (text: string) => {
     return text.split('\n').filter(l => l.trim().length > 0).map((line, idx) => ({
@@ -2236,7 +2262,15 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
     items.push({ id: `item-${items.length}`, text: t('widget.new_task'), done: false });
     const newText = serializeChecklistItems(items);
     const map = yNodes.get(node.id);
-    if (map) setNodeProperties(map, { text: newText });
+    if (map) {
+      const minRequiredH = 120 + items.length * 36;
+      const currentH = Number(map.get('h') ?? node.h ?? 220);
+      const updates: Record<string, any> = { text: newText };
+      if (currentH < minRequiredH) {
+        updates.h = minRequiredH;
+      }
+      setNodeProperties(map, updates);
+    }
   };
 
   // Table helpers
@@ -2273,7 +2307,15 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
     const table = parseTableData(currentText);
     const cols = table[0]?.length || 3;
     table.push(Array(cols).fill(''));
-    if (map) setNodeProperties(map, { text: JSON.stringify(table) });
+    if (map) {
+      const minRequiredH = 90 + table.length * 34;
+      const currentH = Number(map.get('h') ?? node.h ?? 160);
+      const updates: Record<string, any> = { text: JSON.stringify(table) };
+      if (currentH < minRequiredH) {
+        updates.h = minRequiredH;
+      }
+      setNodeProperties(map, updates);
+    }
   };
 
   const handleAddTableCol = (node: BoardNodeData) => {
@@ -2281,7 +2323,16 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
     const currentText = map ? (map.get('text')?.toString ? map.get('text').toString() : map.get('text')) : node.text;
     const table = parseTableData(currentText);
     for (const row of table) row.push('');
-    if (map) setNodeProperties(map, { text: JSON.stringify(table) });
+    if (map) {
+      const numCols = table[0]?.length || 3;
+      const minRequiredW = Math.max(240, numCols * 85);
+      const currentW = Number(map.get('w') ?? node.w ?? 280);
+      const updates: Record<string, any> = { text: JSON.stringify(table) };
+      if (currentW < minRequiredW) {
+        updates.w = minRequiredW;
+      }
+      setNodeProperties(map, updates);
+    }
   };
 
   const handleDelTableRow = (node: BoardNodeData) => {
@@ -2316,9 +2367,13 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
     cards.push(t('widget.new_card'));
     const map = yNodes.get(node.id);
     if (map) {
-      setNodeProperties(map, {
-        description: cards.join('\n')
-      });
+      const minRequiredH = 110 + cards.length * 44;
+      const currentH = Number(map.get('h') ?? node.h ?? 420);
+      const updates: Record<string, any> = { description: cards.join('\n') };
+      if (currentH < minRequiredH) {
+        updates.h = minRequiredH;
+      }
+      setNodeProperties(map, updates);
     }
   };
 
@@ -2915,6 +2970,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
           let newY = startYPos;
 
           const nodeType = (nodeMap.get('type') as string) || 'sticky';
+          const { minW, minH } = getWidgetMinBounds(nodeType);
           const isImage =
             nodeType === 'image' ||
             ((nodeMap.get('fileName') as string || '').match(/\.(png|jpe?g|gif|webp)$/i) && !nodeMap.get('extractedText'));
@@ -2929,54 +2985,54 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
             const ratio = (startW > 0 && startH > 0) ? (startW / startH) : 1;
             if (handle === 'se') {
               if (Math.abs(dx) >= Math.abs(dy * ratio)) {
-                newW = Math.max(60, startW + dx);
-                newH = Math.max(40, Math.round(newW / ratio));
+                newW = Math.max(minW, startW + dx);
+                newH = Math.max(minH, Math.round(newW / ratio));
               } else {
-                newH = Math.max(40, startH + dy);
-                newW = Math.max(60, Math.round(newH * ratio));
+                newH = Math.max(minH, startH + dy);
+                newW = Math.max(minW, Math.round(newH * ratio));
               }
             } else if (handle === 'sw') {
               if (Math.abs(-dx) >= Math.abs(dy * ratio)) {
-                newW = Math.max(60, startW - dx);
-                newH = Math.max(40, Math.round(newW / ratio));
+                newW = Math.max(minW, startW - dx);
+                newH = Math.max(minH, Math.round(newW / ratio));
               } else {
-                newH = Math.max(40, startH + dy);
-                newW = Math.max(60, Math.round(newH * ratio));
+                newH = Math.max(minH, startH + dy);
+                newW = Math.max(minW, Math.round(newH * ratio));
               }
               newX = startXPos + (startW - newW);
             } else if (handle === 'ne') {
               if (Math.abs(dx) >= Math.abs(-dy * ratio)) {
-                newW = Math.max(60, startW + dx);
-                newH = Math.max(40, Math.round(newW / ratio));
+                newW = Math.max(minW, startW + dx);
+                newH = Math.max(minH, Math.round(newW / ratio));
               } else {
-                newH = Math.max(40, startH - dy);
-                newW = Math.max(60, Math.round(newH * ratio));
+                newH = Math.max(minH, startH - dy);
+                newW = Math.max(minW, Math.round(newH * ratio));
               }
               newY = startYPos + (startH - newH);
             } else if (handle === 'nw') {
               if (Math.abs(-dx) >= Math.abs(-dy * ratio)) {
-                newW = Math.max(60, startW - dx);
-                newH = Math.max(40, Math.round(newW / ratio));
+                newW = Math.max(minW, startW - dx);
+                newH = Math.max(minH, Math.round(newW / ratio));
               } else {
-                newH = Math.max(40, startH - dy);
-                newW = Math.max(60, Math.round(newH * ratio));
+                newH = Math.max(minH, startH - dy);
+                newW = Math.max(minW, Math.round(newH * ratio));
               }
               newX = startXPos + (startW - newW);
               newY = startYPos + (startH - newH);
             }
           } else {
             if (handle.includes('e')) {
-              newW = Math.max(80, startW + dx);
+              newW = Math.max(minW, startW + dx);
             }
             if (handle.includes('w')) {
-              newW = Math.max(80, startW - dx);
+              newW = Math.max(minW, startW - dx);
               newX = startXPos + (startW - newW);
             }
             if (handle.includes('s')) {
-              newH = Math.max(nodeType === 'table' ? 140 : 48, startH + dy);
+              newH = Math.max(minH, startH + dy);
             }
             if (handle.includes('n')) {
-              newH = Math.max(nodeType === 'table' ? 140 : 48, startH - dy);
+              newH = Math.max(minH, startH - dy);
               newY = startYPos + (startH - newH);
             }
           }
@@ -6160,10 +6216,14 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                       style={{
                         width: '100%',
                         height: '100%',
+                        flex: '1 1 0',
+                        minHeight: 0,
+                        maxHeight: '100%',
                         display: 'flex',
                         flexDirection: 'column',
                         boxSizing: 'border-box',
-                        overflow: 'hidden'
+                        overflow: 'hidden',
+                        borderRadius: '6px'
                       }}
                       onClick={(e) => { if (e.shiftKey || e.ctrlKey || e.metaKey) return; if (!selectedNodeIds.has(node.id)) setSelectedNodeIds(new Set([node.id])); }}
                       onWheel={(e) => {
@@ -6242,7 +6302,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                         <button
                           type="button"
                           class="checklist-add-row-btn"
-                          style={{ flex: '0 0 auto', marginTop: 'auto' }}
+                          style={{ flex: '0 0 auto', flexShrink: 0, marginTop: 'auto' }}
                           onMouseDown={(e) => e.stopPropagation()}
                           onClick={() => handleAddChecklistItem(node)}
                         >
@@ -6262,10 +6322,14 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                       style={{
                         width: '100%',
                         height: '100%',
+                        flex: '1 1 0',
+                        minHeight: 0,
+                        maxHeight: '100%',
                         display: 'flex',
                         flexDirection: 'column',
                         boxSizing: 'border-box',
-                        overflow: 'hidden'
+                        overflow: 'hidden',
+                        borderRadius: '6px'
                       }}
                       onClick={(e) => { if (e.shiftKey || e.ctrlKey || e.metaKey) return; if (!selectedNodeIds.has(node.id)) setSelectedNodeIds(new Set([node.id])); }}
                       onWheel={(e) => {
@@ -6335,10 +6399,14 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                       style={{
                         width: '100%',
                         height: '100%',
+                        flex: '1 1 0',
+                        minHeight: 0,
+                        maxHeight: '100%',
                         display: 'flex',
                         flexDirection: 'column',
                         boxSizing: 'border-box',
-                        overflow: 'hidden'
+                        overflow: 'hidden',
+                        borderRadius: '6px'
                       }}
                       onClick={(e) => { if (e.shiftKey || e.ctrlKey || e.metaKey) return; if (!selectedNodeIds.has(node.id)) setSelectedNodeIds(new Set([node.id])); }}
                       onWheel={(e) => {
@@ -6405,7 +6473,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                         <button
                           type="button"
                           class="kanban-add-card-btn"
-                          style={{ flex: '0 0 auto', marginTop: 'auto' }}
+                          style={{ flex: '0 0 auto', flexShrink: 0, marginTop: 'auto' }}
                           onMouseDown={(e) => e.stopPropagation()}
                           onClick={() => handleAddKanbanCard(node)}
                         >
@@ -6425,10 +6493,14 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                       style={{
                         width: '100%',
                         height: '100%',
+                        flex: '1 1 0',
+                        minHeight: 0,
+                        maxHeight: '100%',
                         display: 'flex',
                         flexDirection: 'column',
                         boxSizing: 'border-box',
-                        overflow: 'hidden'
+                        overflow: 'hidden',
+                        borderRadius: '6px'
                       }}
                       onClick={(e) => { if (e.shiftKey || e.ctrlKey || e.metaKey) return; if (!selectedNodeIds.has(node.id)) setSelectedNodeIds(new Set([node.id])); }}
                       onWheel={(e) => {
@@ -6555,10 +6627,14 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                       style={{
                         width: '100%',
                         height: '100%',
+                        flex: '1 1 0',
+                        minHeight: 0,
+                        maxHeight: '100%',
                         display: 'flex',
                         flexDirection: 'column',
                         boxSizing: 'border-box',
-                        overflow: 'hidden'
+                        overflow: 'hidden',
+                        borderRadius: '6px'
                       }}
                       onClick={() => setSelectedNodeIds(new Set([node.id]))}
                       onWheel={(e) => {
