@@ -277,7 +277,9 @@ export function ensureInitialBoard(): void {
       deleted: false,
       createdAt: Date.now(),
       updatedAt: Date.now(),
-      scope: 'team'
+      scope: 'team',
+      creatorId: 'system',
+      creatorName: 'Team'
     });
   }
 }
@@ -546,27 +548,66 @@ export function createNote(title = t('sidebar.new_note'), folder: string | null 
 let cachedMemberId: string | null = null;
 export function getMyMemberId(): string {
   if (cachedMemberId) return cachedMemberId;
-  let id = typeof localStorage !== 'undefined' ? localStorage.getItem('doks_member_id') : null;
+
+  // 1. Session-isolated collaborator ID (distinct per browser tab/window)
+  let id = typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('doks_session_member_id') : null;
   if (!id) {
-    id = crypto.randomUUID();
-    if (typeof localStorage !== 'undefined') {
-      localStorage.setItem('doks_member_id', id);
+    // 2. If agentStatus has peer/agent ID, check if we have persistent agent identity
+    if (agentStatus.value?.agentId) {
+      id = agentStatus.value.agentId;
+    } else {
+      id = typeof localStorage !== 'undefined' ? localStorage.getItem('doks_member_id') : null;
     }
+    if (!id) {
+      id = crypto.randomUUID();
+    }
+    if (typeof sessionStorage !== 'undefined') {
+      sessionStorage.setItem('doks_session_member_id', id);
+    }
+  }
+  if (typeof localStorage !== 'undefined' && !localStorage.getItem('doks_member_id')) {
+    localStorage.setItem('doks_member_id', id);
   }
   cachedMemberId = id;
   return id;
 }
 
-export function isBoardAdmin(meta?: BoardMeta | null): boolean {
+export function getMyMemberName(): string {
+  if (typeof sessionStorage !== 'undefined') {
+    const sName = sessionStorage.getItem('doks_display_name') || sessionStorage.getItem('doks_member_name');
+    if (sName) return sName;
+  }
+  if (typeof localStorage !== 'undefined') {
+    const lName = localStorage.getItem('doks_display_name') || localStorage.getItem('doks_member_name');
+    if (lName && lName !== 'You') return lName;
+  }
+  return agentStatus.value?.memberName || 'User';
+}
+
+export function isBoardAdmin(meta?: BoardMeta | null, scopeHint?: WorkspaceScope): boolean {
   if (!meta) return false;
-  // Solo boards are always owned locally
-  if (meta.scope === 'solo') return true;
+
+  const isTeam = scopeHint === 'team' || meta.scope === 'team' || teamMaps.boards.has(meta.id);
+  // Solo boards are always owned locally if genuinely in soloMaps
+  if (!isTeam && (meta.scope === 'solo' || soloMaps.boards.has(meta.id))) return true;
+
+  // Canonical shared team canvas can NEVER be deleted or cleared by participants
+  if (meta.id === TEAM_MAIN_BOARD_ID) return false;
 
   const myId = getMyMemberId();
+  const myName = getMyMemberName();
+
+  // 1. Strict creatorId match
   if (meta.creatorId && meta.creatorId === myId) return true;
 
-  // Fallback for legacy boards without creatorId: current host is considered admin
-  if (!meta.creatorId && agentStatus.value?.isHost) return true;
+  // 2. Exact creatorName match (case-insensitive trim) if creatorName is present
+  if (meta.creatorName && myName && meta.creatorName.trim().toLowerCase() === myName.trim().toLowerCase()) {
+    if (!meta.creatorId || meta.creatorId === myId) return true;
+  }
+
+  // Legacy fallback: only if creatorId AND creatorName are both missing, and the agent is the true hosting server
+  if (!meta.creatorId && !meta.creatorName && agentStatus.value?.isHost) return true;
+
   return false;
 }
 
@@ -588,7 +629,7 @@ export function createBoard(
     deleted: false,
     scope,
     creatorId: getMyMemberId(),
-    creatorName: agentStatus.value?.memberName || 'User'
+    creatorName: getMyMemberName()
   };
 
   targetDoc.transact(() => {
@@ -764,12 +805,22 @@ export function restoreBoard(id: string, scopeHint?: WorkspaceScope): void {
 }
 
 export function deleteBoard(id: string, scope?: WorkspaceScope): void {
-  const effectiveScope = scope || (soloMaps.boards.has(id) ? 'solo' : 'team');
-  const targetMap = effectiveScope === 'solo' ? soloMaps.boards : teamMaps.boards;
-  const existing = targetMap.get(id);
+  // Never allow deleting canonical team or solo main boards
+  if (id === TEAM_MAIN_BOARD_ID || id === SOLO_MAIN_BOARD_ID) {
+    showToast('Cannot delete the main canvas board.', 'error');
+    return;
+  }
+
+  // If the board exists in teamMaps, it is strictly a team board regardless of scope parameter
+  const isTeam = teamMaps.boards.has(id) || scope === 'team';
+  const effectiveScope: WorkspaceScope = isTeam ? 'team' : (scope || 'solo');
+  const targetMap = effectiveScope === 'team' ? teamMaps.boards : soloMaps.boards;
+  const existing = targetMap.get(id) || allBoards.value.find((b) => b.id === id);
+
   if (existing) {
-    if (effectiveScope === 'team' && !isBoardAdmin(existing)) {
-      showToast('Permission denied: Only the board creator can delete this board.', 'error');
+    if (effectiveScope === 'team' && !isBoardAdmin(existing, 'team')) {
+      const creator = existing.creatorName || 'the creator';
+      showToast(`Permission denied: Only the board creator (@${creator}) can delete this board.`, 'error');
       return;
     }
     targetMap.set(id, {
@@ -791,7 +842,15 @@ export function emptyTrash(): void {
 
     const deletedBoardKeys: string[] = [];
     maps.boards.forEach((val, key) => {
-      if (val.deleted) deletedBoardKeys.push(key);
+      if (val.deleted) {
+        if (maps === teamMaps) {
+          if (isBoardAdmin(val, 'team')) {
+            deletedBoardKeys.push(key);
+          }
+        } else {
+          deletedBoardKeys.push(key);
+        }
+      }
     });
     deletedBoardKeys.forEach((k) => maps.boards.delete(k));
   });

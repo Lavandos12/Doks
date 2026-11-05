@@ -41,9 +41,10 @@ export function BoardSettingsModal({
   const [isConverting, setIsConverting] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
 
-  const targetMap = scope === 'solo' ? soloMaps.boards : teamMaps.boards;
-  const boardMeta = targetMap.get(boardId);
-  const isAdmin = isBoardAdmin(boardMeta);
+  const isTeam = scope === 'team' || teamMaps.boards.has(boardId);
+  const targetMap = isTeam ? teamMaps.boards : soloMaps.boards;
+  const boardMeta = targetMap.get(boardId) || allBoards.value.find((b) => b.id === boardId);
+  const isAdmin = isBoardAdmin(boardMeta, isTeam ? 'team' : 'solo');
   const creatorDisplay = boardMeta?.creatorName || 'Admin';
 
   useEffect(() => {
@@ -73,7 +74,11 @@ export function BoardSettingsModal({
   };
 
   const handleDelete = () => {
-    deleteBoard(boardId, scope);
+    if (isTeam && !isAdmin) {
+      showToast(`Permission denied: Only the board creator (@${creatorDisplay}) can delete this board.`, 'error');
+      return;
+    }
+    deleteBoard(boardId, isTeam ? 'team' : 'solo');
     showToast(`Board "${boardTitle}" moved to trash`, 'info');
     onClose();
 
@@ -438,10 +443,10 @@ export function BoardSettingsModal({
                 <button
                   type="button"
                   class="btn-secondary"
-                  disabled={scope === 'team' && !isAdmin}
-                  title={scope === 'team' && !isAdmin ? 'Only the board creator can delete or clear this board.' : undefined}
+                  disabled={isTeam && !isAdmin}
+                  title={isTeam && !isAdmin ? `Only the board creator (@${creatorDisplay}) can delete or clear this board.` : undefined}
                   onClick={() => {
-                    if (scope === 'team' && !isAdmin) return;
+                    if (isTeam && !isAdmin) return;
                     onClearBoard();
                     onClose();
                   }}
@@ -454,8 +459,8 @@ export function BoardSettingsModal({
                     border: '1px solid rgba(248, 113, 113, 0.3)',
                     background: 'rgba(239, 68, 68, 0.06)',
                     color: '#f87171',
-                    cursor: (scope === 'team' && !isAdmin) ? 'not-allowed' : 'pointer',
-                    opacity: (scope === 'team' && !isAdmin) ? 0.5 : 1,
+                    cursor: (isTeam && !isAdmin) ? 'not-allowed' : 'pointer',
+                    opacity: (isTeam && !isAdmin) ? 0.5 : 1,
                     fontSize: 13
                   }}
                 >
@@ -467,8 +472,8 @@ export function BoardSettingsModal({
               <button
                 type="button"
                 class="btn-danger"
-                disabled={scope === 'team' && !isAdmin}
-                title={scope === 'team' && !isAdmin ? 'Only the board creator can delete or clear this board.' : undefined}
+                disabled={isTeam && !isAdmin}
+                title={isTeam && !isAdmin ? `Only the board creator (@${creatorDisplay}) can delete or clear this board.` : undefined}
                 onClick={handleDelete}
                 style={{
                   display: 'flex',
@@ -479,8 +484,8 @@ export function BoardSettingsModal({
                   border: '1px solid rgba(239, 68, 68, 0.5)',
                   background: 'rgba(239, 68, 68, 0.14)',
                   color: '#ef4444',
-                  cursor: (scope === 'team' && !isAdmin) ? 'not-allowed' : 'pointer',
-                  opacity: (scope === 'team' && !isAdmin) ? 0.5 : 1,
+                  cursor: (isTeam && !isAdmin) ? 'not-allowed' : 'pointer',
+                  opacity: (isTeam && !isAdmin) ? 0.5 : 1,
                   fontSize: 13,
                   fontWeight: 600
                 }}

@@ -141,6 +141,16 @@ class ApiClient {
     if (this.bridgeToken && !headers.has('X-Doks-Bridge')) {
       headers.set('X-Doks-Bridge', this.bridgeToken);
     }
+    if (typeof sessionStorage !== 'undefined') {
+      const sId = sessionStorage.getItem('doks_session_member_id') || (typeof localStorage !== 'undefined' ? localStorage.getItem('doks_member_id') : '');
+      const sName = sessionStorage.getItem('doks_display_name') || sessionStorage.getItem('doks_member_name') || (typeof localStorage !== 'undefined' ? localStorage.getItem('doks_member_name') : '');
+      if (sId && !headers.has('X-Doks-Member-Id')) {
+        headers.set('X-Doks-Member-Id', sId);
+      }
+      if (sName && !headers.has('X-Doks-Member-Name')) {
+        headers.set('X-Doks-Member-Name', sName);
+      }
+    }
 
     const response = await fetch(url, {
       ...init,
@@ -200,7 +210,14 @@ class ApiClient {
     const res = await this.fetch(`/api/boards/${encodeURIComponent(id)}?scope=${encodeURIComponent(scope)}`, {
       method: 'DELETE'
     });
-    if (!res.ok) throw new Error(`Failed to delete board: ${res.statusText}`);
+    if (!res.ok) {
+      let errMsg = res.statusText;
+      try {
+        const body = await res.json();
+        if (body.error) errMsg = body.error;
+      } catch {}
+      throw new Error(errMsg);
+    }
   }
 
   public async getNotes(scope: WorkspaceScope = 'team'): Promise<NoteMeta[]> {

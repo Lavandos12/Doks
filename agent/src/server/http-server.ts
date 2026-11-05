@@ -865,6 +865,8 @@ export class AgentHttpServer {
       const indexDoc = this.docManager.getOrCreateDoc(getScopedIndexDocName(scope));
       const { boards } = getIndexMaps(indexDoc);
       const now = Date.now();
+      const reqMemberId = (req.headers['x-doks-member-id'] as string) || this.config.agentId;
+      const reqMemberName = (req.headers['x-doks-member-name'] as string) || this.config.memberName;
       const meta = {
         id: boardId,
         title,
@@ -872,7 +874,9 @@ export class AgentHttpServer {
         createdAt: now,
         updatedAt: now,
         deleted: false,
-        scope
+        scope,
+        creatorId: reqMemberId,
+        creatorName: reqMemberName
       };
       indexDoc.transact(() => {
         boards.set(boardId, meta);
@@ -913,12 +917,35 @@ export class AgentHttpServer {
       if (scope === 'solo' && !this.isHostSession(req)) {
         return reply.code(403).send({ error: 'Forbidden: Solo workspace is private to host' });
       }
+      if (id === 'team-main' || id === 'solo-main') {
+        return reply.code(403).send({ error: 'Forbidden: Cannot delete canonical main board' });
+      }
       const indexDoc = this.docManager.getOrCreateDoc(getScopedIndexDocName(scope));
       const { boards } = getIndexMaps(indexDoc);
       const existing = boards.get(id);
       if (!existing) {
         return reply.code(404).send({ error: 'Board not found' });
       }
+
+      // In team scope: only board creator (or host agent) can delete
+      if (scope === 'team') {
+        const reqMemberId = (req.headers['x-doks-member-id'] as string) || '';
+        const reqMemberName = (req.headers['x-doks-member-name'] as string) || '';
+        const isHost = this.isHostSession(req);
+
+        const isCreator =
+          (existing.creatorId && reqMemberId && existing.creatorId === reqMemberId) ||
+          (existing.creatorName && reqMemberName && existing.creatorName.trim().toLowerCase() === reqMemberName.trim().toLowerCase()) ||
+          (!existing.creatorId && isHost);
+
+        if (!isCreator) {
+          const creator = existing.creatorName || 'the creator';
+          return reply.code(403).send({
+            error: `Forbidden: Only the board creator (@${creator}) can delete this board`
+          });
+        }
+      }
+
       indexDoc.transact(() => {
         boards.set(id, {
           ...existing,
@@ -1424,7 +1451,9 @@ export class AgentHttpServer {
             folder: null,
             createdAt: Date.now(),
             updatedAt: Date.now(),
-            deleted: false
+            deleted: false,
+            creatorId: this.config.agentId,
+            creatorName: this.config.memberName
           });
           const boardDoc = this.docManager.getOrCreateDoc(getScopedBoardDocName(scope, boardId));
           const { nodes } = getBoardMaps(boardDoc);
@@ -1486,7 +1515,9 @@ export class AgentHttpServer {
             folder: null,
             createdAt: Date.now(),
             updatedAt: Date.now(),
-            deleted: false
+            deleted: false,
+            creatorId: this.config.agentId,
+            creatorName: this.config.memberName
           });
           const boardDoc = this.docManager.getOrCreateDoc(getScopedBoardDocName(scope, boardId));
           const { nodes, edges } = getBoardMaps(boardDoc);

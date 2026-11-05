@@ -28,6 +28,7 @@ import {
   setScope,
   convertBoardScope,
   maps,
+  teamMaps,
   restoreNote,
   createNote,
   currentScope,
@@ -4209,7 +4210,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                         e.stopPropagation();
                         setSettingsTargetBoard({
                           id: b.id,
-                          scope: b.scope || 'solo',
+                          scope: teamMaps.boards.has(b.id) ? 'team' : (b.scope || 'solo'),
                           title: b.title
                         });
                         setIsBoardSettingsOpen(true);
@@ -7598,7 +7599,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
           setSettingsTargetBoard(null);
         }}
         boardId={settingsTargetBoard?.id || boardId}
-        scope={settingsTargetBoard?.scope || (currentBoardMeta?.scope || effectiveScope)}
+        scope={settingsTargetBoard?.scope || (teamMaps.boards.has(settingsTargetBoard?.id || boardId) ? 'team' : (currentBoardMeta?.scope || effectiveScope))}
         boardTitle={settingsTargetBoard?.title || currentBoardMeta?.title || t('boards.default_title')}
         onClearBoard={() => {
           const targetId = settingsTargetBoard?.id || boardId;
