@@ -385,6 +385,20 @@ export class AgentHttpServer {
   }
 
   private isLoopbackRequest(req: any): boolean {
+    const forwardedFor = req.headers?.['x-forwarded-for'];
+    const forwardedProto = req.headers?.['x-forwarded-proto'];
+    const renderHost = req.headers?.['x-render-host'];
+    const cfConnectingIp = req.headers?.['cf-connecting-ip'];
+    const hostHeader = (req.headers?.host || '').split(':')[0].toLowerCase();
+
+    // If reverse proxy headers are present, or public cloud host, request came from external network
+    if (forwardedFor || forwardedProto || renderHost || cfConnectingIp) {
+      return false;
+    }
+    if (hostHeader && hostHeader !== 'localhost' && hostHeader !== '127.0.0.1' && hostHeader !== '::1' && hostHeader !== '[::1]') {
+      return false;
+    }
+
     const ip = (req.ip || req.raw?.socket?.remoteAddress || req.socket?.remoteAddress || '').replace(/^::ffff:/, '');
     return ip === '127.0.0.1' || ip === '::1';
   }
@@ -865,7 +879,7 @@ export class AgentHttpServer {
       const indexDoc = this.docManager.getOrCreateDoc(getScopedIndexDocName(scope));
       const { boards } = getIndexMaps(indexDoc);
       const now = Date.now();
-      const reqMemberId = (req.headers['x-doks-member-id'] as string) || this.config.agentId;
+      const reqAccountId = (req.headers['x-doks-account-id'] as string) || (req.headers['x-doks-member-id'] as string) || this.config.agentId;
       const reqMemberName = (req.headers['x-doks-member-name'] as string) || this.config.memberName;
       const meta = {
         id: boardId,
@@ -875,7 +889,7 @@ export class AgentHttpServer {
         updatedAt: now,
         deleted: false,
         scope,
-        creatorId: reqMemberId,
+        creatorId: reqAccountId,
         creatorName: reqMemberName
       };
       indexDoc.transact(() => {
@@ -927,17 +941,18 @@ export class AgentHttpServer {
         return reply.code(404).send({ error: 'Board not found' });
       }
 
-      // In team scope: only board creator (or host agent) can delete
+      // In team scope: strictly only verified creator account can delete
       if (scope === 'team') {
-        const reqMemberId = (req.headers['x-doks-member-id'] as string) || '';
-        const reqMemberName = (req.headers['x-doks-member-name'] as string) || '';
-        const isHost = this.isHostSession(req);
+        const reqAccountId = (req.headers['x-doks-account-id'] as string) || (req.headers['x-doks-member-id'] as string) || '';
 
-        const isCreator =
-          (existing.creatorId && reqMemberId && existing.creatorId === reqMemberId) ||
-          (existing.creatorName && reqMemberName && existing.creatorName.trim().toLowerCase() === reqMemberName.trim().toLowerCase()) ||
-          (!existing.creatorId && isHost);
+        // If the board has no registered creator (legacy or system board), reject deletion
+        if (!existing.creatorId) {
+          return reply.code(403).send({
+            error: 'Forbidden: Unassigned legacy team board cannot be deleted by participants'
+          });
+        }
 
+        const isCreator = reqAccountId && existing.creatorId === reqAccountId;
         if (!isCreator) {
           const creator = existing.creatorName || 'the creator';
           return reply.code(403).send({

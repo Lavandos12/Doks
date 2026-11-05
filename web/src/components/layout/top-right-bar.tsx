@@ -4,7 +4,9 @@ import {
   agentStatus,
   isViewerMode,
   allTrashNotes,
-  allTrashBoards
+  allTrashBoards,
+  getMyAccount,
+  updateMyAccount
 } from '../../state/app-state.js';
 import { Icon } from '../../ui/icons.js';
 import { t } from '../../i18n/index.js';
@@ -35,47 +37,30 @@ export function TopRightBar({
   const deletedCount = allTrashNotes.value.length + allTrashBoards.value.length;
 
   const [showQuickProfile, setShowQuickProfile] = useState(false);
-  const [profileName, setProfileName] = useState(() =>
-    localStorage.getItem('doks_display_name') || localStorage.getItem('doks_member_name') || 'You'
-  );
-  const [profileColor, setProfileColor] = useState(() =>
-    localStorage.getItem('doks_cursor_color') || localStorage.getItem('doks_member_color') || '#8b5cf6'
-  );
+  const [profileName, setProfileName] = useState(() => getMyAccount().displayName);
+  const [profileColor, setProfileColor] = useState(() => getMyAccount().avatarColor);
 
   useEffect(() => {
     const handleProfileUpdated = () => {
-      const updatedName = localStorage.getItem('doks_display_name') || localStorage.getItem('doks_member_name') || 'You';
-      const updatedColor = localStorage.getItem('doks_cursor_color') || localStorage.getItem('doks_member_color') || '#8b5cf6';
-      setProfileName(updatedName);
-      setProfileColor(updatedColor);
+      const acc = getMyAccount();
+      setProfileName(acc.displayName);
+      setProfileColor(acc.avatarColor);
     };
     window.addEventListener('doks_profile_updated', handleProfileUpdated);
     return () => window.removeEventListener('doks_profile_updated', handleProfileUpdated);
   }, []);
 
   const handleSaveQuickProfile = (newName: string, newColor: string) => {
-    const trimmed = newName.trim() || 'Collaborator';
-    localStorage.setItem('doks_display_name', trimmed);
-    localStorage.setItem('doks_member_name', trimmed);
-    localStorage.setItem('doks_cursor_color', newColor);
-    localStorage.setItem('doks_member_color', newColor);
-    if (agentStatus.value) {
-      agentStatus.value = {
-        ...agentStatus.value,
-        memberName: trimmed,
-        memberColor: newColor
-      };
-    }
-    setProfileName(trimmed);
-    setProfileColor(newColor);
+    const updated = updateMyAccount(newName, newColor);
+    setProfileName(updated.displayName);
+    setProfileColor(updated.avatarColor);
     setShowQuickProfile(false);
-    window.dispatchEvent(new Event('doks_profile_updated'));
 
-    // Audit 3.4: Send PATCH /api/profile so server and mesh peers sync updated profile
+    // Sync to server and mesh peers
     fetch('/api/profile', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ memberName: trimmed, memberColor: newColor })
+      body: JSON.stringify({ memberName: updated.displayName, memberColor: updated.avatarColor })
     }).catch(() => {});
   };
 

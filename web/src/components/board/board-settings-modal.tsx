@@ -133,9 +133,19 @@ export function BoardSettingsModal({
         <div class="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 20, padding: '16px 20px' }}>
           {/* Section 1: Title */}
           <div class="settings-section" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <label style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)' }}>
-              Board Title
-            </label>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <label style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)' }}>
+                Board Title
+              </label>
+              {isTeam && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: '#94a3b8' }}>
+                  <Icon name="users" size={12} class={isAdmin ? 'text-accent' : undefined} />
+                  <span>
+                    Owner: <strong style={{ color: isAdmin ? '#c084fc' : '#e2e8f0' }}>@{creatorDisplay}{isAdmin ? ' (You)' : ''}</strong>
+                  </span>
+                </div>
+              )}
+            </div>
             <div style={{ display: 'flex', gap: 8 }}>
               <input
                 type="text"

@@ -141,14 +141,28 @@ class ApiClient {
     if (this.bridgeToken && !headers.has('X-Doks-Bridge')) {
       headers.set('X-Doks-Bridge', this.bridgeToken);
     }
-    if (typeof sessionStorage !== 'undefined') {
-      const sId = sessionStorage.getItem('doks_session_member_id') || (typeof localStorage !== 'undefined' ? localStorage.getItem('doks_member_id') : '');
-      const sName = sessionStorage.getItem('doks_display_name') || sessionStorage.getItem('doks_member_name') || (typeof localStorage !== 'undefined' ? localStorage.getItem('doks_member_name') : '');
-      if (sId && !headers.has('X-Doks-Member-Id')) {
-        headers.set('X-Doks-Member-Id', sId);
+    if (typeof localStorage !== 'undefined' || typeof sessionStorage !== 'undefined') {
+      const accId =
+        (typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('doks_session_account_id') : null) ||
+        (typeof localStorage !== 'undefined' ? localStorage.getItem('doks_account_id') : null) ||
+        (typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('doks_session_member_id') : null) ||
+        (typeof localStorage !== 'undefined' ? localStorage.getItem('doks_member_id') : '');
+      const accName =
+        (typeof localStorage !== 'undefined' ? localStorage.getItem('doks_account_name') : null) ||
+        (typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('doks_display_name') : null) ||
+        (typeof localStorage !== 'undefined' ? localStorage.getItem('doks_display_name') : '') ||
+        (typeof localStorage !== 'undefined' ? localStorage.getItem('doks_member_name') : '');
+      const accSecret = typeof localStorage !== 'undefined' ? localStorage.getItem('doks_account_secret') : '';
+
+      if (accId) {
+        if (!headers.has('X-Doks-Account-Id')) headers.set('X-Doks-Account-Id', accId);
+        if (!headers.has('X-Doks-Member-Id')) headers.set('X-Doks-Member-Id', accId);
       }
-      if (sName && !headers.has('X-Doks-Member-Name')) {
-        headers.set('X-Doks-Member-Name', sName);
+      if (accName && !headers.has('X-Doks-Member-Name')) {
+        headers.set('X-Doks-Member-Name', accName);
+      }
+      if (accSecret && !headers.has('X-Doks-Account-Secret')) {
+        headers.set('X-Doks-Account-Secret', accSecret);
       }
     }
 

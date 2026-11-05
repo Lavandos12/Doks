@@ -26,6 +26,8 @@ import { api } from '../api/client.js';
 import { NotesSearchIndex } from '../search/indexer.js';
 import { showToast } from '../ui/toast.js';
 import { t } from '../i18n/index.js';
+import { getMyAccount, getMyAccountId, getMyAccountName, getMyAccountColor, updateMyAccount, sanitizeContaminatedStorage } from './account-state.js';
+export { getMyAccount, getMyAccountId, getMyAccountName, getMyAccountColor, updateMyAccount } from './account-state.js';
 
 export const searchIndex = new NotesSearchIndex();
 
@@ -110,6 +112,7 @@ export function initAppState(): void {
 
 if (typeof window !== 'undefined') {
   agentStatus.subscribe((st) => {
+    if (st?.agentId) sanitizeContaminatedStorage(st.agentId);
     if (userDismissedViewer) return;
     if (st?.viewerMode || initialViewer) {
       const allowSolo = Boolean(st?.allowSolo);
@@ -545,43 +548,12 @@ export function createNote(title = t('sidebar.new_note'), folder: string | null 
   return id;
 }
 
-let cachedMemberId: string | null = null;
 export function getMyMemberId(): string {
-  if (cachedMemberId) return cachedMemberId;
-
-  // 1. Session-isolated collaborator ID (distinct per browser tab/window)
-  let id = typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('doks_session_member_id') : null;
-  if (!id) {
-    // 2. If agentStatus has peer/agent ID, check if we have persistent agent identity
-    if (agentStatus.value?.agentId) {
-      id = agentStatus.value.agentId;
-    } else {
-      id = typeof localStorage !== 'undefined' ? localStorage.getItem('doks_member_id') : null;
-    }
-    if (!id) {
-      id = crypto.randomUUID();
-    }
-    if (typeof sessionStorage !== 'undefined') {
-      sessionStorage.setItem('doks_session_member_id', id);
-    }
-  }
-  if (typeof localStorage !== 'undefined' && !localStorage.getItem('doks_member_id')) {
-    localStorage.setItem('doks_member_id', id);
-  }
-  cachedMemberId = id;
-  return id;
+  return getMyAccountId();
 }
 
 export function getMyMemberName(): string {
-  if (typeof sessionStorage !== 'undefined') {
-    const sName = sessionStorage.getItem('doks_display_name') || sessionStorage.getItem('doks_member_name');
-    if (sName) return sName;
-  }
-  if (typeof localStorage !== 'undefined') {
-    const lName = localStorage.getItem('doks_display_name') || localStorage.getItem('doks_member_name');
-    if (lName && lName !== 'You') return lName;
-  }
-  return agentStatus.value?.memberName || 'User';
+  return getMyAccountName();
 }
 
 export function isBoardAdmin(meta?: BoardMeta | null, scopeHint?: WorkspaceScope): boolean {
@@ -591,23 +563,18 @@ export function isBoardAdmin(meta?: BoardMeta | null, scopeHint?: WorkspaceScope
   // Solo boards are always owned locally if genuinely in soloMaps
   if (!isTeam && (meta.scope === 'solo' || soloMaps.boards.has(meta.id))) return true;
 
-  // Canonical shared team canvas can NEVER be deleted or cleared by participants
+  // Canonical shared team canvas can NEVER be deleted, cleared, or converted by participants
   if (meta.id === TEAM_MAIN_BOARD_ID) return false;
 
-  const myId = getMyMemberId();
-  const myName = getMyMemberName();
+  const myId = getMyAccountId();
 
-  // 1. Strict creatorId match
-  if (meta.creatorId && meta.creatorId === myId) return true;
-
-  // 2. Exact creatorName match (case-insensitive trim) if creatorName is present
-  if (meta.creatorName && myName && meta.creatorName.trim().toLowerCase() === myName.trim().toLowerCase()) {
-    if (!meta.creatorId || meta.creatorId === myId) return true;
+  // 1. Strict creatorId match against sovereign client account ID
+  if (meta.creatorId) {
+    return meta.creatorId === myId;
   }
 
-  // Legacy fallback: only if creatorId AND creatorName are both missing, and the agent is the true hosting server
-  if (!meta.creatorId && !meta.creatorName && agentStatus.value?.isHost) return true;
-
+  // 2. Legacy / unassigned team boards: permanently protected against unauthorized participant deletion.
+  // Never fall back to isHost or name matching.
   return false;
 }
 
