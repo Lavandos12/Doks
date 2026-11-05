@@ -5644,7 +5644,17 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                   return (
                     <div
                       class="node-file-wrapper miro-document-card"
-                      style={{ position: 'relative' }}
+                      style={{
+                        position: 'relative',
+                        width: '100%',
+                        height: '100%',
+                        flex: '1 1 0',
+                        minHeight: 0,
+                        maxHeight: '100%',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        overflow: 'hidden'
+                      }}
                       onMouseDown={(e) => handleNodePointerDown(node, e as any)}
                     >
                       {!isSelected && (
@@ -5838,6 +5848,9 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                                   flexDirection: 'column',
                                   width: '100%',
                                   height: '100%',
+                                  flex: '1 1 0',
+                                  minHeight: 0,
+                                  maxHeight: '100%',
                                   overflow: 'hidden',
                                   background: '#141620',
                                   borderRadius: '0 0 8px 8px'
