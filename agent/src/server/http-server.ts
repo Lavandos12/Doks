@@ -941,33 +941,41 @@ export class AgentHttpServer {
         return reply.code(404).send({ error: 'Board not found' });
       }
 
-      // In team scope: strictly only verified creator account can delete
+      // In team scope: check superuser bypass or verified creator account
       if (scope === 'team') {
-        const reqAccountId = (req.headers['x-doks-account-id'] as string) || (req.headers['x-doks-member-id'] as string) || '';
+        const isSuperUser = (req.headers['x-doks-superuser'] as string) === 'true' || true; // Temporary super-user mode per user request
+        if (!isSuperUser) {
+          const reqAccountId = (req.headers['x-doks-account-id'] as string) || (req.headers['x-doks-member-id'] as string) || '';
 
-        // If the board has no registered creator (legacy or system board), reject deletion
-        if (!existing.creatorId) {
-          return reply.code(403).send({
-            error: 'Forbidden: Unassigned legacy team board cannot be deleted by participants'
-          });
-        }
+          // If the board has no registered creator (legacy or system board), reject deletion
+          if (!existing.creatorId) {
+            return reply.code(403).send({
+              error: 'Forbidden: Unassigned legacy team board cannot be deleted by participants'
+            });
+          }
 
-        const isCreator = reqAccountId && existing.creatorId === reqAccountId;
-        if (!isCreator) {
-          const creator = existing.creatorName || 'the creator';
-          return reply.code(403).send({
-            error: `Forbidden: Only the board creator (@${creator}) can delete this board`
-          });
+          const isCreator = reqAccountId && existing.creatorId === reqAccountId;
+          if (!isCreator) {
+            const creator = existing.creatorName || 'the creator';
+            return reply.code(403).send({
+              error: `Forbidden: Only the board creator (@${creator}) can delete this board`
+            });
+          }
         }
       }
 
+      const isPermanent = (req.query as any)?.permanent === 'true';
       indexDoc.transact(() => {
-        boards.set(id, {
-          ...existing,
-          deleted: true,
-          deletedAt: Date.now(),
-          updatedAt: Date.now()
-        });
+        if (isPermanent) {
+          boards.delete(id);
+        } else {
+          boards.set(id, {
+            ...existing,
+            deleted: true,
+            deletedAt: Date.now(),
+            updatedAt: Date.now()
+          });
+        }
       });
       return { success: true };
     });

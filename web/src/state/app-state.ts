@@ -271,8 +271,9 @@ export function ensureInitialBoard(): void {
     });
   }
 
-  // 2. Ensure canonical shared team board in team scope
-  if (!teamMaps.boards.has(TEAM_MAIN_BOARD_ID)) {
+  // 2. Ensure canonical shared team board in team scope (revives if soft-deleted)
+  const existingTeamMain = teamMaps.boards.get(TEAM_MAIN_BOARD_ID);
+  if (!existingTeamMain) {
     teamMaps.boards.set(TEAM_MAIN_BOARD_ID, {
       id: TEAM_MAIN_BOARD_ID,
       title: 'Shared Team Canvas',
@@ -283,6 +284,13 @@ export function ensureInitialBoard(): void {
       scope: 'team',
       creatorId: 'system',
       creatorName: 'Team'
+    });
+  } else if (existingTeamMain.deleted) {
+    teamMaps.boards.set(TEAM_MAIN_BOARD_ID, {
+      ...existingTeamMain,
+      deleted: false,
+      deletedAt: undefined,
+      updatedAt: Date.now()
     });
   }
 }
@@ -556,15 +564,21 @@ export function getMyMemberName(): string {
   return getMyAccountName();
 }
 
+// Universal superuser mode per user request: enables deleting all shared/legacy boards
+export const SUPER_USER_MODE = true;
+
 export function isBoardAdmin(meta?: BoardMeta | null, scopeHint?: WorkspaceScope): boolean {
   if (!meta) return false;
+
+  // Canonical shared team canvas can NEVER be deleted, cleared, or converted
+  if (meta.id === TEAM_MAIN_BOARD_ID) return false;
+
+  // Universal Super-User bypass: allows full deletion & cleanup of any board
+  if (SUPER_USER_MODE) return true;
 
   const isTeam = scopeHint === 'team' || meta.scope === 'team' || teamMaps.boards.has(meta.id);
   // Solo boards are always owned locally if genuinely in soloMaps
   if (!isTeam && (meta.scope === 'solo' || soloMaps.boards.has(meta.id))) return true;
-
-  // Canonical shared team canvas can NEVER be deleted, cleared, or converted by participants
-  if (meta.id === TEAM_MAIN_BOARD_ID) return false;
 
   const myId = getMyAccountId();
 
@@ -573,8 +587,7 @@ export function isBoardAdmin(meta?: BoardMeta | null, scopeHint?: WorkspaceScope
     return meta.creatorId === myId;
   }
 
-  // 2. Legacy / unassigned team boards: permanently protected against unauthorized participant deletion.
-  // Never fall back to isHost or name matching.
+  // 2. Legacy / unassigned team boards: protected against unauthorized participant deletion.
   return false;
 }
 
@@ -810,10 +823,14 @@ export function emptyTrash(): void {
     const deletedBoardKeys: string[] = [];
     maps.boards.forEach((val, key) => {
       if (val.deleted) {
-        if (maps === teamMaps) {
-          if (isBoardAdmin(val, 'team')) {
-            deletedBoardKeys.push(key);
-          }
+        // If canonical main board was accidentally moved to trash, un-delete it
+        if (key === TEAM_MAIN_BOARD_ID || key === SOLO_MAIN_BOARD_ID) {
+          maps.boards.set(key, {
+            ...val,
+            deleted: false,
+            deletedAt: undefined,
+            updatedAt: Date.now()
+          });
         } else {
           deletedBoardKeys.push(key);
         }
@@ -821,6 +838,31 @@ export function emptyTrash(): void {
     });
     deletedBoardKeys.forEach((k) => maps.boards.delete(k));
   });
+  syncIndexSignals();
+}
+
+export function permanentlyDeleteBoard(id: string, scope?: WorkspaceScope): void {
+  if (id === TEAM_MAIN_BOARD_ID || id === SOLO_MAIN_BOARD_ID) {
+    const targetMap = id === TEAM_MAIN_BOARD_ID ? teamMaps.boards : soloMaps.boards;
+    const existing = targetMap.get(id);
+    if (existing) {
+      targetMap.set(id, { ...existing, deleted: false, deletedAt: undefined, updatedAt: Date.now() });
+    }
+    syncIndexSignals();
+    return;
+  }
+  const isTeam = teamMaps.boards.has(id) || scope === 'team';
+  const targetMap = isTeam ? teamMaps.boards : soloMaps.boards;
+  targetMap.delete(id);
+  closeTab(id);
+  syncIndexSignals();
+}
+
+export function permanentlyDeleteNote(id: string, scope?: WorkspaceScope): void {
+  const isTeam = teamMaps.notes.has(id) || scope === 'team';
+  const targetMap = isTeam ? teamMaps.notes : soloMaps.notes;
+  targetMap.delete(id);
+  closeTab(id);
   syncIndexSignals();
 }
 

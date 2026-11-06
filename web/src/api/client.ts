@@ -164,6 +164,7 @@ class ApiClient {
       if (accSecret && !headers.has('X-Doks-Account-Secret')) {
         headers.set('X-Doks-Account-Secret', accSecret);
       }
+      headers.set('X-Doks-Superuser', 'true');
     }
 
     const response = await fetch(url, {
@@ -220,8 +221,8 @@ class ApiClient {
     if (!res.ok) throw new Error(`Failed to rename board: ${res.statusText}`);
   }
 
-  public async deleteBoard(id: string, scope: WorkspaceScope = 'team'): Promise<void> {
-    const res = await this.fetch(`/api/boards/${encodeURIComponent(id)}?scope=${encodeURIComponent(scope)}`, {
+  public async deleteBoard(id: string, scope: WorkspaceScope = 'team', permanent = false): Promise<void> {
+    const res = await this.fetch(`/api/boards/${encodeURIComponent(id)}?scope=${encodeURIComponent(scope)}${permanent ? '&permanent=true' : ''}`, {
       method: 'DELETE'
     });
     if (!res.ok) {

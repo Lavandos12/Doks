@@ -7,6 +7,8 @@ import {
   allTrashBoards,
   restoreNote,
   restoreBoard,
+  permanentlyDeleteBoard,
+  permanentlyDeleteNote,
   openTab,
   emptyTrash,
   yjsClient,
@@ -314,15 +316,41 @@ export function HistoryScreen({ onClose }: HistoryScreenProps = {}) {
                         {note.deletedAt ? new Date(note.deletedAt).toLocaleString('en-US') : ''}
                       </span>
                     </div>
-                    <button
-                      class="btn-restore"
-                      onClick={() => {
-                        restoreNote(note.id, note.scope);
-                        openTab('note', note.id, note.title);
-                      }}
-                    >
-                      {t('trash.restore')}
-                    </button>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <button
+                        class="btn-restore"
+                        onClick={() => {
+                          restoreNote(note.id, note.scope);
+                          openTab('note', note.id, note.title);
+                        }}
+                      >
+                        {t('trash.restore')}
+                      </button>
+                      <button
+                        type="button"
+                        class="btn-trash-delete"
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 4,
+                          padding: '4px 8px',
+                          borderRadius: 6,
+                          background: 'rgba(239, 68, 68, 0.15)',
+                          border: '1px solid rgba(239, 68, 68, 0.35)',
+                          color: '#f87171',
+                          fontSize: 12,
+                          cursor: 'pointer'
+                        }}
+                        onClick={() => {
+                          permanentlyDeleteNote(note.id, note.scope);
+                          showToast(`Note "${note.title}" permanently deleted`, 'info');
+                        }}
+                        title="Delete permanently"
+                      >
+                        <Icon name="trash" size={13} />
+                        <span>Delete Forever</span>
+                      </button>
+                    </div>
                   </div>
                 ))}
 
@@ -351,15 +379,41 @@ export function HistoryScreen({ onClose }: HistoryScreenProps = {}) {
                         {b.deletedAt ? new Date(b.deletedAt).toLocaleString('en-US') : ''}
                       </span>
                     </div>
-                    <button
-                      class="btn-restore"
-                      onClick={() => {
-                        restoreBoard(b.id, b.scope);
-                        openTab('board', b.id, b.title);
-                      }}
-                    >
-                      {t('trash.restore')}
-                    </button>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <button
+                        class="btn-restore"
+                        onClick={() => {
+                          restoreBoard(b.id, b.scope);
+                          openTab('board', b.id, b.title);
+                        }}
+                      >
+                        {t('trash.restore')}
+                      </button>
+                      <button
+                        type="button"
+                        class="btn-trash-delete"
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 4,
+                          padding: '4px 8px',
+                          borderRadius: 6,
+                          background: 'rgba(239, 68, 68, 0.15)',
+                          border: '1px solid rgba(239, 68, 68, 0.35)',
+                          color: '#f87171',
+                          fontSize: 12,
+                          cursor: 'pointer'
+                        }}
+                        onClick={() => {
+                          permanentlyDeleteBoard(b.id, b.scope);
+                          showToast(`Board "${b.title}" permanently deleted`, 'info');
+                        }}
+                        title="Delete permanently"
+                      >
+                        <Icon name="trash" size={13} />
+                        <span>Delete Forever</span>
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>

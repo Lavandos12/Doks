@@ -141,7 +141,7 @@ export function BoardSettingsModal({
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: '#94a3b8' }}>
                   <Icon name="users" size={12} class={isAdmin ? 'text-accent' : undefined} />
                   <span>
-                    Owner: <strong style={{ color: isAdmin ? '#c084fc' : '#e2e8f0' }}>@{creatorDisplay}{isAdmin ? ' (You)' : ''}</strong>
+                    Owner: <strong style={{ color: isAdmin ? '#c084fc' : '#e2e8f0' }}>@{creatorDisplay}{isAdmin ? ' (Superuser)' : ''}</strong>
                   </span>
                 </div>
               )}
