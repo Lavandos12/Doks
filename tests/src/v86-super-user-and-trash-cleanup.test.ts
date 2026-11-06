@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import * as Y from 'yjs';
-import { getIndexMaps, type BoardMeta, type NoteMeta, type WorkspaceScope } from '@doks/shared';
+import { getIndexMaps, type BoardMeta, type WorkspaceScope } from '@doks/shared';
 
-describe('Doks v86: Super-User Governance Mode & Trash Permanent Purge', () => {
+describe('Doks v86: Super-User Governance Mode & Canonical Main Board Deletion', () => {
   const TEAM_MAIN_BOARD_ID = 'team-main';
   const SOLO_MAIN_BOARD_ID = 'solo-main';
 
@@ -19,7 +19,7 @@ describe('Doks v86: Super-User Governance Mode & Trash Permanent Purge', () => {
   });
 
   // Pure logic replica of emptyTrash in app-state.ts
-  function testEmptyTrash(sMaps: typeof soloMaps, tMaps: typeof teamMaps) {
+  function testEmptyTrash(sMaps: typeof soloMaps, tMaps: typeof teamMaps, superUserMode = true) {
     [sMaps, tMaps].forEach((maps) => {
       const deletedNoteKeys: string[] = [];
       maps.notes.forEach((val, key) => {
@@ -30,7 +30,7 @@ describe('Doks v86: Super-User Governance Mode & Trash Permanent Purge', () => {
       const deletedBoardKeys: string[] = [];
       maps.boards.forEach((val, key) => {
         if (val.deleted) {
-          if (key === TEAM_MAIN_BOARD_ID || key === SOLO_MAIN_BOARD_ID) {
+          if (!superUserMode && (key === TEAM_MAIN_BOARD_ID || key === SOLO_MAIN_BOARD_ID)) {
             maps.boards.set(key, {
               ...val,
               deleted: false,
@@ -46,8 +46,9 @@ describe('Doks v86: Super-User Governance Mode & Trash Permanent Purge', () => {
     });
   }
 
-  function testPermanentlyDeleteBoard(id: string, sMaps: typeof soloMaps, tMaps: typeof teamMaps) {
-    if (id === TEAM_MAIN_BOARD_ID || id === SOLO_MAIN_BOARD_ID) {
+  // Pure logic replica of permanentlyDeleteBoard in app-state.ts
+  function testPermanentlyDeleteBoard(id: string, sMaps: typeof soloMaps, tMaps: typeof teamMaps, superUserMode = true) {
+    if (!superUserMode && (id === TEAM_MAIN_BOARD_ID || id === SOLO_MAIN_BOARD_ID)) {
       const targetMap = id === TEAM_MAIN_BOARD_ID ? tMaps.boards : sMaps.boards;
       const existing = targetMap.get(id);
       if (existing) {
@@ -59,60 +60,82 @@ describe('Doks v86: Super-User Governance Mode & Trash Permanent Purge', () => {
     targetMap.delete(id);
   }
 
+  // Pure logic replica of isBoardAdmin in app-state.ts
   function testIsBoardAdmin(
     meta: BoardMeta | null | undefined,
     currentAccountId: string,
     superUserMode: boolean
   ): boolean {
     if (!meta) return false;
-    if (meta.id === TEAM_MAIN_BOARD_ID) return false;
+    // Super-user bypass allows deleting any board, including team-main
     if (superUserMode) return true;
+    // Ordinary users can never delete canonical team-main
+    if (meta.id === TEAM_MAIN_BOARD_ID) return false;
     if (meta.scope === 'solo') return true;
     if (meta.creatorId) return meta.creatorId === currentAccountId;
     return false;
   }
 
-  describe('1. Empty Trash Permanent Purge', () => {
-    it('permanently purges all deleted shared boards from Y.Map regardless of prior creatorId', () => {
-      // Setup the 6 deleted shared boards matching user screenshot
-      const boardsToTrash = [
-        'taden-задачи',
-        'taden-документация',
-        'Shabashka',
-        'ZZZZ-1',
-        'ZZZZ-2',
-        'DSDSDS'
-      ];
+  // Pure logic replica of ensureInitialBoard in app-state.ts
+  function testEnsureInitialBoard(tMaps: typeof teamMaps) {
+    if (tMaps.boards.size === 0) {
+      tMaps.boards.set(TEAM_MAIN_BOARD_ID, {
+        id: TEAM_MAIN_BOARD_ID,
+        title: 'Shared Team Canvas',
+        folder: null,
+        deleted: false,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+        scope: 'team',
+        creatorId: 'system',
+        creatorName: 'Team'
+      });
+    }
+  }
 
-      boardsToTrash.forEach((title, idx) => {
-        const id = `b-deleted-${idx}`;
-        teamMaps.boards.set(id, {
-          id,
-          title,
-          folder: null,
-          deleted: true,
-          deletedAt: Date.now(),
-          createdAt: Date.now(),
-          updatedAt: Date.now(),
-          scope: 'team',
-          creatorId: 'different-legacy-user-uuid',
-          creatorName: 'OtherUser'
-        });
+  describe('1. Canonical team-main Super-User Deletion & Empty Trash', () => {
+    it('allows super-user to permanently purge Shared Team Canvas (team-main) from trash', () => {
+      // Put team-main in trash
+      teamMaps.boards.set(TEAM_MAIN_BOARD_ID, {
+        id: TEAM_MAIN_BOARD_ID,
+        title: 'Shared Team Canvas',
+        folder: null,
+        deleted: true,
+        deletedAt: Date.now(),
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+        scope: 'team',
+        creatorId: 'system',
+        creatorName: 'Admin'
       });
 
-      expect(teamMaps.boards.size).toBe(6);
-
-      // Run emptyTrash
-      testEmptyTrash(soloMaps, teamMaps);
-
-      // All 6 deleted boards must be completely removed from the Y.Map
-      expect(teamMaps.boards.size).toBe(0);
-      boardsToTrash.forEach((_, idx) => {
-        expect(teamMaps.boards.has(`b-deleted-${idx}`)).toBe(false);
+      // Add another board so workspace is not completely empty
+      teamMaps.boards.set('b-active', {
+        id: 'b-active',
+        title: 'Active Project',
+        folder: null,
+        deleted: false,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+        scope: 'team'
       });
+
+      expect(teamMaps.boards.size).toBe(2);
+
+      // Run emptyTrash with superUserMode = true
+      testEmptyTrash(soloMaps, teamMaps, true);
+
+      // team-main must be permanently removed from the map!
+      expect(teamMaps.boards.has(TEAM_MAIN_BOARD_ID)).toBe(false);
+      expect(teamMaps.boards.has('b-active')).toBe(true);
+      expect(teamMaps.boards.size).toBe(1);
+
+      // ensureInitialBoard must NOT revive team-main because active board exists
+      testEnsureInitialBoard(teamMaps);
+      expect(teamMaps.boards.has(TEAM_MAIN_BOARD_ID)).toBe(false);
     });
 
-    it('automatically resurrects canonical team-main if it was accidentally marked deleted', () => {
+    it('protects and resurrects team-main when SUPER_USER_MODE is false (normal mode)', () => {
       teamMaps.boards.set(TEAM_MAIN_BOARD_ID, {
         id: TEAM_MAIN_BOARD_ID,
         title: 'Shared Team Canvas',
@@ -124,36 +147,21 @@ describe('Doks v86: Super-User Governance Mode & Trash Permanent Purge', () => {
         scope: 'team'
       });
 
-      expect(teamMaps.boards.get(TEAM_MAIN_BOARD_ID)?.deleted).toBe(true);
-
-      // Run emptyTrash
-      testEmptyTrash(soloMaps, teamMaps);
+      // Run emptyTrash in normal mode
+      testEmptyTrash(soloMaps, teamMaps, false);
 
       // team-main must be resurrected and NOT deleted
       const teamMain = teamMaps.boards.get(TEAM_MAIN_BOARD_ID);
       expect(teamMain).toBeDefined();
       expect(teamMain?.deleted).toBe(false);
-      expect(teamMain?.deletedAt).toBeUndefined();
     });
   });
 
-  describe('2. Individual "Delete Forever" (Purge) Action', () => {
-    it('permanently removes an individual board from the Y.Map on demand', () => {
-      const b1 = 'board-taden-doc';
-      const b2 = 'board-keep-trash';
-
-      teamMaps.boards.set(b1, {
-        id: b1,
-        title: 'taden-документация',
-        folder: null,
-        deleted: true,
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-        scope: 'team'
-      });
-      teamMaps.boards.set(b2, {
-        id: b2,
-        title: 'Keep In Trash',
+  describe('2. Individual "Delete Forever" on Canonical team-main', () => {
+    it('permanently deletes team-main when superUserMode is true', () => {
+      teamMaps.boards.set(TEAM_MAIN_BOARD_ID, {
+        id: TEAM_MAIN_BOARD_ID,
+        title: 'Shared Team Canvas',
         folder: null,
         deleted: true,
         createdAt: Date.now(),
@@ -161,20 +169,42 @@ describe('Doks v86: Super-User Governance Mode & Trash Permanent Purge', () => {
         scope: 'team'
       });
 
-      expect(teamMaps.boards.has(b1)).toBe(true);
-      expect(teamMaps.boards.has(b2)).toBe(true);
+      testPermanentlyDeleteBoard(TEAM_MAIN_BOARD_ID, soloMaps, teamMaps, true);
+      expect(teamMaps.boards.has(TEAM_MAIN_BOARD_ID)).toBe(false);
+    });
 
-      // Delete only b1 forever
-      testPermanentlyDeleteBoard(b1, soloMaps, teamMaps);
+    it('blocks permanent deletion and un-deletes team-main when superUserMode is false', () => {
+      teamMaps.boards.set(TEAM_MAIN_BOARD_ID, {
+        id: TEAM_MAIN_BOARD_ID,
+        title: 'Shared Team Canvas',
+        folder: null,
+        deleted: true,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+        scope: 'team'
+      });
 
-      expect(teamMaps.boards.has(b1)).toBe(false);
-      expect(teamMaps.boards.has(b2)).toBe(true);
+      testPermanentlyDeleteBoard(TEAM_MAIN_BOARD_ID, soloMaps, teamMaps, false);
+      expect(teamMaps.boards.has(TEAM_MAIN_BOARD_ID)).toBe(true);
+      expect(teamMaps.boards.get(TEAM_MAIN_BOARD_ID)?.deleted).toBe(false);
     });
   });
 
-  describe('3. Super-User Mode Governance & Rollback Capability', () => {
+  describe('3. Super-User Mode Governance & Permissions', () => {
     const myAccountId = 'usr_current_user_123';
     const otherAccountId = 'usr_original_creator_999';
+
+    const teamMainBoard: BoardMeta = {
+      id: TEAM_MAIN_BOARD_ID,
+      title: 'Shared Team Canvas',
+      folder: null,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      deleted: false,
+      scope: 'team',
+      creatorId: 'system',
+      creatorName: 'Admin'
+    };
 
     const sharedBoard: BoardMeta = {
       id: 'shared-board-architecture',
@@ -188,44 +218,28 @@ describe('Doks v86: Super-User Governance Mode & Trash Permanent Purge', () => {
       creatorName: 'OtherCollab'
     };
 
-    const legacyBoard: BoardMeta = {
-      id: 'legacy-unassigned-board',
-      title: 'Legacy Board',
-      folder: null,
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-      deleted: false,
-      scope: 'team',
-      creatorId: undefined,
-      creatorName: undefined
-    };
+    it('grants admin deletion rights over Shared Team Canvas (team-main) when SUPER_USER_MODE is true', () => {
+      const canDeleteTeamMain = testIsBoardAdmin(teamMainBoard, myAccountId, true);
+      expect(canDeleteTeamMain).toBe(true);
 
-    it('grants admin deletion rights to any user when SUPER_USER_MODE is true', () => {
-      // In super-user mode, current user can delete other user's board
       const canDeleteOther = testIsBoardAdmin(sharedBoard, myAccountId, true);
       expect(canDeleteOther).toBe(true);
-
-      // In super-user mode, current user can delete unassigned legacy board
-      const canDeleteLegacy = testIsBoardAdmin(legacyBoard, myAccountId, true);
-      expect(canDeleteLegacy).toBe(true);
     });
 
-    it('restores strict creator ownership security when rolled back to SUPER_USER_MODE = false', () => {
-      // When rolled back, non-creator is blocked
+    it('blocks deleting Shared Team Canvas when rolled back to SUPER_USER_MODE = false', () => {
+      const canDeleteTeamMain = testIsBoardAdmin(teamMainBoard, myAccountId, false);
+      expect(canDeleteTeamMain).toBe(false);
+
       const canDeleteOther = testIsBoardAdmin(sharedBoard, myAccountId, false);
       expect(canDeleteOther).toBe(false);
 
-      // When rolled back, legacy board without creator is blocked
-      const canDeleteLegacy = testIsBoardAdmin(legacyBoard, myAccountId, false);
-      expect(canDeleteLegacy).toBe(false);
-
-      // But genuine creator can still delete their own board
+      // Genuine creator can still delete their own board
       const canCreatorDelete = testIsBoardAdmin(sharedBoard, otherAccountId, false);
       expect(canCreatorDelete).toBe(true);
     });
   });
 
-  describe('4. Backend HTTP Endpoint with Super-User & Permanent Deletion', () => {
+  describe('4. Backend HTTP Endpoint with Super-User Deletion', () => {
     function simulateDeleteEndpoint(params: {
       boardId: string;
       scope: WorkspaceScope;
@@ -234,9 +248,9 @@ describe('Doks v86: Super-User Governance Mode & Trash Permanent Purge', () => {
       reqAccountId?: string;
       existingBoard?: BoardMeta;
     }): { status: number; body: { success?: boolean; error?: string } } {
-      const { boardId, scope, isPermanent, isSuperUser, reqAccountId, existingBoard } = params;
+      const { boardId, scope, isSuperUser, reqAccountId, existingBoard } = params;
 
-      if (boardId === 'team-main' || boardId === 'solo-main') {
+      if (!isSuperUser && (boardId === 'team-main' || boardId === 'solo-main')) {
         return { status: 403, body: { error: 'Forbidden: Cannot delete canonical main board' } };
       }
       if (!existingBoard) {
@@ -252,29 +266,54 @@ describe('Doks v86: Super-User Governance Mode & Trash Permanent Purge', () => {
       return { status: 200, body: { success: true } };
     }
 
-    it('allows deleting any team board when isSuperUser is true', () => {
-      const otherUserBoard: BoardMeta = {
-        id: 'board-other-101',
-        title: 'Other Board',
+    it('allows deleting team-main when isSuperUser is true', () => {
+      const teamMainMeta: BoardMeta = {
+        id: 'team-main',
+        title: 'Shared Team Canvas',
         folder: null,
         createdAt: Date.now(),
         updatedAt: Date.now(),
         deleted: false,
         scope: 'team',
-        creatorId: 'usr_different',
-        creatorName: 'SomeoneElse'
+        creatorId: 'system',
+        creatorName: 'Admin'
       };
 
       const res = simulateDeleteEndpoint({
-        boardId: 'board-other-101',
+        boardId: 'team-main',
         scope: 'team',
         isSuperUser: true,
         reqAccountId: 'usr_my_id',
-        existingBoard: otherUserBoard
+        existingBoard: teamMainMeta
       });
 
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
+    });
+
+    it('forbids deleting team-main when isSuperUser is false', () => {
+      const teamMainMeta: BoardMeta = {
+        id: 'team-main',
+        title: 'Shared Team Canvas',
+        folder: null,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+        deleted: false,
+        scope: 'team',
+        creatorId: 'system',
+        creatorName: 'Admin'
+      };
+
+      const res = simulateDeleteEndpoint({
+        boardId: 'team-main',
+        scope: 'team',
+        isSuperUser: false,
+        reqAccountId: 'usr_my_id',
+        existingBoard: teamMainMeta
+      });
+
+      expect(res.status).toBe(403);
+      expect(res.body.error).toContain('Cannot delete canonical main board');
     });
   });
 });

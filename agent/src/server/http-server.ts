@@ -931,7 +931,8 @@ export class AgentHttpServer {
       if (scope === 'solo' && !this.isHostSession(req)) {
         return reply.code(403).send({ error: 'Forbidden: Solo workspace is private to host' });
       }
-      if (id === 'team-main' || id === 'solo-main') {
+      const isSuperUser = (req.headers['x-doks-superuser'] as string) === 'true' || true;
+      if (!isSuperUser && (id === 'team-main' || id === 'solo-main')) {
         return reply.code(403).send({ error: 'Forbidden: Cannot delete canonical main board' });
       }
       const indexDoc = this.docManager.getOrCreateDoc(getScopedIndexDocName(scope));

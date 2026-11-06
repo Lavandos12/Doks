@@ -271,9 +271,8 @@ export function ensureInitialBoard(): void {
     });
   }
 
-  // 2. Ensure canonical shared team board in team scope (revives if soft-deleted)
-  const existingTeamMain = teamMaps.boards.get(TEAM_MAIN_BOARD_ID);
-  if (!existingTeamMain) {
+  // 2. Ensure canonical shared team board in team scope only if no boards exist at all
+  if (teamMaps.boards.size === 0) {
     teamMaps.boards.set(TEAM_MAIN_BOARD_ID, {
       id: TEAM_MAIN_BOARD_ID,
       title: 'Shared Team Canvas',
@@ -284,13 +283,6 @@ export function ensureInitialBoard(): void {
       scope: 'team',
       creatorId: 'system',
       creatorName: 'Team'
-    });
-  } else if (existingTeamMain.deleted) {
-    teamMaps.boards.set(TEAM_MAIN_BOARD_ID, {
-      ...existingTeamMain,
-      deleted: false,
-      deletedAt: undefined,
-      updatedAt: Date.now()
     });
   }
 }
@@ -570,11 +562,11 @@ export const SUPER_USER_MODE = true;
 export function isBoardAdmin(meta?: BoardMeta | null, scopeHint?: WorkspaceScope): boolean {
   if (!meta) return false;
 
-  // Canonical shared team canvas can NEVER be deleted, cleared, or converted
-  if (meta.id === TEAM_MAIN_BOARD_ID) return false;
-
-  // Universal Super-User bypass: allows full deletion & cleanup of any board
+  // Universal Super-User bypass: allows full deletion & cleanup of any board including main canvas
   if (SUPER_USER_MODE) return true;
+
+  // Canonical shared team canvas can NEVER be deleted, cleared, or converted by ordinary users
+  if (meta.id === TEAM_MAIN_BOARD_ID) return false;
 
   const isTeam = scopeHint === 'team' || meta.scope === 'team' || teamMaps.boards.has(meta.id);
   // Solo boards are always owned locally if genuinely in soloMaps
@@ -785,8 +777,8 @@ export function restoreBoard(id: string, scopeHint?: WorkspaceScope): void {
 }
 
 export function deleteBoard(id: string, scope?: WorkspaceScope): void {
-  // Never allow deleting canonical team or solo main boards
-  if (id === TEAM_MAIN_BOARD_ID || id === SOLO_MAIN_BOARD_ID) {
+  // Unless super-user mode is active, block deleting canonical main boards
+  if (!SUPER_USER_MODE && (id === TEAM_MAIN_BOARD_ID || id === SOLO_MAIN_BOARD_ID)) {
     showToast('Cannot delete the main canvas board.', 'error');
     return;
   }
@@ -823,8 +815,8 @@ export function emptyTrash(): void {
     const deletedBoardKeys: string[] = [];
     maps.boards.forEach((val, key) => {
       if (val.deleted) {
-        // If canonical main board was accidentally moved to trash, un-delete it
-        if (key === TEAM_MAIN_BOARD_ID || key === SOLO_MAIN_BOARD_ID) {
+        // Unless super-user mode is active, keep main board safe
+        if (!SUPER_USER_MODE && (key === TEAM_MAIN_BOARD_ID || key === SOLO_MAIN_BOARD_ID)) {
           maps.boards.set(key, {
             ...val,
             deleted: false,
@@ -842,7 +834,7 @@ export function emptyTrash(): void {
 }
 
 export function permanentlyDeleteBoard(id: string, scope?: WorkspaceScope): void {
-  if (id === TEAM_MAIN_BOARD_ID || id === SOLO_MAIN_BOARD_ID) {
+  if (!SUPER_USER_MODE && (id === TEAM_MAIN_BOARD_ID || id === SOLO_MAIN_BOARD_ID)) {
     const targetMap = id === TEAM_MAIN_BOARD_ID ? teamMaps.boards : soloMaps.boards;
     const existing = targetMap.get(id);
     if (existing) {

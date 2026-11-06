@@ -3,6 +3,7 @@ import { useState, useEffect } from 'preact/hooks';
 import type { WorkspaceScope } from '@doks/shared';
 import {
   allBoards,
+  createBoard,
   renameBoard,
   deleteBoard,
   convertBoardScope,
@@ -86,6 +87,10 @@ export function BoardSettingsModal({
     const remaining = allBoards.value.filter((b) => b.id !== boardId && !b.deleted);
     if (remaining.length > 0) {
       selectBoardWithScope(remaining[0].id, remaining[0].scope || 'solo', remaining[0].title);
+    } else {
+      const freshTitle = isTeam ? 'Team Canvas' : 'Personal Canvas';
+      const newId = createBoard(freshTitle, null, isTeam ? 'team' : 'solo', true);
+      selectBoardWithScope(newId, isTeam ? 'team' : 'solo', freshTitle);
     }
   };
 
