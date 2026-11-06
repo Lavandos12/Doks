@@ -371,10 +371,11 @@ function syncIndexSignals() {
 
   // Auto-open first board if no tabs open and boards exist
   if (openTabs.value.length === 0 && !activeTabId.value) {
-    const defaultBoardId = isCloudHost ? TEAM_MAIN_BOARD_ID : SOLO_MAIN_BOARD_ID;
-    const defaultBoard = allBoards.value.find((b) => b.id === defaultBoardId) || allBoards.value[0];
-    if (defaultBoard) {
-      selectBoardWithScope(defaultBoard.id, defaultBoard.scope || (isCloudHost ? 'team' : 'solo'), defaultBoard.title);
+    const activeBoards = allBoards.value.filter((b) => !b.deleted);
+    const preferredBoard =
+      activeBoards.find((b) => (b.scope || 'solo') === (isCloudHost ? 'team' : 'solo')) || activeBoards[0];
+    if (preferredBoard) {
+      selectBoardWithScope(preferredBoard.id, preferredBoard.scope || (isCloudHost ? 'team' : 'solo'), preferredBoard.title);
     }
   }
 
@@ -557,7 +558,7 @@ export function getMyMemberName(): string {
 }
 
 // Universal superuser mode per user request: enables deleting all shared/legacy boards
-export const SUPER_USER_MODE = true;
+export const SUPER_USER_MODE = false;
 
 export function isBoardAdmin(meta?: BoardMeta | null, scopeHint?: WorkspaceScope): boolean {
   if (!meta) return false;
@@ -828,7 +829,17 @@ export function emptyTrash(): void {
         }
       }
     });
-    deletedBoardKeys.forEach((k) => maps.boards.delete(k));
+    deletedBoardKeys.forEach((k) => {
+      maps.boards.delete(k);
+      try {
+        const bDoc = yjsClient.getOrCreateDoc(getScopedBoardDocName(maps === teamMaps ? 'team' : 'solo', k));
+        const { nodes, edges } = getBoardMaps(bDoc);
+        bDoc.transact(() => {
+          nodes.clear();
+          edges.clear();
+        });
+      } catch {}
+    });
   });
   syncIndexSignals();
 }
@@ -846,6 +857,14 @@ export function permanentlyDeleteBoard(id: string, scope?: WorkspaceScope): void
   const isTeam = teamMaps.boards.has(id) || scope === 'team';
   const targetMap = isTeam ? teamMaps.boards : soloMaps.boards;
   targetMap.delete(id);
+  try {
+    const bDoc = yjsClient.getOrCreateDoc(getScopedBoardDocName(isTeam ? 'team' : 'solo', id));
+    const { nodes, edges } = getBoardMaps(bDoc);
+    bDoc.transact(() => {
+      nodes.clear();
+      edges.clear();
+    });
+  } catch {}
   closeTab(id);
   syncIndexSignals();
 }

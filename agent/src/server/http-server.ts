@@ -931,7 +931,7 @@ export class AgentHttpServer {
       if (scope === 'solo' && !this.isHostSession(req)) {
         return reply.code(403).send({ error: 'Forbidden: Solo workspace is private to host' });
       }
-      const isSuperUser = (req.headers['x-doks-superuser'] as string) === 'true' || true;
+      const isSuperUser = (req.headers['x-doks-superuser'] as string) === 'true';
       if (!isSuperUser && (id === 'team-main' || id === 'solo-main')) {
         return reply.code(403).send({ error: 'Forbidden: Cannot delete canonical main board' });
       }
@@ -944,7 +944,7 @@ export class AgentHttpServer {
 
       // In team scope: check superuser bypass or verified creator account
       if (scope === 'team') {
-        const isSuperUser = (req.headers['x-doks-superuser'] as string) === 'true' || true; // Temporary super-user mode per user request
+        const isSuperUser = (req.headers['x-doks-superuser'] as string) === 'true';
         if (!isSuperUser) {
           const reqAccountId = (req.headers['x-doks-account-id'] as string) || (req.headers['x-doks-member-id'] as string) || '';
 
@@ -969,6 +969,14 @@ export class AgentHttpServer {
       indexDoc.transact(() => {
         if (isPermanent) {
           boards.delete(id);
+          try {
+            const boardDoc = this.docManager.getOrCreateDoc(getScopedBoardDocName(scope, id));
+            const { nodes, edges } = getBoardMaps(boardDoc);
+            boardDoc.transact(() => {
+              nodes.clear();
+              edges.clear();
+            });
+          } catch {}
         } else {
           boards.set(id, {
             ...existing,

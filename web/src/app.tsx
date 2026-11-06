@@ -89,15 +89,14 @@ export function App() {
       if (exists) return activeTab.id;
     }
     const isCloud = typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
-    const canonicalId = isCloud ? TEAM_MAIN_BOARD_ID : SOLO_MAIN_BOARD_ID;
-    const matchingCanonical = allBoards.value.find((b) => b.id === canonicalId && !b.deleted);
-    if (matchingCanonical) return matchingCanonical.id;
-
     const activeInScope = allBoards.value.find((b) => (b.scope || 'solo') === currentScope.value && !b.deleted);
     if (activeInScope) return activeInScope.id;
 
     const anyValid = allBoards.value.find((b) => !b.deleted);
-    return anyValid?.id || canonicalId;
+    if (anyValid) return anyValid.id;
+
+    const canonicalId = isCloud ? TEAM_MAIN_BOARD_ID : SOLO_MAIN_BOARD_ID;
+    return canonicalId;
   })();
 
   const currentBoard = allBoards.value.find((b) => b.id === activeBoardId) || boards.value.find((b) => b.id === activeBoardId);
@@ -114,9 +113,17 @@ export function App() {
       selectBoardWithScope(requestedBoardId, isSolo ? 'solo' : 'team', isSolo ? 'Personal Board' : 'Shared Board');
     } else {
       const isCloud = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
-      const defaultId = isCloud ? TEAM_MAIN_BOARD_ID : SOLO_MAIN_BOARD_ID;
-      const defaultScope = isCloud ? 'team' : 'solo';
-      selectBoardWithScope(defaultId, defaultScope, isCloud ? 'Shared Team Canvas' : 'Personal Canvas');
+      const targetScope = isCloud ? 'team' : 'solo';
+      const validBoard =
+        allBoards.value.find((b) => !b.deleted && (b.scope || 'solo') === targetScope) ||
+        allBoards.value.find((b) => !b.deleted);
+
+      if (validBoard) {
+        selectBoardWithScope(validBoard.id, validBoard.scope || targetScope, validBoard.title);
+      } else {
+        const defaultId = isCloud ? TEAM_MAIN_BOARD_ID : SOLO_MAIN_BOARD_ID;
+        selectBoardWithScope(defaultId, targetScope, isCloud ? 'Shared Team Canvas' : 'Personal Canvas');
+      }
     }
   }, []);
 

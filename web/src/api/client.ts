@@ -164,7 +164,6 @@ class ApiClient {
       if (accSecret && !headers.has('X-Doks-Account-Secret')) {
         headers.set('X-Doks-Account-Secret', accSecret);
       }
-      headers.set('X-Doks-Superuser', 'true');
     }
 
     const response = await fetch(url, {
