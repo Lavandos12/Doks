@@ -331,6 +331,70 @@ export function calculateAutoFontSize(text: string, w: number, h: number, type?:
   return Math.min(Math.max(12, best), 72);
 }
 
+/**
+ * Calculates optimal viewport coordinates (x, y, zoom) to cleanly fit and center board content.
+ * Enforces a strict zoom ceiling of 1.0 (100%) so small cards or single notes are never over-zoomed,
+ * while scaling down wide/tall diagrams with comfortable 12% margins.
+ */
+export function computeOptimalViewportForNodes(
+  nodes: BoardNodeData[],
+  containerWidth: number = typeof window !== 'undefined' ? window.innerWidth : 1200,
+  containerHeight: number = typeof window !== 'undefined' ? window.innerHeight : 800
+): ViewportCoord {
+  const activeNodes = (nodes || []).filter((n) => !n.deleted);
+  if (activeNodes.length === 0) {
+    return { x: 80, y: 80, zoom: 1 };
+  }
+
+  // Prioritize structural content over standalone ink drawings if available
+  const targetNodes = activeNodes.filter((n) => n.type !== 'drawing');
+  const nodesForFit = targetNodes.length > 0 ? targetNodes : activeNodes;
+
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+
+  for (const n of nodesForFit) {
+    const w = typeof n.w === 'number' && Number.isFinite(n.w) ? n.w : 200;
+    const h = typeof n.h === 'number' && Number.isFinite(n.h) ? n.h : 130;
+    const nx = typeof n.x === 'number' && Number.isFinite(n.x) ? n.x : 0;
+    const ny = typeof n.y === 'number' && Number.isFinite(n.y) ? n.y : 0;
+
+    minX = Math.min(minX, nx);
+    minY = Math.min(minY, ny);
+    maxX = Math.max(maxX, nx + w);
+    maxY = Math.max(maxY, ny + h);
+  }
+
+  if (!Number.isFinite(minX) || !Number.isFinite(minY) || !Number.isFinite(maxX) || !Number.isFinite(maxY)) {
+    return { x: 80, y: 80, zoom: 1 };
+  }
+
+  const contentW = Math.max(maxX - minX, 100);
+  const contentH = Math.max(maxY - minY, 100);
+  const centerX = (minX + maxX) / 2;
+  const centerY = (minY + maxY) / 2;
+
+  const availW = containerWidth > 0 ? containerWidth : 1200;
+  const availH = containerHeight > 0 ? containerHeight : 800;
+
+  // 15% breathing room margin (at least 96px)
+  const paddingX = Math.max(96, availW * 0.15);
+  const paddingY = Math.max(96, availH * 0.15);
+
+  const scaleX = (availW - paddingX * 2) / contentW;
+  const scaleY = (availH - paddingY * 2) / contentH;
+
+  // Maximum zoom 1.0 (never over-zoom small notes), minimum 0.1
+  const targetZoom = Math.min(Math.max(Math.min(scaleX, scaleY), 0.1), 1.0);
+
+  const x = Math.round(availW / 2 - centerX * targetZoom);
+  const y = Math.round(availH / 2 - centerY * targetZoom);
+
+  return { x, y, zoom: targetZoom };
+}
+
 const getSafeAttachmentUrl = (url?: string, hash?: string): string | undefined => {
   if (url) {
     if (url.startsWith('blob:') || url.startsWith('/api/attachments/')) return url;
@@ -410,8 +474,31 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
   const effectiveScope: WorkspaceScope = scopeOverride || currentScope.value;
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Viewport state
-  const [viewport, setViewport] = useState({ x: 80, y: 80, zoom: 1 });
+  const docName = getScopedBoardDocName(effectiveScope, boardId);
+  const boardDoc = yjsClient.getOrCreateDoc(docName);
+  const awareness = yjsClient.getOrCreateAwareness(docName);
+  const { nodes: yNodes, edges: yEdges } = getBoardMaps(boardDoc);
+
+  // User navigation & auto-centering tracking
+  const hasUserNavigatedRef = useRef<boolean>(false);
+  const hasInitialCenteredRef = useRef<boolean>(false);
+
+  // Viewport state: automatically position on existing content if available
+  const [viewport, setViewport] = useState<ViewportCoord>(() => {
+    const initialActiveNodes: BoardNodeData[] = [];
+    yNodes.forEach((nodeMap, id) => {
+      const data = nodeMapToData(id, nodeMap);
+      if (!data.deleted) initialActiveNodes.push(data);
+    });
+
+    if (initialActiveNodes.length > 0) {
+      hasInitialCenteredRef.current = true;
+      const screenW = (typeof window !== 'undefined' && window.innerWidth) ? window.innerWidth : 1200;
+      const screenH = (typeof window !== 'undefined' && window.innerHeight) ? window.innerHeight : 800;
+      return computeOptimalViewportForNodes(initialActiveNodes, screenW, screenH);
+    }
+    return { x: 80, y: 80, zoom: 1 };
+  });
   const [activeTool, setActiveTool] = useState<CanvasTool>('select');
   const [isSpacePressed, setIsSpacePressed] = useState(false);
 
@@ -881,11 +968,6 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
   // Undo manager
   const undoManagerRef = useRef<Y.UndoManager | null>(null);
 
-  const docName = getScopedBoardDocName(effectiveScope, boardId);
-  const boardDoc = yjsClient.getOrCreateDoc(docName);
-  const awareness = yjsClient.getOrCreateAwareness(docName);
-  const { nodes: yNodes, edges: yEdges } = getBoardMaps(boardDoc);
-
   // Map of nodes for quick coordinate lookup (with real-time drag positions)
   const nodeLookup = useMemo(() => {
     const map = new Map<string, BoardNodeData>();
@@ -999,6 +1081,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
   }, []);
 
   const handleZoomByFactor = useCallback((factor: number) => {
+    hasUserNavigatedRef.current = true;
     const availW = containerSize.width || window.innerWidth;
     const availH = containerSize.height || window.innerHeight;
     const centerX = availW / 2;
@@ -1011,6 +1094,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
   }, [containerSize, animateToViewport]);
 
   const handleResetZoom = useCallback(() => {
+    hasUserNavigatedRef.current = true;
     const availW = containerSize.width || window.innerWidth;
     const availH = containerSize.height || window.innerHeight;
     const centerX = availW / 2;
@@ -1088,6 +1172,15 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
       });
       setNodesList(activeNodes);
 
+      // Auto-center camera on newly arrived nodes if not already centered and user hasn't panned
+      if (!hasInitialCenteredRef.current && !hasUserNavigatedRef.current && activeNodes.length > 0) {
+        hasInitialCenteredRef.current = true;
+        const w = (containerRef.current?.clientWidth) || ((typeof window !== 'undefined' && window.innerWidth) ? window.innerWidth : 1200);
+        const h = (containerRef.current?.clientHeight) || ((typeof window !== 'undefined' && window.innerHeight) ? window.innerHeight : 800);
+        const optimal = computeOptimalViewportForNodes(activeNodes, w, h);
+        animateToViewport(optimal, true);
+      }
+
       const activeEdges: BoardEdgeData[] = [];
       yEdges.forEach((edge) => {
         if (!edge.deleted) activeEdges.push(edge);
@@ -1126,6 +1219,8 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
     awareness.on('change', updateAwareness);
 
     return () => {
+      hasInitialCenteredRef.current = false;
+      hasUserNavigatedRef.current = false;
       yNodes.unobserveDeep(updateState);
       yEdges.unobserve(updateState);
       awareness.off('change', updateAwareness);
@@ -1331,6 +1426,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
     }
 
     e.preventDefault();
+    hasUserNavigatedRef.current = true;
     if (!containerRef.current) return;
     const rect = containerRef.current.getBoundingClientRect();
 
@@ -3440,6 +3536,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
       rafIdRef.current = null;
     }
     targetViewportRef.current = viewportRef.current;
+    hasUserNavigatedRef.current = true;
 
     setContextMenu(null);
     setQuickConnect(null);
@@ -3554,6 +3651,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
       rafIdRef.current = null;
     }
     targetViewportRef.current = viewportRef.current;
+    hasUserNavigatedRef.current = true;
 
     if (e.button !== 0) return;
     if (dragState) return;
@@ -3800,41 +3898,11 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
   }, [selectedNodeIds, nodeLookup, viewport]);
 
   const fitToContent = () => {
-    const targetNodes = nodesList.filter((n) => !n.deleted && n.type !== 'drawing');
-    const nodesForFit = targetNodes.length > 0 ? targetNodes : nodesList.filter((n) => !n.deleted);
-    if (nodesForFit.length === 0) {
-      animateToViewport({ x: 80, y: 80, zoom: 1 }, false);
-      return;
-    }
-    let minX = Infinity;
-    let minY = Infinity;
-    let maxX = -Infinity;
-    let maxY = -Infinity;
-    for (const n of nodesForFit) {
-      minX = Math.min(minX, n.x);
-      minY = Math.min(minY, n.y);
-      maxX = Math.max(maxX, n.x + n.w);
-      maxY = Math.max(maxY, n.y + n.h);
-    }
-    const contentW = maxX - minX;
-    const contentH = maxY - minY;
-    const centerX = (minX + maxX) / 2;
-    const centerY = (minY + maxY) / 2;
-
-    const availW = containerSize.width || window.innerWidth;
-    const availH = containerSize.height || window.innerHeight;
-
-    const paddingX = Math.max(96, availW * 0.15);
-    const paddingY = Math.max(96, availH * 0.15);
-
-    const scaleX = (availW - paddingX * 2) / Math.max(contentW, 100);
-    const scaleY = (availH - paddingY * 2) / Math.max(contentH, 100);
-    const targetZoom = Math.min(Math.max(Math.min(scaleX, scaleY), 0.01), 2.5);
-
-    const x = availW / 2 - centerX * targetZoom;
-    const y = availH / 2 - centerY * targetZoom;
-
-    animateToViewport({ x, y, zoom: targetZoom }, false);
+    hasUserNavigatedRef.current = true;
+    const availW = containerSize.width || ((typeof window !== 'undefined' && window.innerWidth) ? window.innerWidth : 1200);
+    const availH = containerSize.height || ((typeof window !== 'undefined' && window.innerHeight) ? window.innerHeight : 800);
+    const optimal = computeOptimalViewportForNodes(nodesList, availW, availH);
+    animateToViewport(optimal, false);
   };
 
   return (
