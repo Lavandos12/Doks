@@ -14,13 +14,13 @@
   --text-normal: var(--text-primary);
 
   /* Stage C Dark Theme Tokens (Default) */
-  --bg-primary: #09080f;
-  --bg-secondary: #110f1c;
-  --bg-card: #181528;
-  --bg-card-hover: #221e38;
-  --border-color: #2b2644;
+  --bg-primary: #090a0f;
+  --bg-secondary: #12151f;
+  --bg-card: #12151f;
+  --bg-card-hover: #1e2230;
+  --border-color: #1e2230;
   --border-focus: #6d28d9;
-  --text-primary: #f1f3f9;
+  --text-primary: #f1f5f9;
   --text-secondary: #9da5b4;
   --text-muted: #656c7d;
   --accent: #8b5cf6;

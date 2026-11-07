@@ -38,7 +38,7 @@ describe('v77 Purge Manual Document Creation: Natural Whiteboard Import Pipeline
 
   describe('3. Natural File Import & Rendering Engine Preserved', () => {
     it('should maintain type file card and document rendering for imported files', () => {
-      expect(canvasSrc).toContain("(node.type === 'file' || Boolean(node.fileHash)) ? (");
+      expect(canvasSrc).toContain("(node.fileHash || node.type === 'file' || Boolean(node.extractedText)) ? (");
       expect(canvasSrc).toContain('class="node-file-wrapper miro-document-card"');
       expect(canvasSrc).toContain('class="excel-workbook-container"');
     });

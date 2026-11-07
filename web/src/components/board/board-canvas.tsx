@@ -299,9 +299,9 @@ export function calculateAutoFontSize(text: string, w: number, h: number, type?:
     return Math.min(Math.max(14, Math.round(h * 0.14)), 72);
   }
 
-  // Iterative binary search for font size between 12px and 140px
+  // Iterative binary search for font size between 12px and 72px
   let low = 12;
-  let high = Math.min(Math.round(h * 0.5), 140);
+  let high = Math.min(Math.round(h * 0.5), 72);
   let best = low;
 
   while (low <= high) {
@@ -324,7 +324,7 @@ export function calculateAutoFontSize(text: string, w: number, h: number, type?:
       high = mid - 1; // Too big, reduce font
     }
   }
-  return best;
+  return Math.min(Math.max(12, best), 72);
 }
 
 const getSafeAttachmentUrl = (url?: string, hash?: string): string | undefined => {
@@ -1580,14 +1580,8 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
         return;
       }
 
-      // Paste (Ctrl+V): let native 'paste' ClipboardEvent fire so handleWindowPaste receives screenshot binary
+      // Paste (Ctrl+V): let native 'paste' ClipboardEvent fire so handleWindowPaste handles images/nodes/text
       if (matchShortcut(e, 'mod+v')) {
-        const targetPos = lastMouseCanvasPosRef.current;
-        setTimeout(() => {
-          if (Date.now() - lastPasteTimeRef.current > 140) {
-            pasteClipboard(targetPos.x, targetPos.y);
-          }
-        }, 120);
         return;
       }
 
@@ -1935,15 +1929,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
       return;
     }
 
-    // 3. Fallback: check text from clipboard to create a sticky note
-    if (typeof navigator !== 'undefined' && navigator.clipboard && typeof navigator.clipboard.readText === 'function') {
-      try {
-        const text = await navigator.clipboard.readText();
-        if (text && text.trim().length > 0) {
-          createNodeAt('sticky', targetPos.x - 100, targetPos.y - 65, activeColor, text.trim());
-        }
-      } catch {}
-    }
+    // Text paste from OS clipboard is handled directly by handleWindowPaste
   };
 
   // Wrap selected nodes into a new Frame container (Ctrl+G)
@@ -2563,7 +2549,11 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
     };
 
     const handleWindowPaste = async (e: ClipboardEvent) => {
-      lastPasteTimeRef.current = Date.now();
+      const now = Date.now();
+      if (now - lastPasteTimeRef.current < 250) {
+        return;
+      }
+      lastPasteTimeRef.current = now;
 
       // 1. Prioritize explicit image paste from OS (screenshots, image files)
       const items = e.clipboardData?.items;
@@ -5600,7 +5590,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                     style={{ width: '100%', height: '100%', objectFit: 'fill', pointerEvents: 'none' }}
                   />
                 </div>
-              ) : (node.type === 'file' || Boolean(node.fileHash)) ? (
+              ) : (node.fileHash || node.type === 'file' || Boolean(node.extractedText)) ? (
                 (() => {
                   const isAud = (node.fileName || '').match(/\.(mp3|ogg|wav)$/i);
                   const isVid = (node.fileName || '').match(/\.(mp4|webm)$/i);
@@ -6160,7 +6150,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                       position: 'absolute',
                       inset: '12px',
                       display: 'flex',
-                      alignItems: 'center',
+                      alignItems: (node.text && (node.text.includes('\n') || node.text.length > 36)) ? 'flex-start' : 'center',
                       justifyContent: 'center',
                       pointerEvents: editingNodeId === node.id ? 'auto' : 'none',
                       overflow: 'hidden'
@@ -6172,12 +6162,13 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                       style={{
                         fontSize: `${node.fontSize || calculateAutoFontSize(node.text, node.w, node.h, 'shape')}px`,
                         pointerEvents: editingNodeId === node.id ? 'auto' : 'none',
-                        textAlign: 'center',
+                        textAlign: (node.text && (node.text.includes('\n') || node.text.length > 36)) ? 'left' : 'center',
                         width: '100%',
-                        height: 'auto',
+                        height: '100%',
                         maxHeight: '100%',
                         resize: 'none',
-                        lineHeight: 1.35
+                        lineHeight: 1.4,
+                        overflowY: 'auto'
                       }}
                       rows={Math.min(8, Math.max(1, (node.text || '').split('\n').length))}
                       value={node.text}
