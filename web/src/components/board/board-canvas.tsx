@@ -290,6 +290,10 @@ export function calculateAutoFontSize(text: string, w: number, h: number, type?:
   if (type === 'frame') {
     return Math.min(Math.max(14, Math.round(Math.min(w, h) * 0.035)), 48);
   }
+  // Notes and shapes maintain steady, readable 14px body typography that never inflates on resize
+  if (type === 'sticky' || type === 'shape') {
+    return 14;
+  }
   const padW = Math.max(20, w - 24);
   const padH = Math.max(20, h - 24);
   const clean = (text || '').trim();
