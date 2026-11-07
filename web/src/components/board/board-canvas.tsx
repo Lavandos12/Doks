@@ -3705,14 +3705,16 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
   };
 
   // Magnetic port pointer handlers
-  const handlePortPointerDown = (nodeId: string, side: PortSide, e: MouseEvent) => {
+  const handlePortPointerDown = (nodeId: string, side: PortSide, e: MouseEvent | PointerEvent) => {
     e.stopPropagation();
+    if ((e as any).preventDefault) (e as any).preventDefault();
+    if ((e as any).button !== undefined && (e as any).button !== 0) return;
     const pos = screenToCanvas(e.clientX, e.clientY);
     const node = nodeLookup.get(nodeId);
     const startPt = node
       ? getPortCoordinates({ id: node.id, x: node.x, y: node.y, width: node.w, height: node.h }, side)
       : pos;
-    setConnectingState({
+    const nextState = {
       fromNodeId: nodeId,
       fromSide: side,
       startX: startPt.x,
@@ -3720,7 +3722,9 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
       currentX: pos.x,
       currentY: pos.y,
       snappedTarget: null
-    });
+    };
+    connectingStateRef.current = nextState;
+    setConnectingState(nextState);
   };
 
   // Custom Context Menu handler
@@ -3835,7 +3839,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
 
   return (
     <div
-      class={`board-container ${activeTool === 'hand' || isSpacePressed ? 'cursor-grab' : ''} ${activeTool === 'arrow' ? 'tool-arrow' : ''} ${gridType === 'lines' ? 'grid-lines' : gridType === 'none' ? 'grid-none' : ''}`}
+      class={`board-container ${activeTool === 'hand' || isSpacePressed ? 'cursor-grab' : ''} ${activeTool === 'arrow' ? 'tool-arrow' : ''} ${gridType === 'lines' ? 'grid-lines' : gridType === 'none' ? 'grid-none' : ''} ${resizeState ? 'is-resizing' : ''} ${dragState ? 'is-dragging' : ''}`}
       ref={containerRef}
       onScroll={(e) => {
         if (e.currentTarget.scrollTop !== 0) e.currentTarget.scrollTop = 0;
@@ -5481,21 +5485,25 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                       class="magnetic-port port-top"
                       style={{ transform: portTransform('top'), transformOrigin: 'center bottom' }}
                       onMouseDown={(e) => handlePortPointerDown(node.id, 'top', e as any)}
+                      onPointerDown={(e) => handlePortPointerDown(node.id, 'top', e as any)}
                     />
                     <div
                       class="magnetic-port port-right"
                       style={{ transform: portTransform('right'), transformOrigin: 'left center' }}
                       onMouseDown={(e) => handlePortPointerDown(node.id, 'right', e as any)}
+                      onPointerDown={(e) => handlePortPointerDown(node.id, 'right', e as any)}
                     />
                     <div
                       class="magnetic-port port-bottom"
                       style={{ transform: portTransform('bottom'), transformOrigin: 'center top' }}
                       onMouseDown={(e) => handlePortPointerDown(node.id, 'bottom', e as any)}
+                      onPointerDown={(e) => handlePortPointerDown(node.id, 'bottom', e as any)}
                     />
                     <div
                       class="magnetic-port port-left"
                       style={{ transform: portTransform('left'), transformOrigin: 'right center' }}
                       onMouseDown={(e) => handlePortPointerDown(node.id, 'left', e as any)}
+                      onPointerDown={(e) => handlePortPointerDown(node.id, 'left', e as any)}
                     />
                   </>
                 );

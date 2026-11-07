@@ -1865,7 +1865,7 @@ input:focus, select:focus, textarea:focus {
   pointer-events: none;
   transition: opacity 0.15s ease, transform 0.15s ease, background 0.15s ease;
   cursor: crosshair;
-  z-index: 40;
+  z-index: 60 !important;
 }
 
 .magnetic-port::before {
@@ -1876,6 +1876,41 @@ input:focus, select:focus, textarea:focus {
   right: -10px;
   bottom: -10px;
   border-radius: 50%;
+  pointer-events: auto;
+}
+
+/* Directional hit-bridge extending seamlessly across 32px gap to node boundary when not selected */
+.board-node-box:not(.selected) .port-top::before {
+  top: -12px;
+  bottom: -34px;
+  left: -12px;
+  right: -12px;
+  border-radius: 12px;
+  pointer-events: auto;
+}
+.board-node-box:not(.selected) .port-right::before {
+  right: -12px;
+  left: -34px;
+  top: -12px;
+  bottom: -12px;
+  border-radius: 12px;
+  pointer-events: auto;
+}
+.board-node-box:not(.selected) .port-bottom::before {
+  bottom: -12px;
+  top: -34px;
+  left: -12px;
+  right: -12px;
+  border-radius: 12px;
+  pointer-events: auto;
+}
+.board-node-box:not(.selected) .port-left::before {
+  left: -12px;
+  right: -34px;
+  top: -12px;
+  bottom: -12px;
+  border-radius: 12px;
+  pointer-events: auto;
 }
 
 /* Show ports when node is hovered, or when arrow tool is active */
@@ -1885,25 +1920,23 @@ input:focus, select:focus, textarea:focus {
   pointer-events: auto;
 }
 
-/* Selected nodes keep ports hidden during resize unless explicitly hovered */
+/* Selected nodes: connector ports are permanently visible and interactive (Miro standard) */
 .board-node-box.selected .magnetic-port {
-  opacity: 0;
-  pointer-events: none;
+  opacity: 1 !important;
+  pointer-events: auto !important;
 }
 
-.board-container.is-resizing .magnetic-port {
+/* During active transform/drag of any node, ports are cleanly hidden to avoid collision */
+.board-container.is-resizing .magnetic-port,
+.board-container.is-dragging .magnetic-port {
   opacity: 0 !important;
   pointer-events: none !important;
-}
-
-.board-node-box.selected:hover .magnetic-port {
-  opacity: 1;
-  pointer-events: auto;
 }
 
 .magnetic-port:hover {
   opacity: 1 !important;
   pointer-events: auto !important;
+  z-index: 70 !important;
   background: #312e81;
   border-color: #a5b4fc;
 }
