@@ -2774,6 +2774,34 @@ input:focus, select:focus, textarea:focus {
   color: var(--text-muted);
 }
 
+.note-picker-del-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--text-muted, #94a3b8);
+  border-radius: 4px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s ease, color 0.15s ease, background-color 0.15s ease;
+  margin-left: 4px;
+}
+
+.note-picker-item:hover .note-picker-del-btn,
+.note-picker-del-btn:focus-visible {
+  opacity: 0.7;
+}
+
+.note-picker-del-btn:hover {
+  opacity: 1;
+  color: var(--danger, #ef4444);
+  background: rgba(239, 68, 68, 0.15);
+}
+
 /* Note Card on Canvas (F3) */
 .note-card-deleted-view {
   display: flex;

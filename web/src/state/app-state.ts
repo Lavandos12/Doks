@@ -17,7 +17,8 @@ import {
   getScopedNoteDocName,
   getScopedBoardDocName,
   getBoardMaps,
-  DOC_INDEX
+  DOC_INDEX,
+  isLegacyDummyNote
 } from '@doks/shared';
 export { getScopedNoteDocName } from '@doks/shared';
 import { yjsClient, agentStatus, connectionState } from './yjs-client.js';
@@ -319,6 +320,23 @@ export const maps = new Proxy({} as ReturnType<typeof getIndexMaps>, {
 
 function syncIndexSignals() {
   ensureInitialBoard();
+
+  // Auto-purge legacy dummy preset notes from synchronized Y.Maps
+  const purgeLegacyNotes = (map: Y.Map<any>) => {
+    const toDelete: string[] = [];
+    map.forEach((val, id) => {
+      if (val && isLegacyDummyNote(val)) {
+        toDelete.push(id);
+      }
+    });
+    if (toDelete.length > 0) {
+      toDelete.forEach((id) => {
+        map.delete(id);
+      });
+    }
+  };
+  purgeLegacyNotes(soloMaps.notes);
+  purgeLegacyNotes(teamMaps.notes);
   const activeMaps = getActiveMaps();
 
   // Unified allBoards across both scopes, sorted by updatedAt desc
@@ -727,15 +745,17 @@ export function moveNote(id: string, newFolder: string | null): void {
 }
 
 export function deleteNote(id: string): void {
-  const activeMaps = getActiveMaps();
-  const existing = activeMaps.notes.get(id);
-  if (existing) {
-    activeMaps.notes.set(id, {
-      ...existing,
-      deleted: true,
-      deletedAt: Date.now()
-    });
-    closeTab(id);
+  for (const m of [soloMaps, teamMaps]) {
+    const existing = m.notes.get(id);
+    if (existing) {
+      m.notes.set(id, {
+        ...existing,
+        deleted: true,
+        deletedAt: Date.now()
+      });
+      closeTab(id);
+      break;
+    }
   }
 }
 

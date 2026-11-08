@@ -25,7 +25,8 @@ import {
   type WorkspaceScope,
   type BoardSummary,
   type BridgeTransferRequest,
-  type BridgeTransferResponse
+  type BridgeTransferResponse,
+  isLegacyDummyNote
 } from '@doks/shared';
 import { StateStore } from './state-store.js';
 
@@ -90,6 +91,9 @@ export class DocManager extends EventEmitter {
     this.loadSavedScopeDocs(this.teamContainer);
     this.loadSavedScopeDocs(this.soloContainer);
 
+    // Purge any legacy dummy preset notes from persistent storage
+    this.purgeLegacyDummyNotes();
+
     // Auto-compaction every 60s
     this.autoCompactionTimer = setInterval(() => {
       this.compactAll();
@@ -97,6 +101,29 @@ export class DocManager extends EventEmitter {
     if (this.autoCompactionTimer.unref) {
       this.autoCompactionTimer.unref();
     }
+  }
+
+  public purgeLegacyDummyNotes(): void {
+    const purgeContainer = (container: ScopeContainer) => {
+      const indexDoc = container.docs.get(DOC_INDEX);
+      if (!indexDoc) return;
+      const notesMap = indexDoc.getMap<any>('notes');
+      const toDelete: string[] = [];
+      notesMap.forEach((val: any, id: string) => {
+        if (val && isLegacyDummyNote(val)) {
+          toDelete.push(id);
+        }
+      });
+      if (toDelete.length > 0) {
+        indexDoc.transact(() => {
+          for (const id of toDelete) {
+            notesMap.delete(id);
+          }
+        }, 'server-purge-legacy');
+      }
+    };
+    purgeContainer(this.teamContainer);
+    purgeContainer(this.soloContainer);
   }
 
   private loadSavedScopeDocs(container: ScopeContainer): void {

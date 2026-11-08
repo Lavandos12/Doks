@@ -259,3 +259,23 @@ export function setNodeProperties(nodeMap: Y.Map<any>, data: Partial<BoardNodeDa
     }
   }
 }
+
+/**
+ * Detects legacy dummy/preset notes created during early development & testing (e.g. November 4, 2026)
+ * to safely purge them without affecting genuine user-created notes.
+ */
+export function isLegacyDummyNote(note: { title?: string; createdAt?: number }): boolean {
+  if (!note || !note.title) return false;
+  const t = note.title.trim().toLowerCase();
+
+  if (t === 'training_program' || t === 'programma_trenirovok') return true;
+  if (t.includes('дорожная карта eluma') || t.includes('eluma')) return true;
+  if (t.includes('time__') || t.includes('вырвиглазную')) return true;
+
+  // Specific legacy "Page" note from the early testing preset set
+  if (t === 'page' && (typeof note.createdAt === 'number' ? note.createdAt <= 1794000000000 : true)) {
+    return true;
+  }
+
+  return false;
+}

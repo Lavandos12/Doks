@@ -1,6 +1,7 @@
 import { h } from 'preact';
 import { useState } from 'preact/hooks';
-import { notes, createNote } from '../../state/app-state.js';
+import { notes, createNote, deleteNote } from '../../state/app-state.js';
+import { showToast } from '../../ui/toast.js';
 import { Icon } from '../../ui/icons.js';
 import { t } from '../../i18n/index.js';
 
@@ -21,6 +22,14 @@ export function NotePickerModal({ isOpen, onClose, onSelectNote }: NotePickerMod
   const filteredNotes = query.trim()
     ? activeNotes.filter((n) => n.title.toLowerCase().includes(query.trim().toLowerCase()))
     : activeNotes;
+
+  const handleDeleteNote = (id: string, title: string) => {
+    const confirmMsg = t('notes.delete_confirm')?.replace('{title}', title || t('notes.untitled')) || ("Delete note " + (title || 'untitled') + "?");
+    if (confirm(confirmMsg)) {
+      deleteNote(id);
+      showToast(t('notes.delete_success') || 'Note deleted', 'info');
+    }
+  };
 
   const handleCreate = () => {
     const titleToUse = newTitle.trim() || t('notes.default_title');
@@ -112,6 +121,18 @@ export function NotePickerModal({ isOpen, onClose, onSelectNote }: NotePickerMod
                       <span class="note-picker-item-date">
                         {new Date(note.updatedAt).toLocaleDateString()}
                       </span>
+                      <button
+                        type="button"
+                        class="note-picker-del-btn"
+                        title={t('common.delete')}
+                        aria-label={t('common.delete')}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteNote(note.id, note.title);
+                        }}
+                      >
+                        <Icon name="trash" size={14} />
+                      </button>
                     </div>
                   ))
                 )}
