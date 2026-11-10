@@ -930,6 +930,10 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
       }
       const color = CANVAS_COLORS[n.color || ''] || '#6366f1';
       const safeText = (n.text || '').replace(/[<>&]/g, '');
+      if (n.type === 'text') {
+        const textColor = n.color && n.color !== 'default' ? (CANVAS_COLORS[n.color] || n.color) : '#f1f5f9';
+        return `<g><text x="${n.x}" y="${n.y + 24}" fill="${textColor}" font-size="${n.fontSize || 16}">${safeText}</text></g>`;
+      }
       return `<g><rect x="${n.x}" y="${n.y}" width="${n.w}" height="${n.h}" rx="8" fill="#181b24" stroke="${color}" stroke-width="2" /><text x="${n.x + 12}" y="${n.y + 24}" fill="#f1f5f9" font-size="14">${safeText}</text></g>`;
     }).join('\n');
 
@@ -2190,7 +2194,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
         w: defaultW,
         h: defaultH,
         text: defaultText,
-        color: (type === 'sticky' || isKanban || type === 'shape') ? color : 'default',
+        color: (type === 'sticky' || isKanban || type === 'shape' || type === 'text') ? color : 'default',
         author: agentStatus.value?.memberName || 'User',
         done: false,
         z: isFrame ? 0 : 1,
@@ -5498,10 +5502,16 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
           const isFrame = node.type === 'frame';
           const isNote = node.type === 'note';
           const isSticky = node.type === 'sticky';
+          const isTextNode = node.type === 'text';
           const isImage = node.type === 'image' || ((node.fileName || '').match(/\.(png|jpe?g|gif|webp)$/i) && !node.extractedText);
           const isWidget = node.type === 'table' || node.type === 'kanban' || node.type === 'chart' || node.type === 'checklist';
           const shapeClass = node.type === 'shape' && node.shapeVariant ? `shape-variant-${node.shapeVariant}` : '';
           const frameFontSize = node.fontSize || Math.min(Math.max(14, Math.round(Math.min(node.w, node.h) * 0.035)), 96);
+          
+          const isDefaultColor = !rawColor || rawColor === 'default';
+          const textNodeColorHex = !isDefaultColor
+            ? (rawColor === '6' ? '#94a3b8' : (CANVAS_COLORS[rawColor] || (rawColor.startsWith('#') ? rawColor : undefined)))
+            : '#f1f5f9';
 
           const stickyBg = isSticky && nodeColorHex !== CANVAS_COLORS.default ? `${nodeColorHex}26` : undefined;
           const borderColor = isFrame
@@ -5536,6 +5546,7 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                 backgroundColor: stickyBg || undefined,
                 boxShadow: widgetGlow,
                 borderColor,
+                color: isTextNode ? textNodeColorHex : undefined,
                 zIndex: node.z ?? (isFrame ? 1 : 10)
               }}
               onMouseDown={(e) => handleNodePointerDown(node, e as any)}
@@ -7158,7 +7169,9 @@ export function BoardCanvas({ boardId, gridType = 'lines', snapToGrid = false, s
                   class="node-inline-textarea"
                   style={{
                     fontSize: `${node.fontSize || calculateAutoFontSize(node.text, node.w, node.h, node.type)}px`,
-                    pointerEvents: editingNodeId === node.id ? 'auto' : 'none'
+                    pointerEvents: editingNodeId === node.id ? 'auto' : 'none',
+                    color: isTextNode ? textNodeColorHex : undefined,
+                    caretColor: isTextNode && !isDefaultColor ? textNodeColorHex : 'var(--accent, #38bdf8)'
                   }}
                   value={node.text}
                   placeholder={t('canvas.enter_text')}

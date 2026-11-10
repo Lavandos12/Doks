@@ -1812,8 +1812,13 @@ input:focus, select:focus, textarea:focus {
   background: transparent !important;
   border: none !important;
   box-shadow: none !important;
-  color: var(--text-normal, #f1f5f9);
+  color: inherit;
   padding: 4px;
+}
+
+.board-node-box.type-text .node-inline-textarea::placeholder {
+  color: var(--text-muted, #94a3b8);
+  opacity: 0.55;
 }
 
 .board-node-box.type-drawing {
